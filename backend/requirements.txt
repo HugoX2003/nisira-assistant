@@ -1,0 +1,22 @@
+# === DEPENDENCIAS CORE DJANGO ===
+Django>=5.0
+djangorestframework>=3.15
+djangorestframework-simplejwt>=5.3
+drf-spectacular>=0.27
+django-cors-headers>=4.3
+django-environ>=0.11
+python-dotenv>=1.0
+
+# === BASE DE DATOS ===
+# SQLite por defecto (sin dependencias extra)
+# Para MySQL/PostgreSQL descomentar las siguientes líneas:
+# mysqlclient>=2.2
+# psycopg2-binary>=2.9
+
+# === UTILIDADES ===
+requests>=2.31.0
+pillow>=10.0.0
+
+# === DEPENDENCIAS ADICIONALES ===
+requests>=2.31.0
+Pillow>=10.0.0
