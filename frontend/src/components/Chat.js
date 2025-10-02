@@ -1,24 +1,32 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { query as queryApi, getConversations, getMessages } from '../services/api';
+import { ragEnhancedChat, getConversations, getMessages, getVectorStats, deleteConversation } from '../services/api';
 import '../styles/Chat.css';
+
+// Componente actualizado con nuevo diseño moderno
 
 // Componente de mensaje optimizado
 const Message = React.memo(({ message, isUser, timestamp, sources }) => (
-  <div className={`message ${isUser ? 'user' : 'bot'}`}>
-    <div className="message-content">
+  <div className={`message-item ${isUser ? 'user-message' : 'assistant-message'}`}>
+    <div className="message-bubble">
       <div className="message-text">{message}</div>
       {sources && sources.length > 0 && (
         <div className="message-sources">
-          <details>
-            <summary>Fuentes ({sources.length})</summary>
-            <ul>
-              {sources.map((source, idx) => (
-                <li key={idx}>
-                  <strong>{source.archivo}</strong> - Relevancia: {(source.similarity_score * 100).toFixed(1)}%
-                </li>
-              ))}
-            </ul>
-          </details>
+          <div className="sources-header">
+            📋 Fuentes ({sources.length})
+          </div>
+          <div className="source-cards">
+            {sources.map((source, idx) => (
+              <div key={idx} className="source-card">
+                <div className="source-title">{source.file_name || 'Documento'}</div>
+                <div className="source-details">
+                  {source.page && <span className="source-page">Página {source.page}</span>}
+                  <span className="source-score">
+                    {((source.similarity_score || 0) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -28,12 +36,15 @@ const Message = React.memo(({ message, isUser, timestamp, sources }) => (
 
 // Componente de loading optimizado
 const LoadingIndicator = React.memo(() => (
-  <div className="message bot">
-    <div className="message-content">
-      <div className="loading-dots">
-        <span></span>
-        <span></span>
-        <span></span>
+  <div className="message-item assistant-message">
+    <div className="message-bubble">
+      <div className="loading-indicator">
+        <span>Pensando</span>
+        <div className="loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </div>
     </div>
   </div>
@@ -66,12 +77,12 @@ const useConversations = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (autoSelectFirst = true) => {
     try {
       const res = await getConversations();
       const list = res.conversations || [];
       setConversations(list);
-      if (list.length > 0 && !activeConversation) {
+      if (list.length > 0 && !activeConversation && autoSelectFirst) {
         setActiveConversation(list[0].id);
       }
     } catch (error) {
@@ -91,6 +102,7 @@ const Chat = ({ onLogout, user }) => {
   const [message, setMessage] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [error, setError] = useState(null);
+  const [deleteDialog, setDeleteDialog] = useState({ show: false, conversationId: null });
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -108,9 +120,9 @@ const Chat = ({ onLogout, user }) => {
     return () => clearTimeout(timer);
   }, [messages, scrollToBottom]);
 
-  // Cargar conversaciones al montar
+  // Cargar conversaciones al montar - SIN auto-seleccionar
   useEffect(() => {
-    loadConversations();
+    loadConversations(false);
   }, [loadConversations]);
 
   // Cargar mensajes cuando cambia la conversación activa
@@ -126,9 +138,9 @@ const Chat = ({ onLogout, user }) => {
         const res = await getMessages(activeConversation);
         const msgs = (res.messages || []).map(m => ({
           id: m.id,
-          text: m.text,
-          sender: m.sender,
-          timestamp: new Date(m.created_at).toLocaleTimeString(),
+          text: m.content, // Backend envía 'content'
+          sender: m.is_user ? 'user' : 'bot', // Backend envía 'is_user'
+          timestamp: new Date(m.timestamp).toLocaleTimeString(), // Backend envía 'timestamp'
           sources: m.sources || []
         }));
         clearMessages();
@@ -154,38 +166,44 @@ const Chat = ({ onLogout, user }) => {
     setMessage('');
     setError(null);
 
-    // Agregar mensaje del usuario
-    const userMessage = {
-      id: Date.now(),
+    // Agregar mensaje del usuario inmediatamente a la UI
+    const userMsg = {
+      id: `temp-user-${Date.now()}`,
       text: trimmedMessage,
       sender: 'user',
       timestamp: new Date().toLocaleTimeString(),
       sources: []
     };
+    addMessage(userMsg);
     
-    addMessage(userMessage);
     setIsLoading(true);
 
     try {
-      const response = await queryApi(trimmedMessage);
+      // Usar ragEnhancedChat que guarda automáticamente las conversaciones
+      const response = await ragEnhancedChat(trimmedMessage, activeConversation);
       
-      if (response.success) {
-        const botMessage = {
-          id: Date.now() + 1,
-          text: response.data.response,
+      if (response && response.assistant_message) {
+        // Agregar mensaje del asistente inmediatamente a la UI
+        const assistantMsg = {
+          id: response.assistant_message.id,
+          text: response.assistant_message.content,
           sender: 'bot',
-          timestamp: new Date().toLocaleTimeString(),
-          sources: response.data.search_results || []
+          timestamp: new Date(response.assistant_message.timestamp).toLocaleTimeString(),
+          sources: response.sources || []
         };
-        
-        addMessage(botMessage);
-        
-        // Recargar conversaciones si es necesario
-        if (response.data.conversation_id && !activeConversation) {
-          await loadConversations();
+        addMessage(assistantMsg);
+
+        // Si se creó una nueva conversación, actualizarla
+        if (!activeConversation && response.conversation_id) {
+          setActiveConversation(response.conversation_id);
         }
+        
+        // Recargar conversaciones para mostrar la nueva en la sidebar
+        // No auto-seleccionar la primera para no interferir con la vista actual
+        loadConversations(false);
+        
       } else {
-        throw new Error(response.message || 'Error en la respuesta');
+        throw new Error(response?.error || 'No se generó respuesta');
       }
     } catch (error) {
       console.error('Error enviando mensaje:', error);
@@ -204,7 +222,7 @@ const Chat = ({ onLogout, user }) => {
       // Enfocar input después de procesar
       setTimeout(() => inputRef.current?.focus(), 100);
     }
-  }, [message, isLoading, addMessage, activeConversation, loadConversations]);
+  }, [message, isLoading, addMessage, activeConversation, setActiveConversation, loadConversations]);
 
   // Manejo de teclas optimizado
   const handleKeyDown = useCallback((e) => {
@@ -220,7 +238,7 @@ const Chat = ({ onLogout, user }) => {
     clearMessages();
     setError(null);
     inputRef.current?.focus();
-  }, [clearMessages]);
+  }, [clearMessages, setActiveConversation]);
 
   // Cambiar conversación
   const handleConversationSelect = useCallback((conversationId) => {
@@ -230,18 +248,69 @@ const Chat = ({ onLogout, user }) => {
     }
   }, [activeConversation]);
 
+  // Eliminar conversación - Mostrar diálogo
+  const handleDeleteConversation = useCallback((conversationId, e) => {
+    // Prevenir que se seleccione la conversación al hacer click en eliminar
+    e.stopPropagation();
+    
+    // Mostrar diálogo de confirmación
+    setDeleteDialog({ show: true, conversationId });
+  }, []);
+
+  // Confirmar eliminación
+  const confirmDelete = useCallback(async () => {
+    const conversationId = deleteDialog.conversationId;
+    
+    try {
+      await deleteConversation(conversationId);
+      
+      // Si la conversación eliminada era la activa, limpiar vista
+      if (conversationId === activeConversation) {
+        setActiveConversation(null);
+        clearMessages();
+      }
+      
+      // Recargar lista de conversaciones sin auto-seleccionar
+      // Esto mostrará la pantalla de bienvenida si se eliminó la conversación activa
+      loadConversations(false);
+      
+      // Cerrar diálogo
+      setDeleteDialog({ show: false, conversationId: null });
+      
+    } catch (error) {
+      console.error('Error eliminando conversación:', error);
+      setError('No se pudo eliminar la conversación');
+      setDeleteDialog({ show: false, conversationId: null });
+    }
+  }, [deleteDialog.conversationId, activeConversation, clearMessages, loadConversations]);
+
+  // Cancelar eliminación
+  const cancelDelete = useCallback(() => {
+    setDeleteDialog({ show: false, conversationId: null });
+  }, []);
+
   // Componente de sidebar memoizado
   const Sidebar = useMemo(() => (
-    <div className={`chat-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+    <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
         <h3>Conversaciones</h3>
-        <button 
-          className="new-conversation-btn"
-          onClick={handleNewConversation}
-          title="Nueva conversación"
-        >
-          + Nueva
-        </button>
+        <div className="sidebar-header-actions">
+          <button 
+            className="new-conversation-btn"
+            onClick={handleNewConversation}
+            title="Nueva conversación"
+          >
+            + Nueva
+          </button>
+          <button 
+            className="sidebar-close-btn"
+            onClick={() => setSidebarOpen(false)}
+            title="Cerrar sidebar"
+            aria-label="Cerrar sidebar"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       
       <div className="conversations-list">
@@ -251,13 +320,20 @@ const Chat = ({ onLogout, user }) => {
             className={`conversation-item ${conv.id === activeConversation ? 'active' : ''}`}
             onClick={() => handleConversationSelect(conv.id)}
           >
-            <div className="conversation-title">{conv.title}</div>
-            <div className="conversation-date">
-              {new Date(conv.created_at).toLocaleDateString()}
+            <div className="conversation-content">
+              <div className="conversation-title">{conv.title}</div>
+              <div className="conversation-date">
+                {new Date(conv.created_at).toLocaleDateString()}
+              </div>
             </div>
-            <div className="conversation-meta">
-              {conv.message_count} mensajes
-            </div>
+            <button
+              className="delete-conversation-btn"
+              onClick={(e) => handleDeleteConversation(conv.id, e)}
+              title="Eliminar conversación"
+              aria-label="Eliminar conversación"
+            >
+              🗑️
+            </button>
           </div>
         ))}
       </div>
@@ -274,19 +350,29 @@ const Chat = ({ onLogout, user }) => {
   ), [sidebarOpen, conversations, activeConversation, handleNewConversation, handleConversationSelect, user, onLogout]);
 
   return (
-    <div className="chat-container">
+    <div className="chat chat-container">
+      {/* Overlay para cerrar sidebar en móvil */}
+      {sidebarOpen && (
+        <div 
+          className="sidebar-overlay" 
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
       {Sidebar}
       
-      <div className="chat-main">
+      <div className="main-content">
         <div className="chat-header">
-          <button 
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            aria-label="Toggle sidebar"
-          >
-            ☰
-          </button>
-          <h2>RAG Assistant</h2>
+          {!sidebarOpen && (
+            <button 
+              className="sidebar-toggle"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Abrir sidebar"
+            >
+              ☰
+            </button>
+          )}
+          <h2>NISIRA Assistant</h2>
           <div className="chat-status">
             {isLoading ? 'Procesando...' : 'Listo'}
           </div>
@@ -299,10 +385,10 @@ const Chat = ({ onLogout, user }) => {
           </div>
         )}
 
-        <div className="chat-messages">
+        <div className="messages-container">
           {messages.length === 0 && !isLoading && (
             <div className="welcome-message">
-              <h3>¡Bienvenido al RAG Assistant! 🤖</h3>
+              <h3>¡Bienvenido al NISIRA Assistant! 🤖</h3>
               <p>Pregúntame sobre cualquier tema de los documentos disponibles.</p>
               <div className="example-questions">
                 <p><strong>Ejemplos:</strong></p>
@@ -329,35 +415,59 @@ const Chat = ({ onLogout, user }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        <form className="chat-input-form" onSubmit={handleSubmit}>
-          <div className="input-container">
-            <textarea
-              ref={inputRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Escribe tu pregunta aquí... (Enter para enviar, Shift+Enter para nueva línea)"
-              disabled={isLoading}
-              rows={1}
-              style={{ resize: 'none' }}
-            />
-            <button 
-              type="submit" 
-              disabled={!message.trim() || isLoading}
-              className="send-button"
-              title="Enviar mensaje"
-            >
-              {isLoading ? '⏳' : '📤'}
-            </button>
-          </div>
-          
-          <div className="input-help">
-            <small>
-              💡 Tip: Sé específico en tus preguntas para obtener mejores resultados
-            </small>
-          </div>
-        </form>
+        <div className="input-container">
+          <form className="input-form" onSubmit={handleSubmit}>
+            <div className="input-wrapper">
+              <textarea
+                ref={inputRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Escribe tu pregunta aquí..."
+                disabled={isLoading}
+                rows={1}
+                className="message-input"
+                style={{ resize: 'none' }}
+              />
+              <button 
+                type="submit" 
+                disabled={!message.trim() || isLoading}
+                className="send-button"
+                title="Enviar mensaje"
+              >
+                {isLoading ? '⏳' : '📤'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
+
+      {/* Diálogo de confirmación de eliminación */}
+      {deleteDialog.show && (
+        <div className="delete-dialog-overlay" onClick={cancelDelete}>
+          <div className="delete-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="delete-dialog-icon">🗑️</div>
+            <h3 className="delete-dialog-title">Eliminar conversación</h3>
+            <p className="delete-dialog-message">
+              ¿Estás seguro de que quieres eliminar esta conversación? Esta acción no se puede deshacer.
+            </p>
+            <div className="delete-dialog-actions">
+              <button 
+                className="delete-dialog-btn delete-dialog-btn-cancel" 
+                onClick={cancelDelete}
+              >
+                Cancelar
+              </button>
+              <button 
+                className="delete-dialog-btn delete-dialog-btn-confirm" 
+                onClick={confirmDelete}
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

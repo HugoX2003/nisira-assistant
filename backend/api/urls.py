@@ -1,38 +1,48 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
-    health_view, query_view, ingest_view, register_view, sync_drive_view, 
-    ingest_upload_view, conversations_view, messages_view, sync_drive_full_view,
-    chat_simple, rag_status_simple
-)
-from .test_views import (
-    test_rag_simple, test_rag_multiple, rag_system_status, test_custom_question
+    # Vistas básicas
+    health_check,
+    api_info,
+    # Vistas de conversaciones
+    get_conversations,
+    create_conversation,
+    get_messages,
+    send_message,
+    delete_conversation,
+    # Vistas RAG
+    rag_status,
+    rag_initialize,
+    rag_sync_documents,
+    rag_query,
+    rag_enhanced_chat,
+    rag_system_status
 )
 
-# URLs de la API - Endpoints disponibles
+# URLs de la API
 urlpatterns = [
-    # Endpoints de autenticación JWT
-    path("auth/token", TokenObtainPairView.as_view(), name="token_obtain_pair"),  # Login
-    path("auth/refresh", TokenRefreshView.as_view(), name="token_refresh"),       # Renovar token
-    path("auth/register", register_view, name="register"),                        # Registro de usuarios
+    # Autenticación JWT
+    path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     
-    # Endpoints de la aplicación
-    path("health", health_view, name="health"),      # Verificar estado del servidor
-    path("query", query_view, name="query"),         # Realizar consultas RAG (legacy)
-    path("ingest", ingest_view, name="ingest"),      # Ingerir documentos
-    path("sync-drive", sync_drive_view, name="sync_drive"),  # Sincronizar PDFs desde Drive
-    path("sync-drive/full", sync_drive_full_view, name="sync_drive_full"),  # Sync + extraer + ingestar
-    path("ingest/upload", ingest_upload_view, name="ingest_upload"),  # Subir PDF y reingestar
-    path("conversations", conversations_view, name="conversations"),
-    path("conversations/<int:conv_id>/messages", messages_view, name="messages"),
+    # API básica
+    path("health/", health_check, name="health_check"),
+    path("info/", api_info, name="api_info"),
     
-    # Endpoints del sistema RAG simplificado
-    path("chat/simple", chat_simple, name="chat_simple"),          # Chat con sistema RAG simplificado
-    path("rag/status/simple", rag_status_simple, name="rag_status_simple"),  # Estado del sistema RAG
+    # Gestión de conversaciones
+    path("conversations/", get_conversations, name="get_conversations"),
+    path("conversations/create/", create_conversation, name="create_conversation"),
+    path("conversations/<int:conversation_id>/messages/", get_messages, name="get_messages"),
+    path("conversations/<int:conversation_id>/delete/", delete_conversation, name="delete_conversation"),
     
-    # Endpoints de testing del sistema RAG
-    path("test/rag/simple", test_rag_simple, name="test_rag_simple"),         # Test simple del RAG
-    path("test/rag/multiple", test_rag_multiple, name="test_rag_multiple"),   # Test con múltiples preguntas
-    path("test/rag/status", rag_system_status, name="rag_system_status"),     # Estado completo del sistema
-    path("test/rag/custom", test_custom_question, name="test_custom_question"), # Test con pregunta personalizada
+    # Chat básico
+    path("chat/", send_message, name="send_message"),
+    
+    # Sistema RAG
+    path("rag/status/", rag_status, name="rag_status"),
+    path("rag/initialize/", rag_initialize, name="rag_initialize"),
+    path("rag/sync/", rag_sync_documents, name="rag_sync_documents"),
+    path("rag/query/", rag_query, name="rag_query"),
+    path("rag/chat/", rag_enhanced_chat, name="rag_enhanced_chat"),
+    path("rag/system-status/", rag_system_status, name="rag_system_status"),
 ]

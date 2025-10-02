@@ -70,8 +70,8 @@ REST_FRAMEWORK = {
 # SimpleJWT
 from datetime import timedelta
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.environ.get('JWT_EXPIRES_MIN', 60))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # 24 horas para evitar deslogueo frecuente
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),    # 7 días
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
@@ -81,6 +81,7 @@ SIMPLE_JWT = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = 'core.urls'
 
