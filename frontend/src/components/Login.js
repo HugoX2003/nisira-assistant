@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { login } from "../services/api";
+import { login, tokenManager } from "../services/api";
 import "../styles/Login.css";
 
 /**
@@ -32,10 +32,12 @@ export default function Login({ onLogin, onShowRegister }) {
     try {
       // Enviar petición de login al backend
       const data = await login(username, password);
-      try {
-        localStorage.setItem("token", data.access);
-        localStorage.setItem("refresh", data.refresh || "");
-      } catch {}
+      
+      // Guardar tokens usando el TokenManager
+      tokenManager.setTokens(data.access, data.refresh);
+      
+      console.log('✅ Tokens guardados exitosamente');
+      
       // Si el login es exitoso, notificar al componente padre
       onLogin();
     } catch (err) {

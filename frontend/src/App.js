@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Chat from "./components/Chat";
@@ -8,9 +8,22 @@ import Chat from "./components/Chat";
  * Maneja la navegación entre las pantallas de login, registro y chat
  */
 function App() {
+  // Verificar si hay un token en localStorage al iniciar
+  const checkAuth = () => {
+    const token = localStorage.getItem('token');
+    return token && token !== 'null' && token !== 'undefined';
+  };
+
   // Estados para controlar qué pantalla mostrar
-  const [currentView, setCurrentView] = useState("login"); // "login" | "register" | "chat"
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentView, setCurrentView] = useState(checkAuth() ? "chat" : "login");
+  const [loggedIn, setLoggedIn] = useState(checkAuth());
+
+  // Verificar autenticación al montar el componente
+  useEffect(() => {
+    const isAuthenticated = checkAuth();
+    setLoggedIn(isAuthenticated);
+    setCurrentView(isAuthenticated ? "chat" : "login");
+  }, []);
 
   /**
    * Función que se ejecuta cuando el usuario se loguea exitosamente

@@ -27,8 +27,19 @@ class TokenManager {
     try {
       this.accessToken = localStorage.getItem('token');
       this.refreshToken = localStorage.getItem('refresh');
+      
+      // Verificar que los tokens sean válidos (no null, no undefined, no vacío)
+      if (this.accessToken && this.accessToken !== 'null' && this.accessToken !== 'undefined') {
+        console.log('✅ Token cargado desde localStorage');
+      } else {
+        console.log('⚠️ No hay token válido en localStorage');
+        this.accessToken = null;
+        this.refreshToken = null;
+      }
     } catch (error) {
       console.warn('Error cargando tokens del localStorage:', error);
+      this.accessToken = null;
+      this.refreshToken = null;
     }
   }
 
@@ -110,7 +121,7 @@ const tokenManager = new TokenManager();
 // Crear instancia de axios con configuración base
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 30000, // 30 segundos
+  timeout: 120000, // 2 minutos (para consultas RAG que pueden tardar)
   headers: {
     'Content-Type': 'application/json',
   }
@@ -283,7 +294,7 @@ export async function query(question, options = {}) {
       };
     }
 
-    const response = await api.post('/api/query/', payload);
+    const response = await api.post('/api/rag/query/', payload);
     const result = response.data;
     
     // Cachear resultado exitoso
@@ -359,7 +370,7 @@ export async function createConversation(title) {
 
 export async function deleteConversation(conversationId) {
   try {
-    await api.delete(`/api/conversations/${conversationId}/`);
+    await api.delete(`/api/conversations/${conversationId}/delete/`);
     
     // Invalidar cache de conversaciones
     responseCache.delete('conversations');
@@ -408,6 +419,81 @@ export async function getRagStatus() {
 }
 
 // ================================
+// FUNCIONES RAG ADICIONALES
+// ================================
+
+export async function ragQuery(question, options = {}) {
+  try {
+    const payload = {
+      question: question.trim(),
+      top_k: options.top_k || 3,
+      include_generation: options.include_generation !== false
+    };
+
+    const response = await api.post('/api/rag/query/', payload);
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'consulta RAG');
+  }
+}
+
+export async function ragEnhancedChat(content, conversationId = null, options = {}) {
+  try {
+    const payload = {
+      content: content.trim(),
+      conversation_id: conversationId,
+      use_rag: options.use_rag !== false
+    };
+
+    // Timeout extendido para consultas RAG (pueden tardar en generar embeddings y respuestas)
+    const response = await api.post('/api/rag/chat/', payload, {
+      timeout: 180000 // 3 minutos para RAG
+    });
+    
+    // Invalidar cache de conversaciones cuando se crea una nueva
+    if (!conversationId && response.data.conversation_id) {
+      responseCache.delete('conversations');
+    }
+    
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'chat RAG mejorado');
+  }
+}
+
+export async function getDocuments(options = {}) {
+  try {
+    const params = {
+      page: options.page || 1,
+      page_size: options.page_size || 10
+    };
+
+    const response = await api.get('/api/rag/documents/', { params });
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'obtener documentos');
+  }
+}
+
+export async function syncDocuments() {
+  try {
+    const response = await api.post('/api/rag/sync/');
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'sincronizar documentos');
+  }
+}
+
+export async function getVectorStats() {
+  try {
+    const response = await api.get('/api/rag/status/');
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'obtener estadísticas de vectores');
+  }
+}
+
+// ================================
 // FUNCIONES DE UTILIDAD
 // ================================
 
@@ -434,8 +520,8 @@ export function setRefreshToken(token) {
   tokenManager.setTokens(tokenManager.getAccessToken(), token);
 }
 
-// Exportar instancia de API para uso avanzado
-export { api };
+// Exportar instancia de API y TokenManager para uso avanzado
+export { api, tokenManager };
 
 export default {
   login,
@@ -443,6 +529,8 @@ export default {
   logout,
   isAuthenticated,
   query,
+  ragQuery,
+  ragEnhancedChat,
   semanticSearch,
   getConversations,
   getMessages,
@@ -450,6 +538,10 @@ export default {
   deleteConversation,
   getSystemHealth,
   getRagStatus,
+  getDocuments,
+  syncDocuments,
+  getVectorStats,
   clearApiCache,
-  getApiStats
+  getApiStats,
+  tokenManager
 };
