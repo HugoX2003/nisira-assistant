@@ -58,12 +58,12 @@ class EmbeddingManager:
             try:
                 self.available_providers['google'] = {
                     'name': 'Google Gemini',
-                    'model': 'models/embedding-001',
+                    'model': 'models/text-embedding-004',  # Modelo más reciente y potente
                     'max_tokens': 2048,
                     'rate_limit': 60,  # requests per minute
                     'free_quota': True
                 }
-                logger.info("✅ Google Gemini disponible para embeddings")
+                logger.info("✅ Google Gemini disponible para embeddings (MODELO AVANZADO)")
             except Exception as e:
                 logger.warning(f"⚠️  Error configurando Google Gemini: {e}")
         
@@ -71,12 +71,12 @@ class EmbeddingManager:
         try:
             self.available_providers['huggingface'] = {
                 'name': 'Hugging Face',
-                'model': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2',  # Modelo multilingüe optimizado
-                'max_tokens': 512,
+                'model': 'sentence-transformers/all-mpnet-base-v2',  # EL MEJOR MODELO - 768 dimensiones
+                'max_tokens': 512,  # Máxima calidad
                 'rate_limit': None,  # Sin límite en modelo local
                 'free_quota': True
             }
-            logger.info("✅ Hugging Face disponible para embeddings (multilingüe)")
+            logger.info("✅ Hugging Face disponible para embeddings (MÁXIMA CALIDAD - 768D)")
         except Exception as e:
             logger.warning(f"⚠️  Error configurando Hugging Face: {e}")
         
@@ -254,7 +254,7 @@ class EmbeddingManager:
         
         logger.info(f"🔄 Procesando {len(texts)} textos con {provider}")
         
-        # Para Hugging Face, usar procesamiento por lotes nativo
+        # Para Hugging Face, usar procesamiento por lotes OPTIMIZADO
         if provider == 'huggingface':
             try:
                 model = self.get_embedding_model(provider)
@@ -262,8 +262,24 @@ class EmbeddingManager:
                 # Procesar textos
                 processed_texts = [self._truncate_text(text, provider) for text in texts]
                 
-                # Crear embeddings en lote
-                embeddings = model.embed_documents(processed_texts)
+                # PROCESAMIENTO EN MINI-BATCHES SÚPER OPTIMIZADO para all-mpnet-base-v2
+                embeddings = []
+                batch_size = 4  # Batches MUY pequeños para modelo pesado (768D)
+                
+                for i in range(0, len(processed_texts), batch_size):
+                    batch = processed_texts[i:i + batch_size]
+                    
+                    # Crear embeddings para este mini-batch
+                    batch_embeddings = model.embed_documents(batch)
+                    embeddings.extend(batch_embeddings)
+                    
+                    # Log progreso detallado
+                    progress = min(i + batch_size, len(processed_texts))
+                    logger.info(f"📊 Embeddings 768D: {progress}/{len(processed_texts)} ({(progress/len(processed_texts)*100):.1f}%)")
+                    
+                    # Pequeña pausa para evitar sobrecarga
+                    import time
+                    time.sleep(0.1)
                 
                 # Cachear resultados
                 for text, embedding in zip(texts, embeddings):
@@ -271,7 +287,7 @@ class EmbeddingManager:
                     cache_key = f"{provider}_{text_hash}"
                     self.cache[cache_key] = embedding
                 
-                logger.info(f"✅ {len(embeddings)} embeddings creados en lote")
+                logger.info(f"✅ {len(embeddings)} embeddings creados en mini-batches optimizados")
                 return embeddings
                 
             except Exception as e:

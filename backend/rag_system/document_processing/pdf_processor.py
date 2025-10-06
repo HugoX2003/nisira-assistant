@@ -1,27 +1,34 @@
 """
-PDF Processor
-============
+PDF Processor Avanzado con LangChain
+===================================
 
-Procesador avanzado de documentos PDF que preserva el contexto,
-estructura y metadatos importantes para el sistema RAG.
+Procesador PDF optimizado que usa LangChain para:
+- Chunking inteligente con contexto semántico
+- Preservación de estructura académica
+- Extracción de metadatos enriquecidos
+- Limpieza avanzada de texto
 """
 
 import os
 import logging
-from typing import List, Dict, Any, Optional, Tuple
 import re
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
 try:
-    import PyPDF2
-    import pdfplumber
-    PYPDF2_AVAILABLE = True
-    PDFPLUMBER_AVAILABLE = True
+    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain.schema import Document
+    DEPENDENCIES_AVAILABLE = True
 except ImportError as e:
-    if 'PyPDF2' in str(e):
-        PYPDF2_AVAILABLE = False
-    if 'pdfplumber' in str(e):
-        PDFPLUMBER_AVAILABLE = False
+    DEPENDENCIES_AVAILABLE = False
+    print(f"⚠️ Dependencias PDF no disponibles: {e}")
+    
+    # Definir Document como clase simple para evitar errores
+    class Document:
+        def __init__(self, page_content: str, metadata: dict = None):
+            self.page_content = page_content
+            self.metadata = metadata or {}
 
 from ..config import DOCUMENT_PROCESSING_CONFIG
 
@@ -29,377 +36,182 @@ logger = logging.getLogger(__name__)
 
 class PDFProcessor:
     """
-    Procesador avanzado de documentos PDF
+    Procesador PDF avanzado con LangChain
     """
     
     def __init__(self):
         self.config = DOCUMENT_PROCESSING_CONFIG
-        self.chunk_size = self.config['chunk_size']
-        self.chunk_overlap = self.config['chunk_overlap']
-        self.preserve_structure = self.config['preserve_structure']
-        self.extract_metadata = self.config['extract_metadata']
-    
+        
+        # Configuración optimizada para textos académicos y citas
+        self.chunk_size = 2000   # CHUNKS MÁS GRANDES para capturar CONTEXTO COMPLETO
+        self.chunk_overlap = 600  # OVERLAP MAYOR para asegurar continuidad total
+        self.min_chunk_size = 200  # Chunks mínimos más grandes
+        
+        # Text splitter inteligente con LangChain
+        if DEPENDENCIES_AVAILABLE:
+            self.text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=self.chunk_size,
+                chunk_overlap=self.chunk_overlap,
+                length_function=len,
+                separators=[
+                    "\n\n\n",  # Separadores de sección
+                    "\n\n",    # Párrafos
+                    "\n",      # Líneas
+                    ". ",      # Oraciones
+                    ".",       # Puntos
+                    " ",       # Espacios
+                    ""         # Caracteres
+                ]
+            )
+        
     def is_available(self) -> bool:
-        """Verificar si las librerías necesarias están disponibles"""
-        return PYPDF2_AVAILABLE and PDFPLUMBER_AVAILABLE
-    
-    def extract_text_with_pypdf2(self, pdf_path: str) -> Tuple[str, Dict[str, Any]]:
-        """
-        Extraer texto usando PyPDF2 (método básico)
-        
-        Args:
-            pdf_path: Ruta al archivo PDF
-        
-        Returns:
-            Tupla con (texto_extraído, metadatos)
-        """
-        if not PYPDF2_AVAILABLE:
-            raise ImportError("PyPDF2 no está disponible")
-        
-        text = ""
-        metadata = {}
-        
-        try:
-            with open(pdf_path, 'rb') as file:
-                pdf_reader = PyPDF2.PdfReader(file)
-                
-                # Extraer metadatos
-                if self.extract_metadata and pdf_reader.metadata:
-                    metadata = {
-                        'title': pdf_reader.metadata.get('/Title', ''),
-                        'author': pdf_reader.metadata.get('/Author', ''),
-                        'subject': pdf_reader.metadata.get('/Subject', ''),
-                        'creator': pdf_reader.metadata.get('/Creator', ''),
-                        'producer': pdf_reader.metadata.get('/Producer', ''),
-                        'creation_date': pdf_reader.metadata.get('/CreationDate', ''),
-                        'modification_date': pdf_reader.metadata.get('/ModDate', ''),
-                        'num_pages': len(pdf_reader.pages)
-                    }
-                
-                # Extraer texto página por página
-                for page_num, page in enumerate(pdf_reader.pages):
-                    try:
-                        page_text = page.extract_text()
-                        if page_text.strip():
-                            if self.preserve_structure:
-                                text += f"\\n\\n--- PÁGINA {page_num + 1} ---\\n\\n"
-                            text += page_text + "\\n"
-                    except Exception as e:
-                        logger.warning(f"Error extrayendo página {page_num + 1}: {e}")
-                        continue
-                
-                logger.info(f"✅ Texto extraído con PyPDF2: {len(text)} caracteres")
-                
-        except Exception as e:
-            logger.error(f"❌ Error procesando PDF con PyPDF2: {e}")
-            raise
-        
-        return text, metadata
-    
-    def extract_text_with_pdfplumber(self, pdf_path: str) -> Tuple[str, Dict[str, Any]]:
-        """
-        Extraer texto usando pdfplumber (método avanzado con mejor estructura)
-        
-        Args:
-            pdf_path: Ruta al archivo PDF
-        
-        Returns:
-            Tupla con (texto_extraído, metadatos)
-        """
-        if not PDFPLUMBER_AVAILABLE:
-            raise ImportError("pdfplumber no está disponible")
-        
-        text = ""
-        metadata = {}
-        tables_info = []
-        
-        try:
-            with pdfplumber.open(pdf_path) as pdf:
-                # Extraer metadatos básicos
-                if self.extract_metadata:
-                    metadata = {
-                        'num_pages': len(pdf.pages),
-                        'file_size': os.path.getsize(pdf_path),
-                        'file_name': os.path.basename(pdf_path)
-                    }
-                    
-                    # Metadatos del PDF si están disponibles
-                    if hasattr(pdf, 'metadata') and pdf.metadata:
-                        metadata.update({
-                            'title': pdf.metadata.get('Title', ''),
-                            'author': pdf.metadata.get('Author', ''),
-                            'subject': pdf.metadata.get('Subject', ''),
-                            'creator': pdf.metadata.get('Creator', ''),
-                            'producer': pdf.metadata.get('Producer', ''),
-                            'creation_date': pdf.metadata.get('CreationDate', ''),
-                            'modification_date': pdf.metadata.get('ModDate', '')
-                        })
-                
-                # Procesar cada página
-                for page_num, page in enumerate(pdf.pages):
-                    try:
-                        # Extraer texto principal
-                        page_text = page.extract_text()
-                        
-                        if page_text and page_text.strip():
-                            if self.preserve_structure:
-                                text += f"\\n\\n=== PÁGINA {page_num + 1} ===\\n\\n"
-                            
-                            # Limpiar y normalizar texto
-                            page_text = self._clean_text(page_text)
-                            text += page_text + "\\n"
-                        
-                        # Extraer tablas si las hay
-                        if self.preserve_structure:
-                            tables = page.extract_tables()
-                            if tables:
-                                for table_num, table in enumerate(tables):
-                                    table_text = self._table_to_text(table, page_num + 1, table_num + 1)
-                                    text += f"\\n\\n--- TABLA {table_num + 1} (Página {page_num + 1}) ---\\n"
-                                    text += table_text + "\\n"
-                                    
-                                    tables_info.append({
-                                        'page': page_num + 1,
-                                        'table_num': table_num + 1,
-                                        'rows': len(table),
-                                        'cols': len(table[0]) if table else 0
-                                    })
-                    
-                    except Exception as e:
-                        logger.warning(f"Error procesando página {page_num + 1}: {e}")
-                        continue
-                
-                if tables_info:
-                    metadata['tables'] = tables_info
-                
-                logger.info(f"✅ Texto extraído con pdfplumber: {len(text)} caracteres, {len(tables_info)} tablas")
-                
-        except Exception as e:
-            logger.error(f"❌ Error procesando PDF con pdfplumber: {e}")
-            raise
-        
-        return text, metadata
-    
-    def _clean_text(self, text: str) -> str:
-        """
-        Limpiar y normalizar texto extraído
-        
-        Args:
-            text: Texto a limpiar
-        
-        Returns:
-            Texto limpio
-        """
-        if not text:
-            return ""
-        
-        # Normalizar espacios en blanco
-        text = re.sub(r'\\s+', ' ', text)
-        
-        # Eliminar caracteres de control
-        text = re.sub(r'[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]', '', text)
-        
-        # Normalizar saltos de línea
-        text = re.sub(r'\\n\\s*\\n', '\\n\\n', text)
-        
-        # Eliminar espacios al inicio y final
-        text = text.strip()
-        
-        return text
-    
-    def _table_to_text(self, table: List[List[str]], page_num: int, table_num: int) -> str:
-        """
-        Convertir tabla a texto estructurado
-        
-        Args:
-            table: Tabla extraída
-            page_num: Número de página
-            table_num: Número de tabla
-        
-        Returns:
-            Texto estructurado de la tabla
-        """
-        if not table:
-            return ""
-        
-        text_lines = []
-        
-        for row_num, row in enumerate(table):
-            if row and any(cell for cell in row if cell):  # Solo filas con contenido
-                row_text = " | ".join(str(cell or "") for cell in row)
-                text_lines.append(row_text)
-        
-        return "\\n".join(text_lines)
-    
-    def extract_text(self, pdf_path: str, method: str = 'pdfplumber') -> Tuple[str, Dict[str, Any]]:
-        """
-        Extraer texto del PDF usando el método especificado
-        
-        Args:
-            pdf_path: Ruta al archivo PDF
-            method: Método a usar ('pdfplumber' o 'pypdf2')
-        
-        Returns:
-            Tupla con (texto_extraído, metadatos)
-        """
-        if not os.path.exists(pdf_path):
-            raise FileNotFoundError(f"Archivo PDF no encontrado: {pdf_path}")
-        
-        logger.info(f"📄 Procesando PDF: {os.path.basename(pdf_path)} con método {method}")
-        
-        if method == 'pdfplumber' and PDFPLUMBER_AVAILABLE:
-            return self.extract_text_with_pdfplumber(pdf_path)
-        elif method == 'pypdf2' and PYPDF2_AVAILABLE:
-            return self.extract_text_with_pypdf2(pdf_path)
-        elif PDFPLUMBER_AVAILABLE:
-            logger.warning(f"Método {method} no disponible, usando pdfplumber")
-            return self.extract_text_with_pdfplumber(pdf_path)
-        elif PYPDF2_AVAILABLE:
-            logger.warning(f"Método {method} no disponible, usando PyPDF2")
-            return self.extract_text_with_pypdf2(pdf_path)
-        else:
-            raise ImportError("No hay librerías PDF disponibles. Instalar PyPDF2 y pdfplumber")
-    
-    def chunk_text(self, text: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Dividir texto en chunks para procesamiento RAG
-        
-        Args:
-            text: Texto completo del documento
-            metadata: Metadatos del documento
-        
-        Returns:
-            Lista de chunks con metadatos
-        """
-        if not text.strip():
-            return []
-        
-        chunks = []
-        
-        # Dividir por párrafos primero si se preserva estructura
-        if self.preserve_structure:
-            # Buscar divisiones naturales (páginas, secciones)
-            sections = re.split(r'\\n\\n(?:===|---)', text)
-            
-            for section_num, section in enumerate(sections):
-                section = section.strip()
-                if not section:
-                    continue
-                
-                # Dividir sección en chunks si es muy larga
-                section_chunks = self._split_text_into_chunks(section)
-                
-                for chunk_num, chunk_text in enumerate(section_chunks):
-                    chunk = {
-                        'text': chunk_text,
-                        'metadata': {
-                            **metadata,
-                            'chunk_id': len(chunks),
-                            'section_num': section_num,
-                            'chunk_num': chunk_num,
-                            'total_chunks': len(section_chunks),
-                            'char_count': len(chunk_text),
-                            'word_count': len(chunk_text.split())
-                        }
-                    }
-                    chunks.append(chunk)
-        else:
-            # División simple por tamaño
-            text_chunks = self._split_text_into_chunks(text)
-            
-            for chunk_num, chunk_text in enumerate(text_chunks):
-                chunk = {
-                    'text': chunk_text,
-                    'metadata': {
-                        **metadata,
-                        'chunk_id': chunk_num,
-                        'total_chunks': len(text_chunks),
-                        'char_count': len(chunk_text),
-                        'word_count': len(chunk_text.split())
-                    }
-                }
-                chunks.append(chunk)
-        
-        logger.info(f"📝 Texto dividido en {len(chunks)} chunks")
-        return chunks
-    
-    def _split_text_into_chunks(self, text: str) -> List[str]:
-        """
-        Dividir texto en chunks respetando límites de palabras
-        
-        Args:
-            text: Texto a dividir
-        
-        Returns:
-            Lista de chunks de texto
-        """
-        if len(text) <= self.chunk_size:
-            return [text]
-        
-        chunks = []
-        start = 0
-        
-        while start < len(text):
-            end = start + self.chunk_size
-            
-            if end >= len(text):
-                # Último chunk
-                chunks.append(text[start:])
-                break
-            
-            # Buscar un buen punto de corte (espacio o puntuación)
-            cut_point = end
-            for i in range(end, max(start + self.chunk_size - 200, start), -1):
-                if text[i] in ' \\n.!?;':
-                    cut_point = i + 1
-                    break
-            
-            chunks.append(text[start:cut_point])
-            start = cut_point - self.chunk_overlap
-        
-        return chunks
-    
+        """Verificar disponibilidad"""
+        return DEPENDENCIES_AVAILABLE
+
     def process_pdf(self, pdf_path: str) -> Dict[str, Any]:
         """
-        Procesar completamente un archivo PDF
+        Procesar PDF con LangChain y técnicas avanzadas
         
         Args:
             pdf_path: Ruta al archivo PDF
         
         Returns:
-            Resultado completo del procesamiento
+            Diccionario con texto procesado, chunks y metadatos
         """
+        if not self.is_available():
+            return {
+                "success": False,
+                "error": "Dependencias PDF no disponibles"
+            }
+        
+        if not os.path.exists(pdf_path):
+            return {
+                "success": False,
+                "error": f"Archivo no encontrado: {pdf_path}"
+            }
+        
         try:
-            # Extraer texto y metadatos
-            text, metadata = self.extract_text(pdf_path)
+            filename = os.path.basename(pdf_path)
+            logger.info(f"📄 Procesando PDF: {filename}")
             
-            if not text.strip():
+            # 1. Cargar documento con LangChain - CON MANEJO DE ERRORES Y EXTRACCIÓN MEJORADA
+            try:
+                # Usar múltiples métodos de extracción para máxima calidad
+                loader = PyPDFLoader(pdf_path)
+                
+                # Configurar extracción optimizada
+                loader.extraction_mode = "layout"  # Preservar layout para mejor calidad
+                documents = loader.load()
+                
+                # Si PyPDF falla, intentar con extracción alternativa
+                if not documents or all(len(doc.page_content.strip()) < 50 for doc in documents):
+                    logger.warning(f"⚠️ Extracción pobre con PyPDF, intentando método alternativo para {filename}")
+                    documents = self._extract_with_fallback(pdf_path)
+                    
+            except Exception as pdf_error:
+                logger.error(f"❌ Error cargando PDF {filename}: {pdf_error}")
+                # Intentar método de fallback
+                try:
+                    logger.info(f"🔄 Intentando extracción alternativa para {filename}")
+                    documents = self._extract_with_fallback(pdf_path)
+                except Exception as fallback_error:
+                    logger.error(f"❌ Extracción alternativa también falló: {fallback_error}")
+                    return {
+                        "success": False,
+                        "error": f"Error al cargar PDF: {pdf_error}",
+                        "file": filename
+                    }
+            
+            if not documents:
+                logger.warning(f"⚠️ PDF vacío: {filename}")
                 return {
                     "success": False,
-                    "error": "No se pudo extraer texto del PDF",
-                    "file_path": pdf_path
+                    "error": "PDF vacío o sin contenido extraíble",
+                    "file": filename
                 }
             
-            # Dividir en chunks
-            chunks = self.chunk_text(text, metadata)
+            # 2. Limpiar y enriquecer texto - SIMPLIFICADO PARA VELOCIDAD
+            cleaned_docs = []
+            for i, doc in enumerate(documents):
+                # LIMPIEZA BÁSICA Y RÁPIDA
+                cleaned_text = doc.page_content.strip()
+                
+                # Solo limpieza esencial
+                cleaned_text = re.sub(r'\s+', ' ', cleaned_text)  # Normalizar espacios
+                cleaned_text = re.sub(r'\n+', '\n', cleaned_text)  # Normalizar saltos
+                
+                if len(cleaned_text) < 50:  # Saltar páginas muy cortas
+                    continue
+                
+                # Metadatos básicos
+                metadata = {
+                    'source': filename,
+                    'page': i + 1,
+                    'total_pages': len(documents),
+                    'file_path': pdf_path,
+                    'chunk_type': 'page_content',
+                    'word_count': len(cleaned_text.split()),
+                    'char_count': len(cleaned_text),
+                    'document': filename
+                }
+                
+                cleaned_docs.append(Document(
+                    page_content=cleaned_text,
+                    metadata=metadata
+                ))
             
-            result = {
+            # 3. Chunking inteligente con LangChain
+            chunks = self.text_splitter.split_documents(cleaned_docs)
+            
+            # 4. Post-procesar chunks
+            processed_chunks = []
+            for i, chunk in enumerate(chunks):
+                # Filtrar chunks muy pequeños o irrelevantes
+                if len(chunk.page_content.strip()) < self.min_chunk_size:
+                    continue
+                
+                # Enriquecer metadatos del chunk
+                chunk.metadata.update({
+                    'chunk_id': i,
+                    'chunk_size': len(chunk.page_content),
+                    'document': filename
+                })
+                
+                # Formato para ChromaDB
+                chunk_data = {
+                    'text': chunk.page_content.strip(),
+                    'metadata': chunk.metadata
+                }
+                
+                processed_chunks.append(chunk_data)
+            
+            logger.info(f"✅ Procesado: {len(processed_chunks)} chunks de {len(documents)} páginas")
+            
+            # 5. Estadísticas
+            total_chars = sum(len(chunk['text']) for chunk in processed_chunks)
+            total_words = sum(len(chunk['text'].split()) for chunk in processed_chunks)
+            
+            return {
                 "success": True,
-                "file_path": pdf_path,
-                "file_name": os.path.basename(pdf_path),
-                "text": text,
-                "metadata": metadata,
-                "chunks": chunks,
+                "chunks": processed_chunks,
                 "stats": {
-                    "total_chars": len(text),
-                    "total_words": len(text.split()),
-                    "total_chunks": len(chunks),
-                    "processing_method": "pdfplumber" if PDFPLUMBER_AVAILABLE else "pypdf2"
+                    "total_pages": len(documents),
+                    "total_chunks": len(processed_chunks),
+                    "total_chars": total_chars,
+                    "total_words": total_words,
+                    "avg_chunk_size": total_chars // len(processed_chunks) if processed_chunks else 0,
+                    "processing_method": "langchain_advanced"
+                },
+                "metadata": {
+                    "filename": filename,
+                    "file_path": pdf_path,
+                    "processing_config": {
+                        "chunk_size": self.chunk_size,
+                        "chunk_overlap": self.chunk_overlap,
+                        "min_chunk_size": self.min_chunk_size
+                    }
                 }
             }
-            
-            logger.info(f"✅ PDF procesado exitosamente: {result['stats']}")
-            return result
             
         except Exception as e:
             logger.error(f"❌ Error procesando PDF {pdf_path}: {e}")
@@ -409,35 +221,183 @@ class PDFProcessor:
                 "file_path": pdf_path
             }
     
-    def get_supported_formats(self) -> List[str]:
-        """Obtener formatos soportados"""
-        return ['.pdf']
+    def _clean_and_enrich_text(self, text: str) -> str:
+        """
+        Limpiar y enriquecer texto extraído con énfasis en preservar citas
+        """
+        if not text or not text.strip():
+            return ""
+        
+        # 1. Preservar citas bibliográficas antes de limpiar
+        text = self._preserve_citations(text)
+        
+        # 2. Normalizar espacios en blanco
+        text = re.sub(r'\s+', ' ', text)
+        
+        # 3. Remover caracteres extraños pero preservar estructura y citas
+        text = re.sub(r'[^\w\s\.\,\;\:\!\?\(\)\-\"\'\n\u00C0-\u017F]', '', text)
+        
+        # 4. Mejorar formato de párrafos
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        
+        # 5. Corregir puntuación separada
+        text = re.sub(r'\s+([\.,:;!?])', r'\1', text)
+        
+        # 6. Preservar estructura de listas y numeración
+        text = re.sub(r'\n\s*(\d+[\.\)])', r'\n\1', text)
+        text = re.sub(r'\n\s*([a-zA-Z][\.\)])', r'\n\1', text)
+        
+        return text.strip()
     
-    def validate_pdf(self, pdf_path: str) -> bool:
+    def _preserve_citations(self, text: str) -> str:
         """
-        Validar que el archivo PDF sea válido
-        
-        Args:
-            pdf_path: Ruta al PDF
-        
-        Returns:
-            True si es válido
+        Preservar y mejorar citas bibliográficas en el texto
         """
-        if not os.path.exists(pdf_path):
-            return False
+        # Patrones de citas bibliográficas comunes
+        citation_patterns = [
+            # Autor(año): Arias(2020), García(2019)
+            (r'([A-Z][a-záéíóúñü]+)\s*\(\s*(\d{4})\s*\)', r'\1 (\2)'),
+            # Según Autor (año): Según Arias (2020)
+            (r'(según|de acuerdo a|como menciona|como indica)\s+([A-Z][a-záéíóúñü]+)\s*\(\s*(\d{4})\s*\)', 
+             r'\1 \2 (\3)'),
+            # Multiple authors: Arias et al. (2020)
+            (r'([A-Z][a-záéíóúñü]+)\s+et\s+al\.\s*\(\s*(\d{4})\s*\)', r'\1 et al. (\2)'),
+            # Citation with page: Arias (2020, p. 45)
+            (r'([A-Z][a-záéíóúñü]+)\s*\(\s*(\d{4})\s*,\s*p\.\s*(\d+)\s*\)', r'\1 (\2, p. \3)')
+        ]
         
-        if not pdf_path.lower().endswith('.pdf'):
-            return False
+        for pattern, replacement in citation_patterns:
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
         
+        return text
+    
+    def _detect_sections(self, text: str) -> Dict[str, Any]:
+        """
+        Detectar secciones especiales en el texto incluyendo citas
+        """
+        sections = {
+            'has_title': False,
+            'has_author': False,
+            'has_references': False,
+            'has_conclusions': False,
+            'has_citations': False,
+            'section_type': 'content'
+        }
+        
+        text_lower = text.lower()
+        
+        # Detectar títulos (texto en mayúsculas al inicio)
+        if re.match(r'^[A-ZÁÉÍÓÚÑ\s]{10,}', text[:100]):
+            sections['has_title'] = True
+            sections['section_type'] = 'title'
+        
+        # Detectar autores
+        author_patterns = [
+            r'por:?\s+[A-Z][a-z]+\s+[A-Z]',
+            r'autor:?\s+[A-Z]',
+            r'^[A-Z][a-z]+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?$'
+        ]
+        if any(re.search(pattern, text[:200], re.IGNORECASE) for pattern in author_patterns):
+            sections['has_author'] = True
+        
+        # Detectar citas bibliográficas
+        citation_patterns = [
+            r'[A-Z][a-záéíóúñü]+\s*\(\s*\d{4}\s*\)',  # Autor(año)
+            r'según\s+[A-Z][a-záéíóúñü]+\s*\(\s*\d{4}\s*\)',  # según Autor(año)
+            r'[A-Z][a-záéíóúñü]+\s+et\s+al\.\s*\(\s*\d{4}\s*\)'  # Autor et al.(año)
+        ]
+        if any(re.search(pattern, text, re.IGNORECASE) for pattern in citation_patterns):
+            sections['has_citations'] = True
+        
+        # Detectar referencias/bibliografía
+        ref_keywords = ['referencias', 'bibliografía', 'bibliography', 'works cited']
+        if any(keyword in text_lower[:100] for keyword in ref_keywords):
+            sections['has_references'] = True
+            sections['section_type'] = 'references'
+        
+        # Detectar conclusiones
+        conclusion_keywords = ['conclusión', 'conclusiones', 'summary', 'resumen']
+        if any(keyword in text_lower[:100] for keyword in conclusion_keywords):
+            sections['has_conclusions'] = True
+            sections['section_type'] = 'conclusions'
+        
+        return sections
+    
+    def _extract_with_fallback(self, pdf_path: str) -> List[Document]:
+        """
+        Método de extracción alternativo cuando PyPDF falla
+        """
         try:
-            if PDFPLUMBER_AVAILABLE:
+            # Método 1: Usar pdfplumber si está disponible
+            try:
+                import pdfplumber
+                documents = []
+                
                 with pdfplumber.open(pdf_path) as pdf:
-                    return len(pdf.pages) > 0
-            elif PYPDF2_AVAILABLE:
+                    for page_num, page in enumerate(pdf.pages):
+                        text = page.extract_text()
+                        if text and text.strip():
+                            doc = Document(
+                                page_content=text,
+                                metadata={
+                                    'source': os.path.basename(pdf_path),
+                                    'page': page_num + 1
+                                }
+                            )
+                            documents.append(doc)
+                
+                if documents:
+                    logger.info(f"✅ Extracción exitosa con pdfplumber: {len(documents)} páginas")
+                    return documents
+                    
+            except ImportError:
+                logger.warning("pdfplumber no disponible, usando método básico")
+            
+            # Método 2: Usar PyPDF2 básico con configuración alternativa
+            try:
+                import PyPDF2
+                documents = []
+                
                 with open(pdf_path, 'rb') as file:
                     pdf_reader = PyPDF2.PdfReader(file)
-                    return len(pdf_reader.pages) > 0
-            else:
-                return False
-        except Exception:
-            return False
+                    
+                    for page_num, page in enumerate(pdf_reader.pages):
+                        text = page.extract_text()
+                        
+                        # Limpiar texto extraído
+                        if text and text.strip():
+                            # Aplicar limpieza adicional
+                            text = re.sub(r'\s+', ' ', text)  # Normalizar espacios
+                            text = text.strip()
+                            
+                            if len(text) > 20:  # Solo páginas con contenido significativo
+                                doc = Document(
+                                    page_content=text,
+                                    metadata={
+                                        'source': os.path.basename(pdf_path),
+                                        'page': page_num + 1
+                                    }
+                                )
+                                documents.append(doc)
+                
+                if documents:
+                    logger.info(f"✅ Extracción exitosa con PyPDF2: {len(documents)} páginas")
+                    return documents
+                    
+            except Exception as e:
+                logger.warning(f"PyPDF2 también falló: {e}")
+            
+            # Método 3: Último recurso - crear documento vacío con metadatos
+            logger.warning(f"Todos los métodos de extracción fallaron para {pdf_path}")
+            return [Document(
+                page_content="[Contenido no extraíble - PDF problemático]",
+                metadata={
+                    'source': os.path.basename(pdf_path),
+                    'page': 1,
+                    'extraction_error': True
+                }
+            )]
+            
+        except Exception as e:
+            logger.error(f"Error en extracción alternativa: {e}")
+            return []
