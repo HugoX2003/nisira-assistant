@@ -11,11 +11,16 @@ Pipeline principal que coordina todos los componentes del sistema RAG:
 """
 
 import os
+import re
 import logging
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime
 import asyncio
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Cargar variables de entorno al importar el módulo
+load_dotenv()
 
 try:
     from langchain_google_genai import ChatGoogleGenerativeAI
@@ -61,25 +66,97 @@ class RAGPipeline:
         }
     
     def _initialize_llm(self):
-        """Inicializar modelo de lenguaje para generación"""
-        if not LANGCHAIN_GOOGLE_AVAILABLE:
-            logger.warning("LangChain Google no disponible, solo búsqueda disponible")
-            return
+        """Inicializar modelo de lenguaje con soporte multi-proveedor"""
+        from ..config import RAG_CONFIG
         
-        if not API_CONFIG['google_api_key']:
-            logger.warning("API key de Google no configurada")
-            return
+        provider = RAG_CONFIG["generation"]["provider"]
+        logger.info(f"🤖 Inicializando LLM con proveedor: {provider}")
         
         try:
-            self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                google_api_key=API_CONFIG['google_api_key'],
-                temperature=0.7,
-                max_tokens=1024
-            )
-            logger.info("LLM Google Gemini inicializado")
+            if provider == "openrouter":
+                self._initialize_openrouter_llm()
+            elif provider == "groq":
+                self._initialize_groq_llm()
+            elif provider == "google":
+                self._initialize_google_llm()
+            else:
+                logger.error(f"❌ Proveedor no soportado: {provider}")
+                return
+                
         except Exception as e:
-            logger.error(f"Error inicializando LLM: {e}")
+            logger.error(f"❌ Error inicializando LLM {provider}: {e}")
+            # Fallback a modo solo búsqueda
+            self.llm = None
+    
+    def _initialize_openrouter_llm(self):
+        """Inicializar OpenRouter LLM"""
+        try:
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            logger.error("❌ langchain_openai no disponible. Instalar con: pip install langchain-openai")
+            return
+            
+        from ..config import RAG_CONFIG
+        
+        config = RAG_CONFIG["generation"]["openrouter"]
+        api_key = config["api_key"]
+        
+        if not api_key or api_key == "your_openrouter_api_key_here":
+            logger.warning("❌ API key de OpenRouter no configurada")
+            return
+        
+        self.llm = ChatOpenAI(
+            model=config["model"],
+            openai_api_key=api_key,
+            openai_api_base=config["base_url"],
+            temperature=0.7,
+            max_tokens=2048
+        )
+        logger.info(f"✅ LLM OpenRouter inicializado: {config['model']}")
+    
+    def _initialize_groq_llm(self):
+        """Inicializar Groq LLM"""
+        try:
+            from langchain_groq import ChatGroq
+        except ImportError:
+            logger.error("❌ langchain_groq no disponible. Instalar con: pip install langchain-groq")
+            return
+            
+        from ..config import RAG_CONFIG
+        
+        config = RAG_CONFIG["generation"]["groq"]
+        api_key = config["api_key"]
+        
+        if not api_key or api_key == "your_groq_api_key_here":
+            logger.warning("❌ API key de Groq no configurada")
+            return
+        
+        self.llm = ChatGroq(
+            model=config["model"],
+            groq_api_key=api_key,
+            temperature=0.7,
+            max_tokens=2048
+        )
+        logger.info(f"✅ LLM Groq inicializado: {config['model']}")
+    
+    def _initialize_google_llm(self):
+        """Inicializar Google Gemini LLM (método original)"""
+        if not LANGCHAIN_GOOGLE_AVAILABLE:
+            logger.warning("❌ LangChain Google no disponible")
+            return
+
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            logger.warning("❌ API key de Google no configurada")
+            return
+
+        self.llm = ChatGoogleGenerativeAI(
+            model="gemini-2.0-flash-exp",
+            google_api_key=api_key,
+            temperature=0.7,
+            max_tokens=1024
+        )
+        logger.info("✅ LLM Google Gemini inicializado")
     
     def is_ready(self) -> Dict[str, bool]:
         """Verificar estado de todos los componentes"""
@@ -275,7 +352,7 @@ class RAGPipeline:
             }
     
     def query(self, question: str, top_k: int = 5, include_generation: bool = True) -> Dict[str, Any]:
-        """Realizar consulta RAG completa"""
+        """Realizar consulta RAG completa con optimización para citas"""
         logger.info(f"Procesando consulta: {question[:100]}...")
         
         if not question.strip():
@@ -285,8 +362,12 @@ class RAGPipeline:
             }
         
         try:
-            # 1. Crear embedding de la pregunta
-            query_embedding = self.embedding_manager.create_embedding(question)
+            # 1. Detectar si es una consulta sobre citas específicas
+            is_citation_query, enhanced_query = self._enhance_citation_query(question)
+            
+            # 2. Usar la consulta mejorada para embeddings
+            search_query = enhanced_query if is_citation_query else question
+            query_embedding = self.embedding_manager.create_embedding(search_query)
             
             if query_embedding is None:
                 return {
@@ -294,12 +375,8 @@ class RAGPipeline:
                     "error": "No se pudo crear embedding de la consulta"
                 }
             
-            # 2. Buscar documentos relevantes con threshold más bajo
-            relevant_docs = self.chroma_manager.search_similar(
-                query_embedding, 
-                n_results=top_k,
-                similarity_threshold=0.15  # Threshold bajo para no filtrar demasiado
-            )
+            # 2. BÚSQUEDA HÍBRIDA SÚPER AGRESIVA
+            relevant_docs = self._hybrid_search(question, enhanced_query, query_embedding, top_k)
             
             if not relevant_docs:
                 return {
@@ -315,13 +392,13 @@ class RAGPipeline:
             sources = []
             
             for i, doc in enumerate(relevant_docs):
-                context_parts.append(f"Documento {i+1}:\\n{doc['document']}")
+                context_parts.append(f"Documento {i+1}:\\n{doc.get('content', doc.get('document', ''))}")
                 
                 metadata = doc['metadata']
                 source_info = {
-                    "rank": doc['rank'],
-                    "similarity_score": doc['similarity_score'],
-                    "file_name": metadata.get('file_name', 'unknown'),
+                    "rank": doc.get('rank', i + 1),
+                    "similarity_score": doc.get('similarity_score', 0),
+                    "file_name": metadata.get('source', metadata.get('document', metadata.get('file_name', 'unknown'))),
                     "chunk_id": metadata.get('chunk_id', 0)
                 }
                 
@@ -369,21 +446,28 @@ class RAGPipeline:
     
     def _create_rag_prompt(self, question: str, context: str) -> str:
         """Crear prompt para generación RAG"""
-        prompt = f"""Eres un asistente inteligente que responde preguntas basándose en documentos específicos.
+        prompt = f"""Eres un asistente académico especializado en análisis de textos y documentos peruanos. Tu trabajo es encontrar y explicar información relevante basándote en los documentos proporcionados.
 
-Contexto de documentos relevantes:
+CONTEXTO DE DOCUMENTOS:
 {context}
 
-Pregunta: {question}
+PREGUNTA DEL USUARIO: {question}
 
-Instrucciones:
-1. Responde únicamente basándote en la información proporcionada en el contexto
-2. Si la información no está en el contexto, indica que no tienes esa información
-3. Sé preciso y cita información específica cuando sea relevante
-4. Mantén un tono profesional y útil
-5. Si hay múltiples documentos, puedes combinar información de ellos
+INSTRUCCIONES CRÍTICAS:
+1. **ANALIZA PROFUNDAMENTE**: Busca conceptos, ideas y menciones relacionadas, no solo coincidencias exactas de palabras
+2. **SÉ INTERPRETATIVO**: Si encuentras contenido relacionado conceptualmente, explícalo aunque no use las palabras exactas de la pregunta
+3. **EXPLORA CONEXIONES**: Conecta ideas entre diferentes partes del texto y diferentes documentos
+4. **CITA ESPECÍFICAMENTE**: Menciona qué documento y qué parte contiene la información relevante
+5. **NO SEAS LITERAL**: Si la pregunta busca "derecho a la mugre" y encuentras texto sobre discriminación, desigualdad o derechos sociales, ¡relaciónalos!
+6. **EXTRAE SIGNIFICADO**: Explica el contexto académico, histórico o social de la información encontrada
+7. **COMBINA FUENTES**: Si múltiples documentos abordan temas relacionados, combínalos en una respuesta coherente
 
-Respuesta:"""
+FORMATO DE RESPUESTA:
+- Si encuentras información relevante (directa o conceptualmente relacionada): Explícala detalladamente
+- Si no hay información relacionada: "No se encontró información relacionada con [pregunta] en los documentos proporcionados"
+- Siempre indica qué documentos consultaste: "Según el Documento X..." o "En el texto de [autor]..."
+
+RESPUESTA ACADÉMICA:"""
         
         return prompt
     
@@ -437,3 +521,498 @@ Respuesta:"""
                 "success": False,
                 "error": str(e)
             }
+    
+    def _enhance_citation_query(self, question: str) -> Tuple[bool, str]:
+        """
+        Detectar y mejorar consultas sobre citas bibliográficas específicas
+        
+        Returns:
+            Tuple[bool, str]: (is_citation_query, enhanced_query)
+        """
+        import re
+        
+        # Patrones para detectar consultas sobre citas
+        citation_patterns = [
+            r'([A-Z][a-záéíóúñü]+)\s*\(\s*(\d{4})\s*\)',  # Arias(2020)
+            r'([A-Z][a-záéíóúñü]+)\s+(\d{4})',           # Arias 2020
+            r'([A-Z][a-záéíóúñü]+)\s+et\s+al\.\s*\(\s*(\d{4})\s*\)'  # Arias et al.(2020)
+        ]
+        
+        enhanced_query = question
+        is_citation_query = False
+        
+        for pattern in citation_patterns:
+            matches = re.findall(pattern, question, re.IGNORECASE)
+            if matches:
+                is_citation_query = True
+                for match in matches:
+                    if len(match) == 2:  # (autor, año)
+                        author, year = match
+                        # Añadir contexto para mejorar la búsqueda
+                        enhanced_query += f" {author} {year} según menciona dice refiere cita bibliográfica investigación estudio análisis variables definición teoría"
+                
+        return is_citation_query, enhanced_query
+    
+    def _hybrid_search(self, original_query: str, enhanced_query: str, query_embedding, top_k: int) -> List[Dict[str, Any]]:
+        """
+        BÚSQUEDA HÍBRIDA MEJORADA
+        Combina múltiples estrategias con pesos optimizados para máxima precisión
+        """
+        all_results = []
+        seen_ids = set()
+        
+        logger.info(f"🔍 Iniciando búsqueda híbrida optimizada para: '{original_query}'")
+        
+        # Obtener configuración de pesos
+        config = self.config.get("retrieval", {})
+        semantic_weight = config.get("semantic_weight", 0.6)
+        lexical_weight = config.get("lexical_weight", 0.4)
+        max_results = config.get("top_k", 15)
+        
+        # 1. BÚSQUEDA SEMÁNTICA MEJORADA
+        try:
+            semantic_docs = self.chroma_manager.search_similar(
+                query_embedding, 
+                n_results=max_results,
+                similarity_threshold=config.get("similarity_threshold", 0.005)
+            )
+            for i, doc in enumerate(semantic_docs):
+                # Usar doc_id del metadata como ID único
+                doc_id = doc.get('metadata', {}).get('doc_id', f"semantic_{len(all_results)}")
+                if doc_id not in seen_ids:
+                    # Aplicar peso semántico y boost por posición
+                    position_boost = 1.0 - (i * 0.05)  # Reduce 5% por posición
+                    weighted_score = doc.get('similarity_score', 0) * semantic_weight * position_boost
+                    
+                    doc['id'] = doc_id
+                    doc['search_type'] = 'semantic'
+                    doc['weighted_score'] = weighted_score
+                    doc['original_score'] = doc.get('similarity_score', 0)
+                    all_results.append(doc)
+                    seen_ids.add(doc_id)
+            logger.info(f"📊 Búsqueda semántica: {len(semantic_docs)} documentos (peso: {semantic_weight})")
+        except Exception as e:
+            logger.warning(f"Error en búsqueda semántica: {e}")
+        
+        # 2. BÚSQUEDA ADICIONAL (DESHABILITADA TEMPORALMENTE)
+        # La búsqueda por texto tiene conflicto de dimensiones
+        try:
+            pass  # Placeholder - búsqueda lexical deshabilitada temporalmente
+        except Exception as e:
+            logger.warning(f"Error en búsqueda lexical: {e}")
+        
+        # 3. BÚSQUEDA POR METADATOS (nombres de archivos y fuentes)
+        try:
+            metadata_docs = self._enhanced_metadata_search(original_query, max_results // 2)
+            for doc in metadata_docs:
+                if doc['id'] not in seen_ids:
+                    # Metadata tiene peso fijo alto para coincidencias exactas
+                    doc['search_type'] = 'metadata'
+                    doc['weighted_score'] = doc.get('similarity_score', 1.0)  # Score alto para metadata
+                    doc['original_score'] = doc.get('similarity_score', 1.0)
+                    all_results.append(doc)
+                    seen_ids.add(doc['id'])
+            logger.info(f"📊 Búsqueda por metadatos: {len(metadata_docs)} documentos")
+        except Exception as e:
+            logger.warning(f"Error en búsqueda por metadatos: {e}")
+        
+        # 4. BÚSQUEDA DE EXPANSIÓN (si pocos resultados)
+        if len(all_results) < top_k:
+            logger.info("� Expandiendo búsqueda con términos relacionados...")
+            try:
+                expanded_docs = self._expansion_search(original_query, top_k)
+                for doc in expanded_docs:
+                    if doc['id'] not in seen_ids:
+                        doc['search_type'] = 'expansion'
+                        doc['weighted_score'] = doc.get('similarity_score', 0) * 0.3  # Peso bajo
+                        doc['original_score'] = doc.get('similarity_score', 0)
+                        all_results.append(doc)
+                        seen_ids.add(doc['id'])
+                logger.info(f"📊 Búsqueda expandida: {len(expanded_docs)} documentos adicionales")
+            except Exception as e:
+                logger.warning(f"Error en búsqueda expandida: {e}")
+        
+        # 5. ORDENAR POR WEIGHTED SCORE
+        all_results.sort(key=lambda x: x.get('weighted_score', 0), reverse=True)
+        
+        # 6. DIVERSIFICACIÓN (evitar documentos muy similares)
+        diverse_results = self._diversify_results(all_results, config.get("diversity_threshold", 0.4))
+        
+        logger.info(f"✅ Búsqueda híbrida completada: {len(diverse_results)} documentos únicos (de {len(all_results)} totales)")
+        
+        return diverse_results[:top_k]
+    
+    def _extract_keywords(self, query: str) -> List[str]:
+        """Extraer palabras clave de la consulta"""
+        import re
+        
+        # Limpiar y extraer palabras
+        words = re.findall(r'\b\w+\b', query.lower())
+        
+        # Filtrar stopwords comunes
+        stopwords = {'el', 'la', 'de', 'que', 'y', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 
+                    'da', 'su', 'por', 'son', 'con', 'para', 'como', 'las', 'del', 'los', 'una', 
+                    'está', 'qué', 'dice', 'sobre', 'quién', 'cómo', 'cuál', 'dónde'}
+        
+        keywords = [word for word in words if len(word) > 2 and word not in stopwords]
+        
+        return keywords
+    
+    def _search_by_filename(self, keywords: List[str], top_k: int) -> List[Dict[str, Any]]:
+        """Buscar por coincidencias en nombres de archivos"""
+        results = []
+        
+        try:
+            collection = self.chroma_manager.collection
+            all_data = collection.get()
+            
+            ids = all_data.get('ids', [])
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            
+            for i, metadata in enumerate(metadatas):
+                if i >= len(ids) or i >= len(documents):
+                    continue
+                    
+                source = metadata.get('source', '').lower()
+                
+                # Calcular score basado en coincidencias de palabras clave
+                score = 0
+                for keyword in keywords:
+                    if keyword in source:
+                        score += 1
+                
+                if score > 0:
+                    results.append({
+                        'id': ids[i],
+                        'document': documents[i],
+                        'metadata': metadata,
+                        'similarity_score': score / len(keywords),  # Normalizar score
+                        'rank': len(results) + 1
+                    })
+            
+            # Ordenar por score descendente
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda por filename: {e}")
+        
+        return results[:top_k]
+    
+    def _lexical_search(self, keywords: List[str], top_k: int) -> List[Dict[str, Any]]:
+        """Búsqueda lexical en el contenido de los documentos"""
+        results = []
+        
+        try:
+            collection = self.chroma_manager.collection
+            all_data = collection.get()
+            
+            ids = all_data.get('ids', [])
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            
+            for i, document in enumerate(documents):
+                if i >= len(ids) or i >= len(metadatas):
+                    continue
+                    
+                content = document.lower()
+                
+                # Calcular score basado en frecuencia de palabras clave
+                score = 0
+                for keyword in keywords:
+                    score += content.count(keyword)
+                
+                if score > 0:
+                    results.append({
+                        'id': ids[i],
+                        'document': document,
+                        'metadata': metadatas[i],
+                        'similarity_score': min(score / 10, 1.0),  # Normalizar y limitar a 1.0
+                        'rank': len(results) + 1
+                    })
+            
+            # Ordenar por score descendente
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda lexical: {e}")
+        
+        return results[:top_k]
+    
+    def _smart_lexical_search(self, keywords: List[str], original_query: str, top_k: int) -> List[Dict[str, Any]]:
+        """Búsqueda lexical inteligente con coincidencias parciales y fuzzy matching"""
+        results = []
+        
+        try:
+            collection = self.chroma_manager.collection
+            all_data = collection.get(include=['documents', 'metadatas'])
+            
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            ids = all_data.get('ids', [])
+            
+            # Expandir keywords con variaciones
+            expanded_keywords = set(keywords)
+            for kw in keywords:
+                # Agregar plurales y singulares básicos
+                if kw.endswith('s'):
+                    expanded_keywords.add(kw[:-1])
+                else:
+                    expanded_keywords.add(kw + 's')
+                    
+                # Agregar variaciones de capitalización
+                expanded_keywords.add(kw.upper())
+                expanded_keywords.add(kw.capitalize())
+            
+            for i, document in enumerate(documents):
+                if i >= len(ids) or i >= len(metadatas):
+                    continue
+                
+                doc_lower = document.lower()
+                score = 0
+                matches = 0
+                
+                # Calcular score basado en coincidencias
+                for keyword in expanded_keywords:
+                    kw_lower = keyword.lower()
+                    if kw_lower in doc_lower:
+                        # Boost para coincidencias exactas
+                        count = doc_lower.count(kw_lower)
+                        score += count * (0.2 if keyword in keywords else 0.1)
+                        matches += count
+                
+                # Boost adicional si el documento contiene la frase completa
+                if original_query.lower() in doc_lower:
+                    score += 0.5
+                    matches += 1
+                
+                if score > 0:
+                    results.append({
+                        'id': ids[i],
+                        'content': document,
+                        'metadata': metadatas[i],
+                        'similarity_score': min(score, 1.0),  # Normalizar a máximo 1.0
+                        'match_count': matches
+                    })
+            
+            # Ordenar por score y luego por número de matches
+            results.sort(key=lambda x: (x['similarity_score'], x['match_count']), reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda lexical inteligente: {e}")
+        
+        return results[:top_k]
+    
+    def _enhanced_metadata_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        """Búsqueda mejorada en metadatos y nombres de archivos"""
+        results = []
+        
+        try:
+            collection = self.chroma_manager.collection
+            all_data = collection.get(include=['documents', 'metadatas'])
+            
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            ids = all_data.get('ids', [])
+            
+            query_words = set(re.findall(r'\b\w+\b', query.lower()))
+            
+            for i, metadata in enumerate(metadatas):
+                if i >= len(ids):
+                    continue
+                
+                score = 0
+                
+                # Buscar en source/filename
+                source = metadata.get('source', '').lower()
+                if source:
+                    source_words = set(re.findall(r'\b\w+\b', source))
+                    common_words = query_words.intersection(source_words)
+                    if common_words:
+                        score += len(common_words) / len(query_words) * 0.8
+                
+                # Buscar en document field
+                document_field = metadata.get('document', '').lower()
+                if document_field:
+                    doc_words = set(re.findall(r'\b\w+\b', document_field))
+                    common_words = query_words.intersection(doc_words)
+                    if common_words:
+                        score += len(common_words) / len(query_words) * 0.6
+                
+                # Búsqueda exacta en títulos/fuentes
+                if query.lower() in source or query.lower() in document_field:
+                    score += 0.9
+                
+                if score > 0:
+                    results.append({
+                        'id': ids[i],
+                        'content': documents[i] if i < len(documents) else '',
+                        'metadata': metadata,
+                        'similarity_score': min(score, 1.0)
+                    })
+            
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda de metadatos: {e}")
+        
+        return results[:top_k]
+    
+    def _expansion_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        """Búsqueda con expansión de términos y conceptos relacionados"""
+        results = []
+        
+        # Diccionario de expansión de términos académicos
+        expansion_dict = {
+            'derecho': ['derechos', 'legal', 'jurídico', 'justicia', 'normativo'],
+            'mugre': ['suciedad', 'contaminación', 'higiene', 'limpieza', 'sanitario'],
+            'satán': ['diablo', 'demonio', 'mal', 'infernal', 'diabólico'],
+            'crucificado': ['crucifixión', 'cruz', 'crucificar', 'martirio'],
+            'democracia': ['democrático', 'democratización', 'participación', 'electoral'],
+            'política': ['político', 'gobierno', 'estado', 'poder', 'gestión'],
+            'regionalización': ['regional', 'descentralización', 'territorio', 'local'],
+            'racismo': ['racial', 'discriminación', 'étnico', 'prejuicio'],
+            'violencia': ['violento', 'agresión', 'conflicto', 'guerra']
+        }
+        
+        try:
+            # Extraer términos clave de la consulta
+            query_terms = re.findall(r'\b\w+\b', query.lower())
+            expanded_terms = set(query_terms)
+            
+            # Expandir con términos relacionados
+            for term in query_terms:
+                if term in expansion_dict:
+                    expanded_terms.update(expansion_dict[term])
+            
+            # Buscar con términos expandidos
+            collection = self.chroma_manager.collection
+            all_data = collection.get(include=['documents', 'metadatas'])
+            
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            ids = all_data.get('ids', [])
+            
+            for i, document in enumerate(documents):
+                if i >= len(ids) or i >= len(metadatas):
+                    continue
+                
+                doc_lower = document.lower()
+                score = 0
+                
+                # Calcular relevancia basada en términos expandidos
+                for term in expanded_terms:
+                    if term in doc_lower:
+                        # Términos originales tienen más peso
+                        weight = 0.3 if term in query_terms else 0.1
+                        count = doc_lower.count(term)
+                        score += count * weight
+                
+                if score > 0:
+                    results.append({
+                        'id': ids[i],
+                        'content': document,
+                        'metadata': metadatas[i],
+                        'similarity_score': min(score / len(expanded_terms), 1.0)
+                    })
+            
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda expandida: {e}")
+        
+        return results[:top_k]
+    
+    def _diversify_results(self, results: List[Dict[str, Any]], diversity_threshold: float) -> List[Dict[str, Any]]:
+        """Diversificar resultados para evitar documentos muy similares"""
+        if not results:
+            return results
+        
+        diverse_results = [results[0]]  # Siempre incluir el mejor resultado
+        
+        for result in results[1:]:
+            is_diverse = True
+            result_content = result.get('content', '').lower()
+            
+            for existing in diverse_results:
+                existing_content = existing.get('content', '').lower()
+                
+                # Calcular similitud simple basada en palabras comunes
+                result_words = set(re.findall(r'\b\w+\b', result_content))
+                existing_words = set(re.findall(r'\b\w+\b', existing_content))
+                
+                if result_words and existing_words:
+                    similarity = len(result_words.intersection(existing_words)) / len(result_words.union(existing_words))
+                    if similarity > diversity_threshold:
+                        is_diverse = False
+                        break
+            
+            if is_diverse:
+                diverse_results.append(result)
+        
+        return diverse_results
+    
+    def _desperate_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        """Búsqueda desesperada - devuelve cualquier contenido relacionado"""
+        results = []
+        
+        try:
+            collection = self.chroma_manager.collection
+            all_data = collection.get()
+            
+            ids = all_data.get('ids', [])
+            documents = all_data.get('documents', [])
+            metadatas = all_data.get('metadatas', [])
+            
+            query_words = set(re.findall(r'\b\w+\b', query.lower()))
+            
+            for i, document in enumerate(documents):
+                if i >= len(ids) or i >= len(metadatas):
+                    continue
+                    
+                doc_words = set(re.findall(r'\b\w+\b', document.lower()))
+                
+                # Calcular intersección de palabras
+                common_words = query_words.intersection(doc_words)
+                
+                if common_words:
+                    score = len(common_words) / len(query_words)
+                    results.append({
+                        'id': ids[i],
+                        'document': document,
+                        'metadata': metadatas[i],
+                        'similarity_score': score,
+                        'rank': len(results) + 1
+                    })
+            
+            # Ordenar por score descendente
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda desesperada: {e}")
+        
+        return results[:top_k]
+    
+    def _rank_hybrid_results(self, results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
+        """Reordenar resultados híbridos por relevancia total"""
+        
+        # Asignar pesos por tipo de búsqueda
+        type_weights = {
+            'semantic': 1.0,
+            'metadata': 0.8,
+            'lexical': 0.6,
+            'desperate': 0.3
+        }
+        
+        for result in results:
+            search_type = result.get('search_type', 'desperate')
+            original_score = result.get('similarity_score', 0)
+            weight = type_weights.get(search_type, 0.3)
+            
+            # Calcular score final ponderado
+            result['final_score'] = original_score * weight
+        
+        # Ordenar por score final
+        results.sort(key=lambda x: x.get('final_score', 0), reverse=True)
+        
+        return results

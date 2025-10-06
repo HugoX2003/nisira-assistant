@@ -34,7 +34,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             'action',
-            choices=['status', 'init', 'sync', 'query', 'reset', 'process'],
+            choices=['status', 'init', 'sync', 'query', 'reset', 'process', 'reindex'],
             help='Acción a realizar'
         )
         
@@ -98,11 +98,87 @@ class Command(BaseCommand):
                 self._handle_reset(options)
             elif action == 'process':
                 self._handle_process(options)
+            elif action == 'reindex':
+                self._handle_reindex(options)
             else:
                 raise CommandError(f"Acción no reconocida: {action}")
-                
         except Exception as e:
             raise CommandError(f"❌ Error ejecutando {action}: {e}")
+
+    def _handle_reindex(self, options):
+        """Procesar todos los PDFs en la carpeta de documentos y generar embeddings"""
+        from glob import glob
+        self.stdout.write("🔄 Reindexando todos los documentos PDF...")
+        
+        # Ruta a la carpeta de documentos
+        base_dir = getattr(settings, 'BASE_DIR', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+        docs_dir = os.path.join(base_dir, 'data', 'documents')
+        pdf_files = glob(os.path.join(docs_dir, '*.pdf'))
+        
+        if not pdf_files:
+            self.stdout.write("❌ No se encontraron archivos PDF en la carpeta de documentos.")
+            return
+        
+        pipeline = RAGPipeline()
+        total = len(pdf_files)
+        exitosos = 0
+        fallidos = 0
+        total_chunks = 0
+        
+        for idx, pdf_path in enumerate(pdf_files, 1):
+            self.stdout.write(f"[{idx}/{total}] Procesando: {os.path.basename(pdf_path)}")
+            
+            try:
+                # Procesar documento
+                result = pipeline.process_document(pdf_path)
+                
+                if result.get('success'):
+                    chunks = result.get('chunks', [])
+                    
+                    if chunks:
+                        # Generar embeddings
+                        chunk_texts = [chunk['text'] for chunk in chunks]
+                        embeddings = pipeline.embedding_manager.create_embeddings_batch(chunk_texts)
+                        
+                        # Filtrar chunks válidos con embeddings
+                        valid_chunks = []
+                        valid_embeddings = []
+                        
+                        for chunk, embedding in zip(chunks, embeddings):
+                            if embedding is not None:
+                                valid_chunks.append(chunk)
+                                valid_embeddings.append(embedding)
+                        
+                        # Guardar en ChromaDB
+                        if valid_chunks:
+                            storage_result = pipeline.chroma_manager.add_documents(
+                                valid_chunks,
+                                valid_embeddings
+                            )
+                            
+                            if storage_result:
+                                exitosos += 1
+                                total_chunks += len(valid_chunks)
+                            else:
+                                fallidos += 1
+                                self.stdout.write(f"   ❌ Error guardando embeddings")
+                        else:
+                            fallidos += 1
+                            self.stdout.write(f"   ❌ No se generaron embeddings válidos")
+                    else:
+                        fallidos += 1
+                        self.stdout.write(f"   ❌ No se extrajeron chunks")
+                else:
+                    fallidos += 1
+                    self.stdout.write(f"   ❌ Error: {result.get('error', 'Unknown')}")
+                    
+            except Exception as e:
+                fallidos += 1
+                self.stdout.write(f"   ❌ Excepción: {e}")
+        
+        self.stdout.write(f"\n✅ Reindexado completado.")
+        self.stdout.write(f"   📊 Exitosos: {exitosos}, Fallidos: {fallidos}, Total: {total}")
+        self.stdout.write(f"   📄 Chunks almacenados: {total_chunks}")
     
     def _handle_status(self, options):
         """Mostrar estado del sistema RAG"""

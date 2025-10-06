@@ -24,22 +24,27 @@ from django.http import JsonResponse
 # Local imports
 from .models import Conversation, Message
 
-# RAG System imports
-try:
-    from rag_system import (
-        get_rag_status,
-        initialize_rag_system,
-        sync_drive_documents,
-        query_rag,
-        RAG_MODULES_AVAILABLE
-    )
-    from rag_system.rag_engine.pipeline import RAGPipeline
-except ImportError:
-    RAG_MODULES_AVAILABLE = False
-    RAGPipeline = None
-
 # Configuración de logging
 logger = logging.getLogger(__name__)
+
+# RAG System imports
+try:
+    import sys
+    import os
+    from django.conf import settings
+    
+    # Agregar rag_system al path
+    rag_path = os.path.join(settings.BASE_DIR, 'rag_system')
+    if rag_path not in sys.path:
+        sys.path.append(rag_path)
+    
+    from rag_system.rag_engine.pipeline import RAGPipeline
+    RAG_MODULES_AVAILABLE = True
+    logger.info("✅ Sistema RAG importado correctamente")
+except ImportError as e:
+    RAG_MODULES_AVAILABLE = False
+    RAGPipeline = None
+    logger.warning(f"⚠️ Sistema RAG no disponible: {e}")
 
 
 @api_view(['GET'])
@@ -330,7 +335,20 @@ def rag_status(request):
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     
     try:
-        rag_status_data = get_rag_status()
+        try:
+            pipeline = RAGPipeline()
+            readiness = pipeline.is_ready()
+            rag_status_data = {
+                "modules_available": RAG_MODULES_AVAILABLE,
+                "components": readiness,
+                "version": "1.0.0"
+            }
+        except Exception as e:
+            logger.error(f"Error obteniendo estado RAG: {e}")
+            rag_status_data = {
+                "modules_available": False,
+                "error": str(e)
+            }
         
         return Response({
             'rag_available': True,
@@ -358,7 +376,20 @@ def rag_initialize(request):
         }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     
     try:
-        result = initialize_rag_system()
+        try:
+            pipeline = RAGPipeline()
+            readiness = pipeline.is_ready()
+            result = {
+                "success": True,
+                "components": readiness,
+                "message": "Sistema RAG inicializado"
+            }
+        except Exception as e:
+            logger.error(f"Error inicializando RAG: {e}")
+            result = {
+                "success": False,
+                "error": str(e)
+            }
         
         if result['success']:
             return Response({

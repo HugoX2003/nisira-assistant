@@ -30,7 +30,7 @@ GOOGLE_DRIVE_CONFIG = {
     "token_file": DATA_DIR / "token.json",
     "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
     "sync_folder_name": "Prueba RAG",  # Carpeta en Drive del administrador
-    "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", ""),  # ID de la carpeta en Drive
+    "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8"),  # ID de la carpeta en Drive
     "download_path": str(DOCUMENTS_DIR),  # Directorio local para descargas
     "supported_formats": [".pdf", ".txt", ".docx", ".doc", ".pptx", ".xlsx"],  # Formatos soportados
     "sync_interval": 300,  # 5 minutos
@@ -54,19 +54,20 @@ API_CONFIG = {
     "google_api_key": os.getenv("GOOGLE_API_KEY", ""),  # API key para Gemini
     "gemini": {
         "api_key_env": "GOOGLE_API_KEY",
-        "model_name": "gemini-1.5-flash",  # Modelo gratuito
-        "chat_model_name": "gemini-1.5-flash",  # Modelo para chat
-        "embedding_model": "models/embedding-001",
+        "model_name": "gemini-2.0-flash-exp",  # Modelo más reciente
+        "chat_model_name": "gemini-2.0-flash-exp", 
+        "embedding_model": "models/text-embedding-004",
         "max_tokens": 8192,
         "temperature": 0.7,
         "requests_per_minute": 15,  # Límite gratuito
     },
     "huggingface": {
-        "model_name": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",  # Modelo multilingüe optimizado
+        "model_name": "sentence-transformers/all-mpnet-base-v2",  # EL MEJOR MODELO - 768 dimensiones
         "device": "cpu",  # Cambiar a "cuda" si tienes GPU
-        "max_seq_length": 512,
+        "max_seq_length": 512,  # Máxima calidad
+        "normalize_embeddings": True,  # Normalizar para mejor similitud coseno
     },
-    "fallback_embedding": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    "fallback_embedding": "sentence-transformers/all-mpnet-base-v2"
 }
 
 # ===== CHROMADB CONFIGURACIÓN =====
@@ -74,34 +75,73 @@ CHROMA_CONFIG = {
     "persist_directory": str(CHROMA_DIR),
     "collection_name": "rag_documents",
     "distance_function": "cosine",  # cosine, l2, ip
-    "embedding_dimension": 768,     # Para all-MiniLM-L6-v2
+    "embedding_dimension": 768,     # Para all-mpnet-base-v2 (MÁXIMA CALIDAD - 768 dimensiones)
 }
 
 # ===== RAG ENGINE CONFIGURACIÓN =====
 RAG_CONFIG = {
     "retrieval": {
-        "top_k": 5,              # Documentos a recuperar
-        "similarity_threshold": 0.7,  # Umbral de similitud
+        "top_k": 15,              # MÁS documentos para capturar más contexto
+        "similarity_threshold": 0.005,  # Threshold MUY bajo para máxima cobertura
         "rerank": True,          # Re-ranking de resultados
-        "max_context_length": 4000,   # Máximo contexto para LLM
+        "max_context_length": 12000,   # MÁS contexto para mejor comprensión
+        "diversity_threshold": 0.4,  # MÁS diversidad en resultados
+        "citation_boost": True,   # Boost especial para chunks con citas
+        "semantic_weight": 0.6,   # Peso de búsqueda semántica (60%)
+        "lexical_weight": 0.4,    # Peso de búsqueda lexical (40%)
     },
     "generation": {
-        "system_prompt": """Eres un asistente inteligente que responde preguntas basándote únicamente en el contexto proporcionado. 
+        # CONFIGURACIÓN MULTI-PROVEEDOR LLM
+        "provider": "openrouter",  # Cambiar entre: "google", "openrouter", "groq", "together"
+        
+        # Google Gemini (LÍMITES ESTRICTOS)
+        "google": {
+            "model": "gemini-2.0-flash-exp",
+            "api_key": os.getenv("GOOGLE_API_KEY"),
+        },
+        
+        # OpenRouter (RECOMENDADO - MEJORES LÍMITES)
+        "openrouter": {
+            "model": "google/gemma-2-9b-it",  # Modelo más rápido y excelente calidad
+            "api_key": os.getenv("OPENROUTER_API_KEY"),
+            "base_url": "https://openrouter.ai/api/v1",
+        },
+        
+        # Groq (ALTERNATIVA RÁPIDA)
+        "groq": {
+            "model": "llama-3.3-70b-versatile",
+            "api_key": os.getenv("GROQ_API_KEY"),
+            "base_url": "https://api.groq.com/openai/v1",
+        },
+        
+        "system_prompt": """Eres un asistente académico especializado en análisis de textos políticos y sociales peruanos. Tu tarea es analizar únicamente el contexto proporcionado y extraer información precisa, especialmente citas bibliográficas.
 
-Instrucciones:
-1. Usa SOLO la información del contexto para responder
-2. Si la información no está en el contexto, di que no tienes esa información
-3. Sé preciso y conciso
-4. Mantén un tono profesional y amigable
-5. Cita las fuentes cuando sea relevante
+REGLAS ESTRICTAS:
+1. SIEMPRE analiza TODO el contexto proporcionado línea por línea
+2. Si encuentras cualquier cita bibliográfica (como Arias(2020), García(2019), etc.), SIEMPRE inclúyela en tu respuesta
+3. Para consultas sobre autores específicos, busca exhaustivamente todas las menciones
+4. Extrae TODAS las citas textuales relevantes y ponlas entre comillas
+5. Si un documento menciona teorías, clasificaciones o análisis, enuméralos completamente
+6. Identifica SIEMPRE el nombre del archivo fuente cuando sea relevante
+7. Para citas específicas como "Arias(2020)", busca tanto el autor como el año en el contexto
+8. Si no encuentras información específica, di claramente que no está en el contexto proporcionado
+6. Si hay información pero es parcial, especifica qué información tienes disponible
 
-Contexto: {context}
+ESTRUCTURA OBLIGATORIA:
+- Identificar AUTOR del contenido si está presente
+- Citar textualmente las partes relevantes entre comillas
+- Proporcionar el documento fuente específico
+- Enumerar puntos o teorías si las hay
+
+IMPORTANTE: Antes de responder "no tengo información", verifica TODO el contexto línea por línea.
+
+Contexto académico: {context}
 
 Pregunta: {question}
 
-Respuesta:""",
-        "max_response_tokens": 1000,
-        "temperature": 0.3,
+Respuesta académica fundamentada:""",
+        "max_response_tokens": 1500,
+        "temperature": 0.2,  # Más determinista para precisión académica
     }
 }
 

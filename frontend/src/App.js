@@ -11,7 +11,13 @@ function App() {
   // Verificar si hay un token en localStorage al iniciar
   const checkAuth = () => {
     const token = localStorage.getItem('token');
-    return token && token !== 'null' && token !== 'undefined';
+    const isValid = token && token !== 'null' && token !== 'undefined' && token.trim() !== '';
+    console.log('🔍 Verificando autenticación:', { 
+      hasToken: !!token, 
+      isValid, 
+      tokenLength: token ? token.length : 0 
+    });
+    return isValid;
   };
 
   // Estados para controlar qué pantalla mostrar
