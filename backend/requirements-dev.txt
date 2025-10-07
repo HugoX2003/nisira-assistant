@@ -8,6 +8,8 @@ django-environ>=0.11
 python-dotenv>=1.0
 
 # === BASE DE DATOS ===
+# SQLite por defecto (sin dependencias extra)
+# PostgreSQL para producción:
 psycopg2-binary>=2.9
 dj-database-url>=2.1.0
 
@@ -15,7 +17,7 @@ dj-database-url>=2.1.0
 requests>=2.31.0
 pillow>=10.0.0
 
-# ===== SISTEMA RAG =====
+# ===== SISTEMA RAG COMPLETO =====
 
 # === LANGCHAIN ECOSYSTEM ===
 langchain>=0.1.0
@@ -39,26 +41,28 @@ openpyxl>=3.1.0
 
 # === BASE DE DATOS VECTORIAL ===
 chromadb>=0.4.0
-
-# === EMBEDDINGS Y NLP (CPU-only, sin CUDA) ===
 sentence-transformers>=2.2.0
+
+# === EMBEDDINGS Y NLP ===
 tiktoken>=0.5.0
 transformers>=4.35.0
-# PyTorch CPU-only (sin CUDA, ahorra ~2GB)
---extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
 
 # === ANÁLISIS Y UTILIDADES ===
 pandas>=2.0.0
 numpy>=1.24.0
 tqdm>=4.66.0
-python-magic>=0.4.27
+python-magic>=0.4.0
 
 # === GOOGLE GEMINI API ===
 google-generativeai>=0.3.0
 
 # === LOGGING Y MONITOREO ===
 python-json-logger>=2.0.0
+
+# === DEPENDENCIAS ADICIONALES ===
+requests>=2.31.0
+Pillow>=10.0.0
 
 # === PRODUCCIÓN ===
 gunicorn>=21.2.0
