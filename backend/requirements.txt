@@ -9,9 +9,9 @@ python-dotenv>=1.0
 
 # === BASE DE DATOS ===
 # SQLite por defecto (sin dependencias extra)
-# Para MySQL/PostgreSQL descomentar las siguientes líneas:
-# mysqlclient>=2.2
-# psycopg2-binary>=2.9
+# PostgreSQL para producción:
+psycopg2-binary>=2.9
+dj-database-url>=2.1.0
 
 # === UTILIDADES BÁSICAS ===
 requests>=2.31.0
@@ -63,3 +63,7 @@ python-json-logger>=2.0.0
 # === DEPENDENCIAS ADICIONALES ===
 requests>=2.31.0
 Pillow>=10.0.0
+
+# === PRODUCCIÓN ===
+gunicorn>=21.2.0
+whitenoise>=6.6.0
