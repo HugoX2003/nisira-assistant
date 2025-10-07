@@ -41,11 +41,14 @@ openpyxl>=3.1.0
 chromadb>=0.4.0
 
 # === EMBEDDINGS Y NLP (CPU-only, sin CUDA) ===
+# IMPORTANTE: Instalar torch CPU PRIMERO para evitar versión CUDA
+torch==2.3.1+cpu
+torchvision==0.18.1+cpu
+torchaudio==2.3.1+cpu
+-f https://download.pytorch.org/whl/torch_stable.html
 sentence-transformers>=2.2.0
 tiktoken>=0.5.0
 transformers>=4.35.0
-# PyTorch sin especificar versión (pip instalará la adecuada)
-# Nota: Railway sin GPU usará versión CPU automáticamente
 
 # === ANÁLISIS Y UTILIDADES ===
 pandas>=2.0.0
