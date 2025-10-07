@@ -141,6 +141,9 @@ api.interceptors.request.use(
       const token = tokenManager.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔐 Agregando token a la petición:', config.url);
+      } else {
+        console.warn('⚠️ No hay token disponible para:', config.url);
       }
     }
 
@@ -231,10 +234,11 @@ export async function login(username, password) {
     
     tokenManager.setTokens(access, refresh);
     
+    // Retornar en el formato que espera Login.js
     return {
-      success: true,
-      user: { username },
-      tokens: { access, refresh }
+      access,
+      refresh,
+      user: { username }
     };
   } catch (error) {
     handleApiError(error, 'login');
