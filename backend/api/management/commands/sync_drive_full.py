@@ -28,30 +28,41 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         """
         Lógica principal del comando:
-        - Llama a la vista sync_drive_full_view 
-        - Simula una petición POST con los parámetros recibidos
-        - Muestra el resultado en consola (OK o error)
+        - Sincroniza documentos desde Google Drive usando RAGPipeline
+        - Procesa y genera embeddings
         """
-        # Asegura que la vista no exija autenticación para este comando
-        os.environ["AUTH_REQUIRED"] = "false"
-
-        from api.views import sync_drive_full_view
-        from django.test import RequestFactory
-
-        # Crea una petición POST simulada con los datos recibidos
-        rf = RequestFactory()
-        data = {
-            'chunk_size': opts['chunk_size'],
-            'chunk_overlap': opts['chunk_overlap'],
-            'force': opts['force'],
-        }
-        req = rf.post('/sync-drive/full', data)
-
-        # Ejecuta la vista y obtiene la respuesta
-        resp = sync_drive_full_view(req)
-
-        # Muestra el resultado en consola
-        if hasattr(resp, 'status_code') and resp.status_code == 200:
-            self.stdout.write(self.style.SUCCESS("OK: " + str(getattr(resp, 'data', {}))))
-        else:
-            self.stderr.write("ERROR: status=" + str(getattr(resp, 'status_code', 'unknown')) + " body=" + str(getattr(resp, 'data', {})))
+        self.stdout.write(self.style.SUCCESS('🚀 Iniciando sincronización completa desde Google Drive...'))
+        
+        try:
+            # Importar RAGPipeline directamente
+            import sys
+            from django.conf import settings
+            
+            rag_path = os.path.join(settings.BASE_DIR, 'rag_system')
+            if rag_path not in sys.path:
+                sys.path.append(rag_path)
+            
+            from rag_system.rag_engine.pipeline import RAGPipeline
+            
+            # Crear instancia del pipeline
+            pipeline = RAGPipeline()
+            
+            # Ejecutar sincronización y procesamiento
+            force_reprocess = opts.get('force', False)
+            self.stdout.write(f'Forzar reprocesamiento: {force_reprocess}')
+            
+            result = pipeline.sync_and_process_documents(force_reprocess=force_reprocess)
+            
+            if result.get('success'):
+                self.stdout.write(self.style.SUCCESS('✅ Sincronización completada exitosamente'))
+                self.stdout.write(f"📊 Documentos procesados: {result.get('documents_processed', 0)}")
+                self.stdout.write(f"📝 Chunks generados: {result.get('chunks_generated', 0)}")
+            else:
+                self.stdout.write(self.style.ERROR(f'❌ Error: {result.get("error", "Unknown error")}'))
+                
+        except ImportError as e:
+            self.stdout.write(self.style.ERROR(f'❌ Sistema RAG no disponible: {e}'))
+        except Exception as e:
+            self.stdout.write(self.style.ERROR(f'❌ Error durante sincronización: {e}'))
+            import traceback
+            self.stdout.write(traceback.format_exc())
