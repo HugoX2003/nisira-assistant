@@ -1,0 +1,13 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "devCommand": "npm start",
+  "installCommand": "npm install",
+  "framework": "create-react-app",
+  "env": {
+    "REACT_APP_API_URL": {
+      "description": "URL del backend Railway",
+      "value": "https://tu-backend.railway.app"
+    }
+  }
+}
