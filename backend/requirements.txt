@@ -44,9 +44,8 @@ chromadb>=0.4.0
 sentence-transformers>=2.2.0
 tiktoken>=0.5.0
 transformers>=4.35.0
-# PyTorch CPU-only (sin CUDA, ahorra ~2GB)
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.0.0
+# PyTorch sin especificar versión (pip instalará la adecuada)
+# Nota: Railway sin GPU usará versión CPU automáticamente
 
 # === ANÁLISIS Y UTILIDADES ===
 pandas>=2.0.0
