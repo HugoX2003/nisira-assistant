@@ -33,9 +33,12 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 # ALLOWED_HOSTS - Railway automático
 if os.environ.get('ALLOWED_HOSTS'):
     ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS').split(',') if host.strip()]
+elif os.environ.get('RAILWAY_ENVIRONMENT_NAME'):
+    # En Railway: permitir todos los subdominios .railway.app
+    ALLOWED_HOSTS = ['nisira-assistant-production-6a02.up.railway.app', '.railway.app', 'localhost', '127.0.0.1']
 else:
-    # Default: permitir Railway y localhost
-    ALLOWED_HOSTS = ['*.railway.app', 'localhost', '127.0.0.1']
+    # Local development
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
