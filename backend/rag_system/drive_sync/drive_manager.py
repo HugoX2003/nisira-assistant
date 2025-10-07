@@ -51,36 +51,55 @@ class GoogleDriveManager:
             logger.error("Google APIs no están disponibles. Instalar google-api-python-client")
             return False
         
-        credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
-        
-        if not os.path.exists(credentials_path):
-            logger.error(f"Archivo de credenciales no encontrado: {credentials_path}")
-            return False
-        
         try:
-            # Cargar credenciales
-            with open(credentials_path, 'r', encoding='utf-8') as f:
-                cred_data = json.load(f)
+            # Opción 1: Cargar desde variable de entorno (PRODUCCIÓN - Railway)
+            credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
             
-            # Determinar tipo de credenciales
-            if 'type' in cred_data and cred_data['type'] == 'service_account':
-                # Credenciales de cuenta de servicio
-                self.credentials = service_account.Credentials.from_service_account_file(
-                    credentials_path,
+            if credentials_json:
+                logger.info("🔑 Cargando credenciales desde variable de entorno...")
+                cred_data = json.loads(credentials_json)
+                
+                # Credenciales de cuenta de servicio desde JSON
+                self.credentials = service_account.Credentials.from_service_account_info(
+                    cred_data,
                     scopes=GOOGLE_DRIVE_CONFIG['scopes']
                 )
-                logger.info("✅ Credenciales de cuenta de servicio cargadas")
+                logger.info("✅ Credenciales de cuenta de servicio cargadas desde variable de entorno")
+            
+            # Opción 2: Cargar desde archivo (DESARROLLO - Local)
             else:
-                # Credenciales OAuth2 (usuario)
-                logger.warning("⚠️  Credenciales OAuth2 detectadas. Se recomienda usar cuenta de servicio.")
-                # Para OAuth2 necesitarías implementar el flujo completo
-                return False
+                credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
+                
+                if not os.path.exists(credentials_path):
+                    logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
+                    logger.error("💡 Configura GOOGLE_CREDENTIALS_JSON en variables de entorno para producción")
+                    return False
+                
+                logger.info(f"📂 Cargando credenciales desde archivo: {credentials_path}")
+                with open(credentials_path, 'r', encoding='utf-8') as f:
+                    cred_data = json.load(f)
+                
+                # Determinar tipo de credenciales
+                if 'type' in cred_data and cred_data['type'] == 'service_account':
+                    # Credenciales de cuenta de servicio
+                    self.credentials = service_account.Credentials.from_service_account_file(
+                        credentials_path,
+                        scopes=GOOGLE_DRIVE_CONFIG['scopes']
+                    )
+                    logger.info("✅ Credenciales de cuenta de servicio cargadas desde archivo")
+                else:
+                    # Credenciales OAuth2 (usuario)
+                    logger.warning("⚠️  Credenciales OAuth2 detectadas. Se recomienda usar cuenta de servicio.")
+                    return False
             
             # Construir servicio
             self.service = build('drive', 'v3', credentials=self.credentials)
-            logger.info("✅ Servicio de Google Drive inicializado")
+            logger.info("✅ Servicio de Google Drive inicializado correctamente")
             return True
             
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Error parseando JSON de credenciales: {e}")
+            return False
         except Exception as e:
             logger.error(f"❌ Error inicializando Google Drive: {e}")
             return False
