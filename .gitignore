@@ -30,7 +30,7 @@ dist/
 .env.test
 .env.example
 # NOTA: credentials.json se mantiene para uso local pero NO se sube
-#credentials.json
+credentials.json
 secrets.json
 config.json
 *.key
