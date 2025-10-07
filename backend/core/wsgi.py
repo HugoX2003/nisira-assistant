@@ -11,6 +11,10 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
+# Usar production_settings en Railway
+if os.environ.get('RAILWAY_ENVIRONMENT'):
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.production_settings')
+else:
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'core.settings')
 
 application = get_wsgi_application()
