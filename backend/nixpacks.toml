@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ['python312', 'gcc', 'postgresql']
+
+[phases.install]
+cmds = ['pip install -r requirements.txt']
+
+[phases.build]
+cmds = ['DJANGO_SETTINGS_MODULE=core.build_settings python manage.py collectstatic --noinput']
+
+[start]
+cmd = 'python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 300'
