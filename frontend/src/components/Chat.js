@@ -1,14 +1,251 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ragEnhancedChat, getConversations, getMessages, getVectorStats, deleteConversation } from '../services/api';
 import '../styles/Chat.css';
 
 // Componente actualizado con nuevo diseño moderno
 
+// Componente especializado para renderizar texto con Markdown
+const MarkdownRenderer = React.memo(({ content }) => (
+  <ReactMarkdown
+    remarkPlugins={[remarkGfm]}
+    components={{
+      // Párrafos con mejor espaciado
+      p: ({ children }) => (
+        <p style={{ 
+          margin: '0.8em 0', 
+          lineHeight: '1.7',
+          fontSize: '0.95rem'
+        }}>
+          {children}
+        </p>
+      ),
+      
+      // Texto en negrita
+      strong: ({ children }) => (
+        <strong style={{ 
+          fontWeight: '600',
+          color: 'inherit'
+        }}>
+          {children}
+        </strong>
+      ),
+      
+      // Texto en cursiva
+      em: ({ children }) => (
+        <em style={{ 
+          fontStyle: 'italic',
+          opacity: '0.95'
+        }}>
+          {children}
+        </em>
+      ),
+      
+      // Código inline
+      code: ({ children, className }) => {
+        const isBlock = className?.includes('language-');
+        if (isBlock) {
+          return (
+            <pre style={{
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              padding: '1rem',
+              borderRadius: '8px',
+              overflow: 'auto',
+              margin: '1em 0',
+              border: '1px solid rgba(255, 255, 255, 0.1)'
+            }}>
+              <code style={{
+                fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+                fontSize: '0.9em',
+                color: 'inherit'
+              }}>
+                {children}
+              </code>
+            </pre>
+          );
+        }
+        return (
+          <code style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.12)',
+            padding: '3px 6px',
+            borderRadius: '4px',
+            fontFamily: 'Consolas, Monaco, "Courier New", monospace',
+            fontSize: '0.9em',
+            fontWeight: '500',
+            color: 'inherit',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            {children}
+          </code>
+        );
+      },
+      
+      // Listas ordenadas
+      ol: ({ children }) => (
+        <ol style={{
+          paddingLeft: '1.8em',
+          margin: '1em 0',
+          lineHeight: '1.6'
+        }}>
+          {children}
+        </ol>
+      ),
+      
+      // Listas no ordenadas
+      ul: ({ children }) => (
+        <ul style={{
+          paddingLeft: '1.8em',
+          margin: '1em 0',
+          lineHeight: '1.6'
+        }}>
+          {children}
+        </ul>
+      ),
+      
+      // Items de lista
+      li: ({ children }) => (
+        <li style={{
+          margin: '0.4em 0',
+          lineHeight: '1.6'
+        }}>
+          {children}
+        </li>
+      ),
+      
+      // Encabezados
+      h1: ({ children }) => (
+        <h1 style={{
+          fontSize: '1.3em',
+          fontWeight: '700',
+          margin: '1.5em 0 0.8em 0',
+          color: 'inherit',
+          borderBottom: '2px solid rgba(255, 255, 255, 0.2)',
+          paddingBottom: '0.3em'
+        }}>
+          {children}
+        </h1>
+      ),
+      
+      h2: ({ children }) => (
+        <h2 style={{
+          fontSize: '1.2em',
+          fontWeight: '650',
+          margin: '1.4em 0 0.7em 0',
+          color: 'inherit'
+        }}>
+          {children}
+        </h2>
+      ),
+      
+      h3: ({ children }) => (
+        <h3 style={{
+          fontSize: '1.1em',
+          fontWeight: '600',
+          margin: '1.2em 0 0.6em 0',
+          color: 'inherit'
+        }}>
+          {children}
+        </h3>
+      ),
+      
+      h4: ({ children }) => (
+        <h4 style={{
+          fontSize: '1.05em',
+          fontWeight: '600',
+          margin: '1em 0 0.5em 0',
+          color: 'inherit'
+        }}>
+          {children}
+        </h4>
+      ),
+      
+      // Citas en bloque
+      blockquote: ({ children }) => (
+        <blockquote style={{
+          borderLeft: '4px solid rgba(255, 255, 255, 0.3)',
+          paddingLeft: '1rem',
+          margin: '1em 0',
+          fontStyle: 'italic',
+          opacity: '0.9',
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          padding: '0.8rem 1rem',
+          borderRadius: '0 8px 8px 0'
+        }}>
+          {children}
+        </blockquote>
+      ),
+      
+      // Separadores horizontales
+      hr: () => (
+        <hr style={{
+          border: 'none',
+          borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+          margin: '2em 0'
+        }} />
+      ),
+      
+      // Eliminar enlaces azules
+      a: ({ children, href }) => (
+        <span style={{
+          color: 'inherit',
+          textDecoration: 'underline',
+          textDecorationColor: 'rgba(255, 255, 255, 0.5)'
+        }}>
+          {children}
+        </span>
+      ),
+      
+      // Tablas
+      table: ({ children }) => (
+        <div style={{ overflowX: 'auto', margin: '1em 0' }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            border: '1px solid rgba(255, 255, 255, 0.2)'
+          }}>
+            {children}
+          </table>
+        </div>
+      ),
+      
+      th: ({ children }) => (
+        <th style={{
+          padding: '0.6rem',
+          textAlign: 'left',
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          fontWeight: '600'
+        }}>
+          {children}
+        </th>
+      ),
+      
+      td: ({ children }) => (
+        <td style={{
+          padding: '0.6rem',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
+        }}>
+          {children}
+        </td>
+      )
+    }}
+  >
+    {content}
+  </ReactMarkdown>
+));
+
 // Componente de mensaje optimizado
 const Message = React.memo(({ message, isUser, timestamp, sources }) => (
   <div className={`message-item ${isUser ? 'user-message' : 'assistant-message'}`}>
     <div className="message-bubble">
-      <div className="message-text">{message}</div>
+      <div className="message-text">
+        {isUser ? (
+          message
+        ) : (
+          <MarkdownRenderer content={message} />
+        )}
+      </div>
       {sources && sources.length > 0 && (
         <div className="message-sources">
           <div className="sources-header">

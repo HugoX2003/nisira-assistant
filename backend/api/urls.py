@@ -10,6 +10,8 @@ from .views import (
     get_messages,
     send_message,
     delete_conversation,
+    # Vistas de autenticación
+    register_user,
     # Vistas RAG
     rag_status,
     rag_initialize,
@@ -24,6 +26,7 @@ urlpatterns = [
     # Autenticación JWT
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("auth/register/", register_user, name="register_user"),
     
     # API básica
     path("health/", health_check, name="health_check"),
