@@ -2,10 +2,10 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "pip install -r requirements.txt && python manage.py collectstatic --noinput"
+    "buildCommand": "pip install -r requirements.txt && DJANGO_SETTINGS_MODULE=core.settings python manage.py collectstatic --noinput --no-input"
   },
   "deploy": {
-    "startCommand": "gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 300",
+    "startCommand": "python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 300",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
