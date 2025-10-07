@@ -631,3 +631,82 @@ def rag_system_status(request):
             'error': 'Error obteniendo estado del sistema',
             'details': str(e)
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ================================
+# AUTENTICACIÓN - REGISTRO
+# ================================
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    """
+    Registrar un nuevo usuario
+    """
+    try:
+        username = request.data.get('username', '').strip()
+        email = request.data.get('email', '').strip()
+        password = request.data.get('password', '').strip()
+        
+        # Validaciones básicas
+        if not username:
+            return Response(
+                {'error': 'El nombre de usuario es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if not email:
+            return Response(
+                {'error': 'El email es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if not password:
+            return Response(
+                {'error': 'La contraseña es requerida'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if len(password) < 6:
+            return Response(
+                {'error': 'La contraseña debe tener al menos 6 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar si el usuario ya existe
+        if User.objects.filter(username=username).exists():
+            return Response(
+                {'error': 'El nombre de usuario ya está en uso'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if User.objects.filter(email=email).exists():
+            return Response(
+                {'error': 'El email ya está registrado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Crear el usuario
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password
+        )
+        
+        logger.info(f"✅ Usuario registrado: {username}")
+        
+        return Response({
+            'message': 'Usuario registrado exitosamente',
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email
+            }
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        logger.error(f"Error registrando usuario: {str(e)}")
+        return Response(
+            {'error': 'Error interno del servidor'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

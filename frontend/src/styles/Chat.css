@@ -572,6 +572,160 @@
   word-wrap: break-word;
 }
 
+/* ===================================
+   ESTILOS PARA MARKDOWN MEJORADOS
+   =================================== */
+.message-text {
+  line-height: 1.6;
+  font-size: 0.95rem;
+  word-wrap: break-word;
+}
+
+/* Eliminar espacios en blanco innecesarios */
+.message-text > *:first-child {
+  margin-top: 0 !important;
+}
+
+.message-text > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Mejorar la legibilidad de párrafos */
+.message-text p {
+  margin: 0.8em 0;
+  line-height: 1.7;
+}
+
+/* Estilos para texto enfatizado */
+.message-text strong {
+  font-weight: 600;
+  color: inherit;
+}
+
+.message-text em {
+  font-style: italic;
+  opacity: 0.95;
+}
+
+/* Mejorar el aspecto del código */
+.message-text code {
+  background-color: rgba(255, 255, 255, 0.12);
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 0.9em;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-text pre {
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 1em 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.message-text pre code {
+  background: none;
+  padding: 0;
+  border: none;
+  font-size: 0.9em;
+}
+
+/* Mejorar listas */
+.message-text ol,
+.message-text ul {
+  padding-left: 1.8em;
+  margin: 1em 0;
+}
+
+.message-text li {
+  margin: 0.4em 0;
+  line-height: 1.6;
+}
+
+/* Estilos para encabezados */
+.message-text h1,
+.message-text h2,
+.message-text h3,
+.message-text h4,
+.message-text h5,
+.message-text h6 {
+  margin: 1.2em 0 0.6em 0;
+  font-weight: 600;
+  color: inherit;
+}
+
+.message-text h1 {
+  font-size: 1.3em;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 0.3em;
+}
+
+.message-text h2 {
+  font-size: 1.2em;
+}
+
+.message-text h3 {
+  font-size: 1.1em;
+}
+
+.message-text h4 {
+  font-size: 1.05em;
+}
+
+/* Citas en bloque */
+.message-text blockquote {
+  border-left: 4px solid rgba(255, 255, 255, 0.3);
+  padding: 0.8rem 1rem;
+  margin: 1em 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* Separadores */
+.message-text hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 2em 0;
+}
+
+/* Tablas */
+.message-text table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin: 1em 0;
+}
+
+.message-text th,
+.message-text td {
+  padding: 0.6rem;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.message-text th {
+  background-color: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+}
+
+/* Enlaces */
+.message-text a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+  transition: text-decoration-color 0.2s ease;
+}
+
+.message-text a:hover {
+  text-decoration-color: rgba(255, 255, 255, 0.8);
+}
+
 .message-timestamp {
   font-size: 0.7rem;
   color: var(--text-muted);

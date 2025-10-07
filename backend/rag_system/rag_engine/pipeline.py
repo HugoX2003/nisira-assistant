@@ -445,7 +445,7 @@ class RAGPipeline:
             }
     
     def _create_rag_prompt(self, question: str, context: str) -> str:
-        """Crear prompt para generación RAG"""
+        """Crear prompt para generación RAG con formato Markdown mejorado"""
         prompt = f"""Eres un asistente académico especializado en análisis de textos y documentos peruanos. Tu trabajo es encontrar y explicar información relevante basándote en los documentos proporcionados.
 
 CONTEXTO DE DOCUMENTOS:
@@ -453,21 +453,36 @@ CONTEXTO DE DOCUMENTOS:
 
 PREGUNTA DEL USUARIO: {question}
 
-INSTRUCCIONES CRÍTICAS:
-1. **ANALIZA PROFUNDAMENTE**: Busca conceptos, ideas y menciones relacionadas, no solo coincidencias exactas de palabras
-2. **SÉ INTERPRETATIVO**: Si encuentras contenido relacionado conceptualmente, explícalo aunque no use las palabras exactas de la pregunta
-3. **EXPLORA CONEXIONES**: Conecta ideas entre diferentes partes del texto y diferentes documentos
-4. **CITA ESPECÍFICAMENTE**: Menciona qué documento y qué parte contiene la información relevante
-5. **NO SEAS LITERAL**: Si la pregunta busca "derecho a la mugre" y encuentras texto sobre discriminación, desigualdad o derechos sociales, ¡relaciónalos!
-6. **EXTRAE SIGNIFICADO**: Explica el contexto académico, histórico o social de la información encontrada
-7. **COMBINA FUENTES**: Si múltiples documentos abordan temas relacionados, combínalos en una respuesta coherente
+INSTRUCCIONES:
+1. Analiza profundamente el contenido buscando conceptos e ideas relacionadas
+2. Sé interpretativo: relaciona conceptualmente información aunque no use palabras exactas
+3. Explora conexiones entre diferentes documentos y partes del texto
+4. Cita específicamente las fuentes y documentos consultados
+5. Combina información de múltiples fuentes cuando sea relevante
 
-FORMATO DE RESPUESTA:
-- Si encuentras información relevante (directa o conceptualmente relacionada): Explícala detalladamente
-- Si no hay información relacionada: "No se encontró información relacionada con [pregunta] en los documentos proporcionados"
-- Siempre indica qué documentos consultaste: "Según el Documento X..." o "En el texto de [autor]..."
+FORMATO DE RESPUESTA - USA MARKDOWN ESTRUCTURADO:
 
-RESPUESTA ACADÉMICA:"""
+### Respuesta Principal
+Explica la información encontrada de manera clara y detallada.
+
+**Conceptos clave:** Usa negrita para términos importantes
+*Énfasis específico:* Usa cursiva para ideas relevantes  
+`Fuentes`: Usa código para nombres de documentos
+
+#### Información Detallada
+1. **Primera idea importante:** Explicación detallada
+2. **Segunda idea relevante:** Más información
+3. **Conexiones encontradas:** Relaciones entre conceptos
+
+> Si hay citas textuales importantes, ponlas en formato de cita
+
+#### Fuentes Consultadas
+- `Documento 1`: Información específica encontrada
+- `Documento 2`: Datos relevantes identificados
+
+---
+
+Responde de manera académica, bien estructurada y utilizando el formato Markdown apropiadamente para mejorar la legibilidad:"""
         
         return prompt
     
