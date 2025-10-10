@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Chat from "./components/Chat";
+import { getCurrentUser, clearUserData } from "./services/api";
 
 /**
  * Componente principal de la aplicación
@@ -23,11 +24,14 @@ function App() {
   // Estados para controlar qué pantalla mostrar
   const [currentView, setCurrentView] = useState(checkAuth() ? "chat" : "login");
   const [loggedIn, setLoggedIn] = useState(checkAuth());
+  const [user, setUser] = useState(getCurrentUser());
 
   // Verificar autenticación al montar el componente
   useEffect(() => {
     const isAuthenticated = checkAuth();
+    const currentUser = getCurrentUser();
     setLoggedIn(isAuthenticated);
+    setUser(currentUser);
     setCurrentView(isAuthenticated ? "chat" : "login");
   }, []);
 
@@ -35,8 +39,9 @@ function App() {
    * Función que se ejecuta cuando el usuario se loguea exitosamente
    * Cambia el estado para mostrar la pantalla de chat
    */
-  function handleLogin() {
+  function handleLogin(userData) {
     setLoggedIn(true);
+    setUser(userData);
     setCurrentView("chat");
   }
 
@@ -69,11 +74,9 @@ function App() {
    */
   function handleLogout() {
     setLoggedIn(false);
+    setUser(null);
     setCurrentView("login");
-    try {
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh');
-    } catch {}
+    clearUserData();
   }
 
   // Renderizar la pantalla correspondiente según el estado actual
@@ -94,7 +97,7 @@ function App() {
       )}
       
       {currentView === "chat" && loggedIn && (
-        <Chat onLogout={handleLogout} />
+        <Chat onLogout={handleLogout} user={user} />
       )}
     </div>
   );

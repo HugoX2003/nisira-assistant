@@ -462,27 +462,31 @@ INSTRUCCIONES:
 
 FORMATO DE RESPUESTA - USA MARKDOWN ESTRUCTURADO:
 
-### Respuesta Principal
 Explica la información encontrada de manera clara y detallada.
 
 **Conceptos clave:** Usa negrita para términos importantes
+
 *Énfasis específico:* Usa cursiva para ideas relevantes  
+
 `Fuentes`: Usa código para nombres de documentos
 
-#### Información Detallada
-1. **Primera idea importante:** Explicación detallada
-2. **Segunda idea relevante:** Más información
-3. **Conexiones encontradas:** Relaciones entre conceptos
+Cuando enumeres múltiples puntos, usa listas numeradas con espacio apropiado:
+
+1. **Primera idea importante:** Explicación detallada de la primera idea encontrada en los documentos.
+
+2. **Segunda idea relevante:** Más información específica sobre el segundo punto identificado.
+
+3. **Conexiones encontradas:** Relaciones entre conceptos y su significado en el contexto académico.
 
 > Si hay citas textuales importantes, ponlas en formato de cita
 
-#### Fuentes Consultadas
+**Fuentes consultadas:**
 - `Documento 1`: Información específica encontrada
 - `Documento 2`: Datos relevantes identificados
 
 ---
 
-Responde de manera académica, bien estructurada y utilizando el formato Markdown apropiadamente para mejorar la legibilidad:"""
+Responde de manera académica, bien estructurada y con espaciado apropiado para facilitar la lectura:"""
         
         return prompt
     

@@ -20,6 +20,12 @@ from rest_framework import status
 from django.contrib.auth.models import User
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.http import HttpResponse, Http404
+from django.conf import settings
+import os
+import mimetypes
 
 # Local imports
 from .models import Conversation, Message
@@ -58,6 +64,90 @@ def health_check(request):
         'timestamp': datetime.now().isoformat(),
         'message': 'API funcionando correctamente'
     })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def custom_login(request):
+    """
+    Vista de login personalizada que devuelve información del usuario junto con los tokens
+    """
+    try:
+        username = request.data.get('username')
+        password = request.data.get('password')
+        
+        if not username or not password:
+            return Response(
+                {'error': 'Username and password are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Autenticar usuario
+        user = authenticate(username=username, password=password)
+        if not user:
+            return Response(
+                {'error': 'Invalid credentials'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Generar tokens JWT
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+        
+        # Respuesta con tokens e información del usuario
+        return Response({
+            'access': str(access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            }
+        }, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error en login personalizado: {e}")
+        return Response(
+            {'error': 'Login failed'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def serve_document(request, filename):
+    """
+    Servir documentos PDF de forma segura a usuarios autenticados
+    """
+    try:
+        # Construir ruta segura del archivo
+        documents_dir = os.path.join(settings.BASE_DIR, 'data', 'documents')
+        file_path = os.path.join(documents_dir, filename)
+        
+        # Verificar que el archivo existe y está en el directorio permitido
+        if not os.path.exists(file_path):
+            raise Http404("Documento no encontrado")
+        
+        # Verificar que la ruta esté dentro del directorio de documentos (seguridad)
+        if not os.path.abspath(file_path).startswith(os.path.abspath(documents_dir)):
+            raise Http404("Acceso no autorizado")
+        
+        # Determinar el tipo MIME
+        content_type, _ = mimetypes.guess_type(file_path)
+        if content_type is None:
+            content_type = 'application/octet-stream'
+        
+        # Leer y servir el archivo
+        with open(file_path, 'rb') as f:
+            response = HttpResponse(f.read(), content_type=content_type)
+            response['Content-Disposition'] = f'inline; filename="{filename}"'
+            return response
+            
+    except Exception as e:
+        logger.error(f"Error sirviendo documento {filename}: {e}")
+        raise Http404("Error al acceder al documento")
 
 
 @api_view(['GET'])
@@ -143,7 +233,8 @@ def get_messages(request, conversation_id):
                 'id': msg.id,
                 'content': msg.text,
                 'is_user': msg.sender == 'user',
-                'timestamp': msg.created_at.isoformat()
+                'timestamp': msg.created_at.isoformat(),
+                'sources': msg.sources  # Ahora las fuentes se guardan en la base de datos
             })
         
         return Response({
@@ -556,12 +647,8 @@ def rag_enhanced_chat(request):
                 response_content = rag_result['answer']
                 sources = rag_result.get('sources', [])
                 
-                # Agregar información de fuentes si están disponibles
-                if sources:
-                    source_text = "\n\n📚 Fuentes consultadas:\n"
-                    for i, source in enumerate(sources[:3], 1):
-                        source_text += f"{i}. {source.get('file_name', 'Documento')} (similitud: {source.get('similarity_score', 0):.2f})\n"
-                    response_content += source_text
+                # NO agregar fuentes al texto del mensaje
+                # Las fuentes se envían por separado en la respuesta JSON
             else:
                 # Respuesta genérica si RAG falla
                 response_content = "Lo siento, no pude encontrar información relevante en los documentos para responder tu pregunta. ¿Podrías ser más específico?"
@@ -575,6 +662,11 @@ def rag_enhanced_chat(request):
             text=response_content,
             sender='bot'
         )
+        
+        # Guardar las fuentes si están disponibles
+        if sources:
+            assistant_message.set_sources(sources)
+            assistant_message.save()
         
         # Actualizar timestamp de conversación
         conversation.save()
@@ -591,6 +683,7 @@ def rag_enhanced_chat(request):
                 'content': assistant_message.text,
                 'timestamp': assistant_message.created_at.isoformat()
             },
+            'response': response_content,  # Para compatibilidad con el frontend
             'rag_used': use_rag and RAG_MODULES_AVAILABLE,
             'sources': sources
         }, status=status.HTTP_201_CREATED)

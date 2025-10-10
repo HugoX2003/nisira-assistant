@@ -38,8 +38,8 @@ export default function Login({ onLogin, onShowRegister }) {
       
       console.log('✅ Tokens guardados exitosamente');
       
-      // Si el login es exitoso, notificar al componente padre
-      onLogin();
+      // Si el login es exitoso, notificar al componente padre con información del usuario
+      onLogin(data.user);
     } catch (err) {
       // Manejar errores de autenticación
       if (err.response?.status === 401) {

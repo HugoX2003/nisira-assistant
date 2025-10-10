@@ -229,19 +229,43 @@ function handleApiError(error, operation = 'operación') {
 
 export async function login(username, password) {
   try {
-    const response = await api.post('/auth/token/', { username, password });
-    const { access, refresh } = response.data;
+    const response = await api.post('/auth/login/', { username, password });
+    const { access, refresh, user } = response.data;
     
     tokenManager.setTokens(access, refresh);
+    
+    // Guardar información del usuario en localStorage
+    localStorage.setItem('user', JSON.stringify(user));
     
     // Retornar en el formato que espera Login.js
     return {
       access,
       refresh,
-      user: { username }
+      user
     };
   } catch (error) {
     handleApiError(error, 'login');
+  }
+}
+
+export function getCurrentUser() {
+  try {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (error) {
+    console.warn('Error al obtener usuario del localStorage:', error);
+    return null;
+  }
+}
+
+export function clearUserData() {
+  try {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('refresh');
+    tokenManager.clearTokens();
+  } catch (error) {
+    console.warn('Error al limpiar datos del usuario:', error);
   }
 }
 
