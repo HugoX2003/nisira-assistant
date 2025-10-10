@@ -1,6 +1,7 @@
 # Modelos para guardar el historial de chat
 from django.db import models
 from django.contrib.auth.models import User
+import json
 
 # Representa una conversación de chat entre el usuario y el asistente
 class Conversation(models.Model):
@@ -34,6 +35,8 @@ class Message(models.Model):
     sender = models.CharField(max_length=10, choices=SENDER_CHOICES)
     # Texto del mensaje
     text = models.TextField()
+    # Fuentes RAG (solo para mensajes del bot)
+    sources_json = models.TextField(blank=True, null=True, help_text="JSON con las fuentes RAG utilizadas")
     # Fecha de creación del mensaje
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -44,4 +47,21 @@ class Message(models.Model):
     def __str__(self):
         # Muestra el tipo de remitente y los primeros 40 caracteres del mensaje
         return f"{self.sender}: {self.text[:40]}"
+
+    @property
+    def sources(self):
+        """Devuelve las fuentes deserializadas como lista"""
+        if self.sources_json:
+            try:
+                return json.loads(self.sources_json)
+            except (json.JSONDecodeError, TypeError):
+                return []
+        return []
+
+    def set_sources(self, sources_list):
+        """Guarda las fuentes como JSON"""
+        if sources_list:
+            self.sources_json = json.dumps(sources_list, ensure_ascii=False)
+        else:
+            self.sources_json = None
 

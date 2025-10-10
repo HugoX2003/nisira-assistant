@@ -12,6 +12,8 @@ from .views import (
     delete_conversation,
     # Vistas de autenticación
     register_user,
+    custom_login,
+    serve_document,
     # Vistas RAG
     rag_status,
     rag_initialize,
@@ -25,6 +27,7 @@ from .views import (
 urlpatterns = [
     # Autenticación JWT
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("auth/login/", custom_login, name="custom_login"),
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/register/", register_user, name="register_user"),
     
@@ -48,4 +51,7 @@ urlpatterns = [
     path("rag/query/", rag_query, name="rag_query"),
     path("rag/chat/", rag_enhanced_chat, name="rag_enhanced_chat"),
     path("rag/system-status/", rag_system_status, name="rag_system_status"),
+    
+    # Servir documentos
+    path("documents/<str:filename>/", serve_document, name="serve_document"),
 ]
