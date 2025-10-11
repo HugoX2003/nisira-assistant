@@ -325,12 +325,14 @@ class RAGPipeline:
         
         try:
             if file_ext == '.pdf':
-                if not self.pdf_processor.is_available():
+                # Crear processor específico para PDF
+                pdf_processor = PDFProcessor(file_extension=file_ext)
+                if not pdf_processor.is_available():
                     return {
                         "success": False,
                         "error": "Procesador PDF no disponible"
                     }
-                result = self.pdf_processor.process_pdf(file_path)
+                result = pdf_processor.process_pdf(file_path)
             
             elif file_ext in self.text_processor.get_supported_formats():
                 result = self.text_processor.process_document(file_path)
@@ -392,14 +394,17 @@ class RAGPipeline:
             sources = []
             
             for i, doc in enumerate(relevant_docs):
-                context_parts.append(f"Documento {i+1}:\\n{doc.get('content', doc.get('document', ''))}")
-                
                 metadata = doc['metadata']
+                file_name = metadata.get('source', metadata.get('document', metadata.get('file_name', f'Documento {i+1}')))
+                context_parts.append(f"Fuente: {file_name}\\n{doc.get('content', doc.get('document', ''))}")
+                
                 source_info = {
                     "rank": doc.get('rank', i + 1),
                     "similarity_score": doc.get('similarity_score', 0),
                     "file_name": metadata.get('source', metadata.get('document', metadata.get('file_name', 'unknown'))),
-                    "chunk_id": metadata.get('chunk_id', 0)
+                    "chunk_id": metadata.get('chunk_id', 0),
+                    "content": doc.get('content', doc.get('document', '')),  # Contenido del chunk
+                    "preview": doc.get('content', doc.get('document', ''))[:200] + "..." if len(doc.get('content', doc.get('document', ''))) > 200 else doc.get('content', doc.get('document', ''))  # Vista previa truncada
                 }
                 
                 if 'page' in metadata:
@@ -481,8 +486,8 @@ Cuando enumeres múltiples puntos, usa listas numeradas con espacio apropiado:
 > Si hay citas textuales importantes, ponlas en formato de cita
 
 **Fuentes consultadas:**
-- `Documento 1`: Información específica encontrada
-- `Documento 2`: Datos relevantes identificados
+- `[nombre del archivo]`: Información específica encontrada
+- `[nombre del archivo]`: Datos relevantes identificados
 
 ---
 
