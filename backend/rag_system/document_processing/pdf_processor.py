@@ -39,13 +39,21 @@ class PDFProcessor:
     Procesador PDF avanzado con LangChain
     """
     
-    def __init__(self):
+    def __init__(self, file_extension=".pdf"):
         self.config = DOCUMENT_PROCESSING_CONFIG
         
-        # Configuración optimizada para textos académicos y citas
-        self.chunk_size = 2000   # CHUNKS MÁS GRANDES para capturar CONTEXTO COMPLETO
-        self.chunk_overlap = 600  # OVERLAP MAYOR para asegurar continuidad total
-        self.min_chunk_size = 200  # Chunks mínimos más grandes
+        # Obtener configuración específica por tipo de archivo
+        chunk_config = self.config["chunk_config"].get(
+            file_extension.lower(), 
+            self.config["chunk_config"]["default"]
+        )
+        
+        # Configuración optimizada por tipo de documento
+        self.chunk_size = chunk_config["chunk_size"]
+        self.chunk_overlap = chunk_config["chunk_overlap"] 
+        self.min_chunk_size = chunk_config["min_chunk_size"]
+        
+        logger.info(f"📄 Configuración para {file_extension}: chunk_size={self.chunk_size}, overlap={self.chunk_overlap}, min_size={self.min_chunk_size}")
         
         # Text splitter inteligente con LangChain
         if DEPENDENCIES_AVAILABLE:

@@ -106,31 +106,39 @@ class Command(BaseCommand):
             raise CommandError(f"❌ Error ejecutando {action}: {e}")
 
     def _handle_reindex(self, options):
-        """Procesar todos los PDFs en la carpeta de documentos y generar embeddings"""
+        """Procesar todos los documentos soportados en la carpeta de documentos y generar embeddings"""
         from glob import glob
-        self.stdout.write("🔄 Reindexando todos los documentos PDF...")
+        self.stdout.write("🔄 Reindexando todos los documentos soportados...")
         
         # Ruta a la carpeta de documentos
         base_dir = getattr(settings, 'BASE_DIR', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         docs_dir = os.path.join(base_dir, 'data', 'documents')
-        pdf_files = glob(os.path.join(docs_dir, '*.pdf'))
         
-        if not pdf_files:
-            self.stdout.write("❌ No se encontraron archivos PDF en la carpeta de documentos.")
+        # Buscar archivos de formatos soportados
+        supported_formats = ['.pdf', '.txt', '.docx']  # Formatos implementados
+        all_files = []
+        for format_ext in supported_formats:
+            files = glob(os.path.join(docs_dir, f'*{format_ext}'))
+            all_files.extend(files)
+        
+        if not all_files:
+            self.stdout.write("❌ No se encontraron archivos soportados en la carpeta de documentos.")
             return
         
         pipeline = RAGPipeline()
-        total = len(pdf_files)
+        total = len(all_files)
         exitosos = 0
         fallidos = 0
         total_chunks = 0
         
-        for idx, pdf_path in enumerate(pdf_files, 1):
-            self.stdout.write(f"[{idx}/{total}] Procesando: {os.path.basename(pdf_path)}")
+        for idx, file_path in enumerate(all_files, 1):
+            file_name = os.path.basename(file_path)
+            file_ext = os.path.splitext(file_path)[1].lower()
+            self.stdout.write(f"[{idx}/{total}] Procesando {file_ext.upper()}: {file_name}")
             
             try:
                 # Procesar documento
-                result = pipeline.process_document(pdf_path)
+                result = pipeline.process_document(file_path)
                 
                 if result.get('success'):
                     chunks = result.get('chunks', [])

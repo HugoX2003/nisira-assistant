@@ -40,10 +40,36 @@ GOOGLE_DRIVE_CONFIG = {
 # ===== PROCESAMIENTO DE DOCUMENTOS =====
 DOCUMENT_PROCESSING_CONFIG = {
     "supported_formats": [".pdf", ".txt", ".docx", ".doc", ".pptx", ".xlsx"],
-    "chunk_size": 1000,      # Tamaño de chunk para procesadores
+    
+    # Configuración de chunking por tipo de documento
+    "chunk_config": {
+        ".pdf": {
+            "chunk_size": 2000,      # PDFs académicos necesitan chunks grandes para contexto
+            "chunk_overlap": 400,    # Overlap mayor para mantener coherencia
+            "min_chunk_size": 200,   # Mínimo para evitar fragmentos inútiles
+        },
+        ".txt": {
+            "chunk_size": 1500,      # TXT suelen ser más directos
+            "chunk_overlap": 300,    
+            "min_chunk_size": 150,   
+        },
+        ".docx": {
+            "chunk_size": 1800,      # DOCX tienen estructura similar a PDF
+            "chunk_overlap": 350,    
+            "min_chunk_size": 180,   
+        },
+        "default": {
+            "chunk_size": 1000,      # Fallback para otros formatos
+            "chunk_overlap": 200,    
+            "min_chunk_size": 100,   
+        }
+    },
+    
+    # Configuración general (mantener compatibilidad)
+    "chunk_size": 1000,      # Valor por defecto (deprecado)
     "max_chunk_size": 1000,  # Tokens por chunk
-    "chunk_overlap": 200,    # Overlap entre chunks
-    "min_chunk_size": 100,   # Mínimo tamaño de chunk
+    "chunk_overlap": 200,    # Overlap entre chunks (deprecado)
+    "min_chunk_size": 100,   # Mínimo tamaño de chunk (deprecado)
     "extract_metadata": True,  # Extraer metadatos de documentos
     "preserve_structure": True,  # Mantener estructura de documentos
     "clean_text": True,     # Limpiar texto extraído
