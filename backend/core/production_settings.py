@@ -40,8 +40,9 @@ if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
 # CORS para frontend
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "https://nisira-assistant.vercel.app",  # Cambiar a tu dominio Vercel
+    "https://nisira-assistant-frontend-2ae3b15d68.herokuapp.com", 
     "http://localhost:3000",  # Para desarrollo local
+    
 ]
 
 # CSRF
