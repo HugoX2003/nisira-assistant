@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+*.pid
+*.lock
+.idea/
+.vscode/
+venv/
+node_modules/
+data/processed/
+chroma_db/
+staticfiles/
