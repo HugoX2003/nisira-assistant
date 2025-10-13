@@ -1,3 +1,4 @@
+
 # Frontend Dockerfile for React client
 # Multi-stage: build with Node, serve with Nginx
 
@@ -20,5 +21,5 @@ FROM nginx:1.27-alpine AS runtime
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

@@ -32,6 +32,13 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 # ALLOWED_HOSTS
 if os.environ.get('ALLOWED_HOSTS'):
     ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS').split(',') if h.strip()]
+elif os.environ.get('DYNO'):  # Heroku environment
+    ALLOWED_HOSTS = [
+        '.herokuapp.com',
+        'nisira-assistant-51691aa80938.herokuapp.com',
+        'localhost',
+        '127.0.0.1'
+    ]
 elif os.environ.get('RAILWAY_ENVIRONMENT_NAME'):
     ALLOWED_HOSTS = [
         '.railway.app',
@@ -93,6 +100,8 @@ SIMPLE_JWT = {
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
 }
 
 # ============================================================================
