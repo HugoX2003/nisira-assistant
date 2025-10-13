@@ -73,4 +73,3 @@ markdown>=3.4.0
 python-multipart>=0.0.6
 mysql-connector-python>=8.0.33
 docx>=0.2.4
-MySQLdb>=1.4.6
