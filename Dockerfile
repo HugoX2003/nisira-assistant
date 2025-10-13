@@ -40,8 +40,7 @@ RUN pip install --upgrade pip \
 # Copy backend source code
 COPY backend/ /app/
 
-# Copy environment and credential files (requested for baked-in deployments)
-COPY backend/.env /app/.env
+# Copy credential files (do NOT copy .env - use environment variables instead)
 COPY backend/credentials.json /app/credentials.json
 
 # Insert built frontend into Django static directory before collectstatic
