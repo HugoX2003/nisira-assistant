@@ -65,3 +65,12 @@ python-json-logger>=2.0.0
 # === PRODUCCIÓN ===
 gunicorn>=21.2.0
 whitenoise>=6.6.0
+
+# === DEPENDENCIAS ADICIONALES DETECTADAS ===
+langchain-openai>=0.0.1
+langchain-groq>=0.0.1
+markdown>=3.4.0
+python-multipart>=0.0.6
+mysql-connector-python>=8.0.33
+docx>=0.2.4
+MySQLdb>=1.4.6
