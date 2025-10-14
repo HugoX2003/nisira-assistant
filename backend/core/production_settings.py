@@ -47,7 +47,7 @@ CORS_ALLOWED_ORIGINS = [
 
 # CSRF
 CSRF_TRUSTED_ORIGINS = [
-    "https://nisira-assistant.vercel.app",  # Cambiar a tu dominio Vercel
+    "https://nisira-assistant-frontend-2ae3b15d68.herokuapp.com",  
 ]
 
 # ChromaDB persistente con volumen Railway
