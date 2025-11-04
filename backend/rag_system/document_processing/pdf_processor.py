@@ -76,6 +76,10 @@ class PDFProcessor:
         """Verificar disponibilidad"""
         return DEPENDENCIES_AVAILABLE
 
+    def get_supported_formats(self) -> List[str]:
+        """Regresar lista de extensiones compatibles para el sistema"""
+        return [".pdf"]
+
     def process_pdf(self, pdf_path: str) -> Dict[str, Any]:
         """
         Procesar PDF con LangChain y técnicas avanzadas

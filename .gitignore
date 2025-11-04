@@ -95,6 +95,8 @@ desktop.ini
 *.backup
 *.orig
 *.tmp
+eval/
+*.eval.json
 
 # ===== ESPECÍFICOS DEL PROYECTO =====
 # Archivos de configuración local

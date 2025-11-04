@@ -1,0 +1,325 @@
+{
+  "generated_at": "2025-11-04T05:36:56.450617+00:00",
+  "document_inventory": {
+    "path": "C:\\Users\\amaya\\Downloads\\10mo Ciclo\\nisira-assistant\\backend\\data\\documents",
+    "exists": true,
+    "total_files": 59,
+    "pdf_files": 59
+  },
+  "rag_status": {
+    "rag_available": true,
+    "system_status": {
+      "readiness": {
+        "drive_manager": true,
+        "pdf_processor": true,
+        "text_processor": true,
+        "embedding_manager": true,
+        "chroma_manager": true,
+        "llm_available": true
+      },
+      "stats": {
+        "documents_processed": 0,
+        "chunks_created": 0,
+        "embeddings_generated": 0,
+        "last_sync": null,
+        "last_processing": null
+      },
+      "drive_status": {
+        "authenticated": true,
+        "folder_id": "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8",
+        "download_path": "C:\\Users\\amaya\\Downloads\\10mo Ciclo\\nisira-assistant\\backend\\data\\documents",
+        "supported_formats": [
+          ".pdf",
+          ".txt",
+          ".docx",
+          ".doc",
+          ".pptx",
+          ".xlsx"
+        ],
+        "local_files_count": 59,
+        "local_files": [
+          "1. IV Seminario Nacional de las Regiones . Pais y Región. Democracia y Desarrollo.pdf",
+          "10. Juan Pablo Viscardo y Guzman, entre la lucidez impotente y la ilución movilizadora. Juan Pablo Viscardo y Guzman (1748-1798).pdf",
+          "11. El APRA  y el congreso económico nacional. Pensamiento político peruano 1930-1968.pdf",
+          "12. El silencio, la queja y la acción respuestas al sufrimiento en la cultura peruana.Tiempos de ira y amor.pdf",
+          "13. Conservadurismo, liberalismo y democracia en el Perú de siglo XIX. Pensamiento político peruano..pdf",
+          "14. Las relaciones sociedad-estado en Perú, un examen bibliográfico. Hay lugar para los pobres en el Perú..pdf",
+          "15. Discriminación social y racismo en el Perú de hoy. 500 años después... el fin de la historia.pdf",
+          "16. Introducción.pdf",
+          "17. Juventud y proceso cultural. Juventud e iglesia.pdf",
+          "18. Insistir en la política. Cuestión de Estado (2004).pdf",
+          "19. Mundo popular y clase política. Razones del desencuentro.Cuestión de estado.pdf",
+          "2. Presentación. Crisis y desafíos, La enseñanza de las ciencias sociales en el Perú.pdf",
+          "21. Notas sobre el precio relativo de la papa. Allpanchis.pdf",
+          "22. Introducción tensiones y (des)encuentros. Salud reproductiva en la amazonia.pdf",
+          "23. Satán crucificado. Hueso Humero (1989).pdf",
+          "24. Los fantasmas de la clase media. Hueso Húmero (1985).pdf",
+          "24.pdf",
+          "25. El dios impotente, la (in) humanidad de trujilllo en la fiesta del chivo. Las guerras de este mundo.pdf",
+          "27. La sociología útil y la sociología crítica. El perú desde las aulas de ciencias sociales de la PUCP..pdf",
+          "28. Términos externos e internos del intercambio en la economía peruana 1950-1973.pdf",
+          "3. El imperio de los incas en la divulgación escolar. Revista de Ciencias Sociales (1987).pdf",
+          "32. La cuestión racial, espejismo y realidad. RACISMO Y MESTIZAJE Y OTROS ENSAYOS..pdf",
+          "35. Empresarios, sociedad nacional de industrias y procesos políticos, 1950-1968.pdf",
+          "36. El psicoanálisis, las ciencias sociales y el mundo popular.pdf",
+          "38. El proceso de industrialización en el Perú.pdf",
+          "39. Moralismo , contestación y cinismo como posiciones de enunciación de los juicios morales en la juventud peruana. Pasiones privadas, utopías públicas..pdf",
+          "4. El mundo migrante. construyendo una imagen de sí mismo. Coloquio lo cholo en el Perú.pdf",
+          "40. Modernidad, posmodernidad el debate sobre el carácter de nuestra época. Encrucijada del saber.pdf",
+          "41. Presencia viva. Presencia y aporte de Alberto Flores Galindo.pdf",
+          "43. Inacabadas ruinas, nota críticas sobre el imaginario peruano. Perspectivas sobre el nacionalismo en el Perú.pdf",
+          "45. Imágenes que analizan imágenes. Sombras coloniales y globalización en el Perú de hoy.pdf",
+          "46. Los fantasmas del patrón y del siervo como desestabilizador de la autoridad legal en la sociedad peruana. Cultura política en el Perú..pdf",
+          "47. El indio como prójimo González Prada y el nacimiento de una tradición democrática en el Perú. El porvenir nos debe una victoria.pdf",
+          "48. Notas sobre el sensacioalismo en al prensa televisiva. Industrias culturales.pdf",
+          "49. Confrontarse a los próximos. Para no olvidar.pdf",
+          "5. Ricardo Palma y imaginario criollo. Libros y artes 2007.pdf",
+          "50. Memorias del velasquismo. Batallas por la memoria.pdf",
+          "51. La transgresión como forma específica de goce del mundo criollo. Estudios culturales, discurso ,poderes, pulsiones.pdf",
+          "53. Foucault, el pensamiento como provocación para cambiar el mundo y embellecer la vida. Después de Michel Foucault.pdf",
+          "54. Lucha por la descolonización sin rabia ni vergüenza, el legado pendiente de Jose María Arguedas. Arguedas y el Perú de hoy.pdf",
+          "55. Quizá conmigo empieza a cerrarse un ciclo y abrirse otro, el evento Arguedas. Arguedas y el Perú de hoy.pdf",
+          "56. Ajuste de cuentas, las clases medias en el trabajo de tempo..pdf",
+          "57. La ambigüedad moral del humor y la reproducción del racismo (el caso de la China Tudela, Rafael León). Las clases medias.pdf",
+          "58. Las palabras y la vida. Márgenes (1994).pdf",
+          "59. Viva el socialismo. Margenes (1991).pdf",
+          "60. La realidad de los deseos. Margenes (1989).pdf",
+          "61. Nacionalismo peruano. Entre la crisis y la posibilidad. Márgenes (1988).pdf",
+          "62. Un medio día con Sarita. Los nuevos limeños sueños fervores y caminos en el mundo popular.pdf",
+          "63. Crisis social y fantasmas coloniales. Los sacaojos.pdf",
+          "64. El goce de la trasgresión, la cultura criolla y la ética civil. Gobernabilidad tevista de sociedad y estado.pdf",
+          "65. Los dicursos académicos, Sendero Luminoso y el mundo andino. Gobernabilidad revista de sociedad y estado.pdf",
+          "66. Los discursos públicos. Gobernabilida revista de sociedad y estado.pdf",
+          "67. El fundamento invisible, función y lugar de las ideas racistas en la república Aristocrática. RACISMO Y MESTIZAJE Y OTROS ENSAYOS. (1).pdf",
+          "68. Imagenes del Perú, los estudiantes opinan. 30 días.pdf",
+          "69. Frente Democrático Nacional,  una promesa frustada. 30 días.pdf",
+          "7. Vida Fecunda. Socialismo y participación.pdf",
+          "8. Etnicidad y política. los puentes entre lo ideal y lo real. Cronicas urbanas.pdf",
+          "9. Las (sin) razones de la violencia. El Perú en los albores del siglo XXI-3.pdf",
+          "S04 Operacionalizacion-de-Variables.pdf"
+        ]
+      },
+      "embedding_stats": {
+        "ready": true,
+        "current_provider": "huggingface",
+        "providers_available": 2,
+        "cache_entries": 0,
+        "embedding_dimension": 768,
+        "current_model": "sentence-transformers/all-mpnet-base-v2",
+        "max_tokens": 512,
+        "free_quota": true
+      },
+      "chroma_stats": {
+        "ready": true,
+        "collection_name": "rag_documents",
+        "total_documents": 3041,
+        "persist_directory": "C:\\Users\\amaya\\Downloads\\10mo Ciclo\\nisira-assistant\\backend\\chroma_db",
+        "file_types": [],
+        "sample_metadata_keys": [
+          "chunk_id",
+          "char_count",
+          "source",
+          "total_pages",
+          "doc_id",
+          "word_count",
+          "file_path",
+          "chunk_type",
+          "added_at",
+          "document",
+          "chunk_size",
+          "page"
+        ]
+      },
+      "supported_formats": {
+        "pdf": [
+          ".pdf"
+        ],
+        "text": [
+          ".txt",
+          ".md"
+        ]
+      }
+    },
+    "timestamp": "2025-11-04T00:36:32.650738",
+    "http_status": 200
+  },
+  "pipeline_status": {
+    "available": true,
+    "status": {
+      "readiness": {
+        "drive_manager": true,
+        "pdf_processor": true,
+        "text_processor": true,
+        "embedding_manager": true,
+        "chroma_manager": true,
+        "llm_available": true
+      },
+      "stats": {
+        "documents_processed": 0,
+        "chunks_created": 0,
+        "embeddings_generated": 0,
+        "last_sync": null,
+        "last_processing": null
+      },
+      "drive_status": {
+        "authenticated": true,
+        "folder_id": "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8",
+        "download_path": "C:\\Users\\amaya\\Downloads\\10mo Ciclo\\nisira-assistant\\backend\\data\\documents",
+        "supported_formats": [
+          ".pdf",
+          ".txt",
+          ".docx",
+          ".doc",
+          ".pptx",
+          ".xlsx"
+        ],
+        "local_files_count": 59,
+        "local_files": [
+          "1. IV Seminario Nacional de las Regiones . Pais y Región. Democracia y Desarrollo.pdf",
+          "10. Juan Pablo Viscardo y Guzman, entre la lucidez impotente y la ilución movilizadora. Juan Pablo Viscardo y Guzman (1748-1798).pdf",
+          "11. El APRA  y el congreso económico nacional. Pensamiento político peruano 1930-1968.pdf",
+          "12. El silencio, la queja y la acción respuestas al sufrimiento en la cultura peruana.Tiempos de ira y amor.pdf",
+          "13. Conservadurismo, liberalismo y democracia en el Perú de siglo XIX. Pensamiento político peruano..pdf",
+          "14. Las relaciones sociedad-estado en Perú, un examen bibliográfico. Hay lugar para los pobres en el Perú..pdf",
+          "15. Discriminación social y racismo en el Perú de hoy. 500 años después... el fin de la historia.pdf",
+          "16. Introducción.pdf",
+          "17. Juventud y proceso cultural. Juventud e iglesia.pdf",
+          "18. Insistir en la política. Cuestión de Estado (2004).pdf",
+          "19. Mundo popular y clase política. Razones del desencuentro.Cuestión de estado.pdf",
+          "2. Presentación. Crisis y desafíos, La enseñanza de las ciencias sociales en el Perú.pdf",
+          "21. Notas sobre el precio relativo de la papa. Allpanchis.pdf",
+          "22. Introducción tensiones y (des)encuentros. Salud reproductiva en la amazonia.pdf",
+          "23. Satán crucificado. Hueso Humero (1989).pdf",
+          "24. Los fantasmas de la clase media. Hueso Húmero (1985).pdf",
+          "24.pdf",
+          "25. El dios impotente, la (in) humanidad de trujilllo en la fiesta del chivo. Las guerras de este mundo.pdf",
+          "27. La sociología útil y la sociología crítica. El perú desde las aulas de ciencias sociales de la PUCP..pdf",
+          "28. Términos externos e internos del intercambio en la economía peruana 1950-1973.pdf",
+          "3. El imperio de los incas en la divulgación escolar. Revista de Ciencias Sociales (1987).pdf",
+          "32. La cuestión racial, espejismo y realidad. RACISMO Y MESTIZAJE Y OTROS ENSAYOS..pdf",
+          "35. Empresarios, sociedad nacional de industrias y procesos políticos, 1950-1968.pdf",
+          "36. El psicoanálisis, las ciencias sociales y el mundo popular.pdf",
+          "38. El proceso de industrialización en el Perú.pdf",
+          "39. Moralismo , contestación y cinismo como posiciones de enunciación de los juicios morales en la juventud peruana. Pasiones privadas, utopías públicas..pdf",
+          "4. El mundo migrante. construyendo una imagen de sí mismo. Coloquio lo cholo en el Perú.pdf",
+          "40. Modernidad, posmodernidad el debate sobre el carácter de nuestra época. Encrucijada del saber.pdf",
+          "41. Presencia viva. Presencia y aporte de Alberto Flores Galindo.pdf",
+          "43. Inacabadas ruinas, nota críticas sobre el imaginario peruano. Perspectivas sobre el nacionalismo en el Perú.pdf",
+          "45. Imágenes que analizan imágenes. Sombras coloniales y globalización en el Perú de hoy.pdf",
+          "46. Los fantasmas del patrón y del siervo como desestabilizador de la autoridad legal en la sociedad peruana. Cultura política en el Perú..pdf",
+          "47. El indio como prójimo González Prada y el nacimiento de una tradición democrática en el Perú. El porvenir nos debe una victoria.pdf",
+          "48. Notas sobre el sensacioalismo en al prensa televisiva. Industrias culturales.pdf",
+          "49. Confrontarse a los próximos. Para no olvidar.pdf",
+          "5. Ricardo Palma y imaginario criollo. Libros y artes 2007.pdf",
+          "50. Memorias del velasquismo. Batallas por la memoria.pdf",
+          "51. La transgresión como forma específica de goce del mundo criollo. Estudios culturales, discurso ,poderes, pulsiones.pdf",
+          "53. Foucault, el pensamiento como provocación para cambiar el mundo y embellecer la vida. Después de Michel Foucault.pdf",
+          "54. Lucha por la descolonización sin rabia ni vergüenza, el legado pendiente de Jose María Arguedas. Arguedas y el Perú de hoy.pdf",
+          "55. Quizá conmigo empieza a cerrarse un ciclo y abrirse otro, el evento Arguedas. Arguedas y el Perú de hoy.pdf",
+          "56. Ajuste de cuentas, las clases medias en el trabajo de tempo..pdf",
+          "57. La ambigüedad moral del humor y la reproducción del racismo (el caso de la China Tudela, Rafael León). Las clases medias.pdf",
+          "58. Las palabras y la vida. Márgenes (1994).pdf",
+          "59. Viva el socialismo. Margenes (1991).pdf",
+          "60. La realidad de los deseos. Margenes (1989).pdf",
+          "61. Nacionalismo peruano. Entre la crisis y la posibilidad. Márgenes (1988).pdf",
+          "62. Un medio día con Sarita. Los nuevos limeños sueños fervores y caminos en el mundo popular.pdf",
+          "63. Crisis social y fantasmas coloniales. Los sacaojos.pdf",
+          "64. El goce de la trasgresión, la cultura criolla y la ética civil. Gobernabilidad tevista de sociedad y estado.pdf",
+          "65. Los dicursos académicos, Sendero Luminoso y el mundo andino. Gobernabilidad revista de sociedad y estado.pdf",
+          "66. Los discursos públicos. Gobernabilida revista de sociedad y estado.pdf",
+          "67. El fundamento invisible, función y lugar de las ideas racistas en la república Aristocrática. RACISMO Y MESTIZAJE Y OTROS ENSAYOS. (1).pdf",
+          "68. Imagenes del Perú, los estudiantes opinan. 30 días.pdf",
+          "69. Frente Democrático Nacional,  una promesa frustada. 30 días.pdf",
+          "7. Vida Fecunda. Socialismo y participación.pdf",
+          "8. Etnicidad y política. los puentes entre lo ideal y lo real. Cronicas urbanas.pdf",
+          "9. Las (sin) razones de la violencia. El Perú en los albores del siglo XXI-3.pdf",
+          "S04 Operacionalizacion-de-Variables.pdf"
+        ]
+      },
+      "embedding_stats": {
+        "ready": true,
+        "current_provider": "huggingface",
+        "providers_available": 2,
+        "cache_entries": 0,
+        "embedding_dimension": 768,
+        "current_model": "sentence-transformers/all-mpnet-base-v2",
+        "max_tokens": 512,
+        "free_quota": true
+      },
+      "chroma_stats": {
+        "ready": true,
+        "collection_name": "rag_documents",
+        "total_documents": 3041,
+        "persist_directory": "C:\\Users\\amaya\\Downloads\\10mo Ciclo\\nisira-assistant\\backend\\chroma_db",
+        "file_types": [],
+        "sample_metadata_keys": [
+          "file_path",
+          "chunk_id",
+          "char_count",
+          "source",
+          "chunk_type",
+          "added_at",
+          "doc_id",
+          "total_pages",
+          "page",
+          "document",
+          "chunk_size",
+          "word_count"
+        ]
+      },
+      "supported_formats": {
+        "pdf": [
+          ".pdf"
+        ],
+        "text": [
+          ".txt",
+          ".md"
+        ]
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "baseline_chat_conc_5",
+      "concurrent_users": 5,
+      "requests_per_user": 4,
+      "use_rag": false,
+      "total_requests": 20,
+      "successful_requests": 20,
+      "failed_requests": 0,
+      "mean_latency_ms": 21.015264999005012,
+      "median_latency_ms": 17.45340001070872,
+      "p95_latency_ms": 50.27591000834946,
+      "max_latency_ms": 57.57209999137558,
+      "min_latency_ms": 13.977299997350201
+    },
+    {
+      "name": "baseline_chat_conc_10",
+      "concurrent_users": 10,
+      "requests_per_user": 4,
+      "use_rag": false,
+      "total_requests": 40,
+      "successful_requests": 40,
+      "failed_requests": 0,
+      "mean_latency_ms": 29.559392497321824,
+      "median_latency_ms": 17.900299993925728,
+      "p95_latency_ms": 89.07042000355429,
+      "max_latency_ms": 115.82780000753701,
+      "min_latency_ms": 13.666100014233962
+    },
+    {
+      "name": "rag_toggle_conc_6",
+      "concurrent_users": 6,
+      "requests_per_user": 3,
+      "use_rag": true,
+      "total_requests": 18,
+      "successful_requests": 18,
+      "failed_requests": 0,
+      "mean_latency_ms": 34.55482777887179,
+      "median_latency_ms": 27.155300005688332,
+      "p95_latency_ms": 81.3083199856919,
+      "max_latency_ms": 94.85459999996237,
+      "min_latency_ms": 13.39520001783967
+    }
+  ]
+}

@@ -411,6 +411,52 @@ export async function deleteConversation(conversationId) {
 }
 
 // ================================
+// CALIFICACIONES
+// ================================
+
+export async function submitRating({ messageId, value, comment = '' }) {
+  try {
+    const payload = {
+      message_id: messageId,
+      value,
+      comment,
+    };
+    const response = await api.post('/api/ratings/', payload);
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'enviar calificación');
+  }
+}
+
+export async function getRatingSummary() {
+  try {
+    const response = await api.get('/api/ratings/summary/');
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'obtener resumen de calificaciones');
+  }
+}
+
+export async function exportRatings(format = 'json') {
+  try {
+    const lowerFormat = format.toLowerCase();
+    const response = await api.get('/api/ratings/export/', {
+      params: { export_format: lowerFormat },
+      responseType: lowerFormat === 'csv' ? 'blob' : 'json',
+    });
+
+    if (lowerFormat === 'csv') {
+      const fileName = response.headers['x-export-filename'] || `ratings-${Date.now()}.csv`;
+      return { fileName, blob: response.data };
+    }
+
+    return response.data;
+  } catch (error) {
+    handleApiError(error, 'exportar calificaciones');
+  }
+}
+
+// ================================
 // FUNCIONES DE ESTADO DEL SISTEMA
 // ================================
 
@@ -572,5 +618,8 @@ export default {
   getVectorStats,
   clearApiCache,
   getApiStats,
+  submitRating,
+  getRatingSummary,
+  exportRatings,
   tokenManager
 };

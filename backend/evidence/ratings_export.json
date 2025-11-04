@@ -1,0 +1,23 @@
+{
+  "count": 2,
+  "results": [
+    {
+      "id": 2,
+      "message_id": 18,
+      "conversation_id": 7,
+      "value": "like",
+      "comment": "Feedback positivo de evidencia",
+      "issue_tag": "irrelevante",
+      "updated_at": "2025-11-04T04:36:43.232412Z"
+    },
+    {
+      "id": 1,
+      "message_id": 16,
+      "conversation_id": 3,
+      "value": "like",
+      "comment": "",
+      "issue_tag": "none",
+      "updated_at": "2025-11-03T02:54:27.190177Z"
+    }
+  ]
+}

@@ -17,6 +17,7 @@ from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime
 import asyncio
 from pathlib import Path
+from time import perf_counter
 from dotenv import load_dotenv
 
 # Cargar variables de entorno al importar el módulo
@@ -353,7 +354,13 @@ class RAGPipeline:
                 "file_path": file_path
             }
     
-    def query(self, question: str, top_k: int = 5, include_generation: bool = True) -> Dict[str, Any]:
+    def query(
+        self,
+        question: str,
+        top_k: int = 5,
+        include_generation: bool = True,
+        collect_metrics: bool = False
+    ) -> Dict[str, Any]:
         """Realizar consulta RAG completa con optimización para citas"""
         logger.info(f"Procesando consulta: {question[:100]}...")
         
@@ -363,48 +370,80 @@ class RAGPipeline:
                 "error": "Pregunta vacía"
             }
         
+        # Preparar estructura opcional de métricas
+        metrics_payload: Dict[str, Any] = {
+            "latency_ms": {
+                "total": None,
+                "embedding": None,
+                "retrieval": None,
+                "context": None,
+                "generation": None,
+                "ttft": None
+            },
+            "counts": {
+                "requested_top_k": top_k,
+                "retrieved_documents": 0
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+        overall_start = perf_counter()
+
         try:
             # 1. Detectar si es una consulta sobre citas específicas
             is_citation_query, enhanced_query = self._enhance_citation_query(question)
             
             # 2. Usar la consulta mejorada para embeddings
             search_query = enhanced_query if is_citation_query else question
+            embedding_start = perf_counter()
             query_embedding = self.embedding_manager.create_embedding(search_query)
+            metrics_payload["latency_ms"]["embedding"] = round((perf_counter() - embedding_start) * 1000, 3)
             
             if query_embedding is None:
+                metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
                 return {
                     "success": False,
-                    "error": "No se pudo crear embedding de la consulta"
+                    "error": "No se pudo crear embedding de la consulta",
+                    "metrics": metrics_payload if collect_metrics else None
                 }
             
             # 2. BÚSQUEDA HÍBRIDA SÚPER AGRESIVA
+            retrieval_start = perf_counter()
             relevant_docs = self._hybrid_search(question, enhanced_query, query_embedding, top_k)
+            retrieval_end = perf_counter()
+            metrics_payload["latency_ms"]["retrieval"] = round((retrieval_end - retrieval_start) * 1000, 3)
             
             if not relevant_docs:
+                metrics_payload["counts"]["retrieved_documents"] = 0
+                metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
                 return {
                     "success": True,
                     "question": question,
                     "relevant_documents": [],
                     "answer": "No se encontraron documentos relevantes para responder la pregunta.",
-                    "sources": []
+                    "sources": [],
+                    "metrics": metrics_payload if collect_metrics else None
                 }
             
             # 3. Preparar contexto
+            context_start = perf_counter()
             context_parts = []
             sources = []
             
             for i, doc in enumerate(relevant_docs):
                 metadata = doc['metadata']
                 file_name = metadata.get('source', metadata.get('document', metadata.get('file_name', f'Documento {i+1}')))
-                context_parts.append(f"Fuente: {file_name}\\n{doc.get('content', doc.get('document', ''))}")
+                content_text = doc.get('content', doc.get('document', ''))
+                context_parts.append(f"Fuente: {file_name}\\n{content_text}")
                 
+                preview_text = content_text[:200] + "..." if len(content_text) > 200 else content_text
                 source_info = {
                     "rank": doc.get('rank', i + 1),
                     "similarity_score": doc.get('similarity_score', 0),
                     "file_name": metadata.get('source', metadata.get('document', metadata.get('file_name', 'unknown'))),
                     "chunk_id": metadata.get('chunk_id', 0),
-                    "content": doc.get('content', doc.get('document', '')),  # Contenido del chunk
-                    "preview": doc.get('content', doc.get('document', ''))[:200] + "..." if len(doc.get('content', doc.get('document', ''))) > 200 else doc.get('content', doc.get('document', ''))  # Vista previa truncada
+                    "content": content_text,
+                    "preview": preview_text
                 }
                 
                 if 'page' in metadata:
@@ -413,15 +452,95 @@ class RAGPipeline:
                 sources.append(source_info)
             
             context = "\\n\\n".join(context_parts)
+            metrics_payload["counts"]["retrieved_documents"] = len(relevant_docs)
+            metrics_payload["latency_ms"]["context"] = round((perf_counter() - context_start) * 1000, 3)
             
             # 4. Generar respuesta si está habilitado
             answer = None
             
             if include_generation and self.llm:
                 try:
+                    generation_start = perf_counter()
                     prompt = self._create_rag_prompt(question, context)
-                    response = self.llm.invoke(prompt)
-                    answer = response.content if hasattr(response, 'content') else str(response)
+                    ttft_ms: Optional[float] = None
+                    answer_parts: List[str] = []
+                    used_streaming = False
+
+                    def _chunk_to_text(chunk: Any) -> Optional[str]:
+                        content = getattr(chunk, "content", None)
+                        if isinstance(content, list):
+                            content = "".join(str(part) for part in content if part)
+                        if not content and hasattr(chunk, "message"):
+                            message_content = getattr(chunk.message, "content", None)
+                            if isinstance(message_content, list):
+                                message_content = "".join(str(part) for part in message_content if part)
+                            if message_content:
+                                content = message_content
+                        if not content and hasattr(chunk, "delta"):
+                            delta = getattr(chunk, "delta")
+                            delta_content = getattr(delta, "content", None)
+                            if isinstance(delta_content, list):
+                                pieces = []
+                                for item in delta_content:
+                                    if isinstance(item, str):
+                                        pieces.append(item)
+                                    elif hasattr(item, "text"):
+                                        piece = getattr(item, "text")
+                                        pieces.append(piece() if callable(piece) else str(piece))
+                                    else:
+                                        pieces.append(str(item))
+                                content = "".join(pieces)
+                            elif delta_content:
+                                content = delta_content
+                        if not content:
+                            text_attr = getattr(chunk, "text", None)
+                            if callable(text_attr):
+                                try:
+                                    content = text_attr()
+                                except TypeError:
+                                    content = None
+                            elif isinstance(text_attr, str) and text_attr:
+                                content = text_attr
+                        if isinstance(content, list):
+                            content = "".join(str(part) for part in content if part)
+                        return str(content) if content else None
+
+                    if collect_metrics and hasattr(self.llm, "stream"):
+                        from contextlib import nullcontext
+
+                        stream_obj = None
+                        try:
+                            stream_obj = self.llm.stream(prompt)
+                            context = stream_obj if hasattr(stream_obj, "__enter__") else nullcontext(stream_obj)
+                            used_streaming = True
+                            with context as active_stream:  # type: ignore[arg-type]
+                                for chunk in active_stream:
+                                    chunk_text = _chunk_to_text(chunk)
+                                    if chunk_text:
+                                        if ttft_ms is None:
+                                            ttft_ms = round((perf_counter() - generation_start) * 1000, 3)
+                                        answer_parts.append(chunk_text)
+                        except Exception as stream_error:  # pragma: no cover - depende del backend
+                            used_streaming = False
+                            logger.warning("Streaming LLM falló, usando invoke estándar: %s", stream_error)
+                        finally:
+                            if stream_obj and hasattr(stream_obj, "close"):
+                                try:
+                                    stream_obj.close()
+                                except Exception:  # pragma: no cover - best effort
+                                    pass
+
+                    if used_streaming and answer_parts:
+                        answer = "".join(answer_parts).strip() or None
+                    else:
+                        response = self.llm.invoke(prompt)
+                        answer = response.content if hasattr(response, 'content') else str(response)
+                        ttft_ms = ttft_ms or None
+                        used_streaming = False
+
+                    generation_end = perf_counter()
+                    metrics_payload["latency_ms"]["generation"] = round((generation_end - generation_start) * 1000, 3)
+                    metrics_payload["latency_ms"]["ttft"] = ttft_ms or metrics_payload["latency_ms"]["generation"]
                     
                 except Exception as e:
                     logger.error(f"Error generando respuesta: {e}")
@@ -437,16 +556,22 @@ class RAGPipeline:
                 "generation_used": answer is not None
             }
             
+            metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
+            if collect_metrics:
+                result["metrics"] = metrics_payload
+            
             logger.info(f"Consulta procesada: {len(relevant_docs)} documentos encontrados")
             
             return result
             
         except Exception as e:
             logger.error(f"Error en consulta RAG: {e}")
+            metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
             return {
                 "success": False,
                 "error": str(e),
-                "question": question
+                "question": question,
+                "metrics": metrics_payload if collect_metrics else None
             }
     
     def _create_rag_prompt(self, question: str, context: str) -> str:
@@ -642,7 +767,7 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
         
         # 4. BÚSQUEDA DE EXPANSIÓN (si pocos resultados)
         if len(all_results) < top_k:
-            logger.info("� Expandiendo búsqueda con términos relacionados...")
+            logger.info("[expand] Expandiendo búsqueda con términos relacionados...")
             try:
                 expanded_docs = self._expansion_search(original_query, top_k)
                 for doc in expanded_docs:
@@ -659,8 +784,12 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
         # 5. ORDENAR POR WEIGHTED SCORE
         all_results.sort(key=lambda x: x.get('weighted_score', 0), reverse=True)
         
-        # 6. DIVERSIFICACIÓN (evitar documentos muy similares)
-        diverse_results = self._diversify_results(all_results, config.get("diversity_threshold", 0.4))
+        # 6. DIVERSIFICACIÓN (evitar documentos muy similares, pero respetar max_per_source)
+        diverse_results = self._diversify_results(
+            all_results,
+            config.get("diversity_threshold", 0.4),
+            config.get("max_per_source")
+        )
         
         logger.info(f"✅ Búsqueda híbrida completada: {len(diverse_results)} documentos únicos (de {len(all_results)} totales)")
         
@@ -838,34 +967,54 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
             documents = all_data.get('documents', [])
             metadatas = all_data.get('metadatas', [])
             ids = all_data.get('ids', [])
-            
+
             query_words = set(re.findall(r'\b\w+\b', query.lower()))
+            stopwords = {
+                'el', 'la', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'que', 'se', 'con', 'por',
+                'para', 'como', 'al', 'lo', 'su', 'sus', 'es', 'son', 'o', 'u', 'a', 'e', 'i', 'sobre',
+                'entre', 'sin', 'más', 'menos', 'donde', 'cuando', 'qué', 'cual', 'cuál', 'cuales',
+                'cuáles', 'quién', 'quienes', 'quiénes', 'de', 'la', 'el', 'las', 'los'
+            }
+            filtered_query_words = {w for w in query_words if len(w) > 2 and w not in stopwords}
+            if not filtered_query_words:
+                filtered_query_words = query_words
             
             for i, metadata in enumerate(metadatas):
                 if i >= len(ids):
                     continue
                 
                 score = 0
+                source_words: set[str] = set()
                 
                 # Buscar en source/filename
                 source = metadata.get('source', '').lower()
                 if source:
-                    source_words = set(re.findall(r'\b\w+\b', source))
-                    common_words = query_words.intersection(source_words)
+                    source_words = {
+                        w for w in re.findall(r'\b\w+\b', source)
+                        if len(w) > 2 and w not in stopwords
+                    }
+                    common_words = filtered_query_words.intersection(source_words)
                     if common_words:
-                        score += len(common_words) / len(query_words) * 0.8
+                        score += len(common_words) / max(len(filtered_query_words), 1) * 0.9
                 
                 # Buscar en document field
                 document_field = metadata.get('document', '').lower()
                 if document_field:
-                    doc_words = set(re.findall(r'\b\w+\b', document_field))
-                    common_words = query_words.intersection(doc_words)
+                    doc_words = {
+                        w for w in re.findall(r'\b\w+\b', document_field)
+                        if len(w) > 2 and w not in stopwords
+                    }
+                    common_words = filtered_query_words.intersection(doc_words)
                     if common_words:
-                        score += len(common_words) / len(query_words) * 0.6
+                        score += len(common_words) / max(len(filtered_query_words), 1) * 0.7
                 
                 # Búsqueda exacta en títulos/fuentes
                 if query.lower() in source or query.lower() in document_field:
                     score += 0.9
+                else:
+                    # Boost si todos los términos clave aparecen dispersos
+                    if filtered_query_words and filtered_query_words.issubset(source_words or set()):
+                        score += 0.5
                 
                 if score > 0:
                     results.append({
@@ -947,14 +1096,34 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
         
         return results[:top_k]
     
-    def _diversify_results(self, results: List[Dict[str, Any]], diversity_threshold: float) -> List[Dict[str, Any]]:
-        """Diversificar resultados para evitar documentos muy similares"""
+    def _diversify_results(
+        self,
+        results: List[Dict[str, Any]],
+        diversity_threshold: float,
+        max_per_source: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Diversificar resultados permitiendo múltiples chunks del mismo documento."""
         if not results:
             return results
-        
-        diverse_results = [results[0]]  # Siempre incluir el mejor resultado
-        
-        for result in results[1:]:
+
+        diverse_results = []
+        source_counts: Dict[str, int] = {}
+
+        for result in results:
+            metadata = result.get('metadata') or {}
+            source_name = metadata.get('source')
+
+            if source_name:
+                current_count = source_counts.get(source_name, 0)
+                if max_per_source is not None and current_count >= max_per_source:
+                    continue
+
+            if not diverse_results:
+                diverse_results.append(result)
+                if source_name:
+                    source_counts[source_name] = source_counts.get(source_name, 0) + 1
+                continue
+
             is_diverse = True
             result_content = result.get('content', '').lower()
             
@@ -973,6 +1142,8 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
             
             if is_diverse:
                 diverse_results.append(result)
+                if source_name:
+                    source_counts[source_name] = source_counts.get(source_name, 0) + 1
         
         return diverse_results
     

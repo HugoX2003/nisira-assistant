@@ -1,0 +1,74 @@
+{
+  "total": 2,
+  "likes": 2,
+  "dislikes": 0,
+  "net_score": 2,
+  "satisfaction_rate": 1.0,
+  "last_updated": "2025-11-04T04:36:43.232412+00:00",
+  "issue_breakdown": {
+    "irrelevante": 1,
+    "none": 1
+  },
+  "daily_breakdown": [
+    {
+      "date": "2025-11-04",
+      "total": 1,
+      "likes": 1,
+      "dislikes": 0
+    },
+    {
+      "date": "2025-11-03",
+      "total": 1,
+      "likes": 1,
+      "dislikes": 0
+    }
+  ],
+  "recent_feedback": [
+    {
+      "id": 2,
+      "message_id": 18,
+      "conversation_id": 7,
+      "value": "like",
+      "comment": "Feedback positivo de evidencia",
+      "issue_tag": "irrelevante",
+      "updated_at": "2025-11-04T04:36:43.232412+00:00",
+      "username": "evidence_tester"
+    },
+    {
+      "id": 1,
+      "message_id": 16,
+      "conversation_id": 3,
+      "value": "like",
+      "comment": "",
+      "issue_tag": "none",
+      "updated_at": "2025-11-03T02:54:27.190177+00:00",
+      "username": "admin"
+    }
+  ],
+  "queue": {
+    "pending": 0,
+    "failed": 0,
+    "processed": 1
+  },
+  "latest_experiment": {
+    "id": 1,
+    "name": "Exp Evidencia",
+    "variant_name": "v1",
+    "executed_by": "evidence_tester",
+    "notes": "Evidencia de guardrails",
+    "baseline_precision": 0.7,
+    "variant_precision": 0.78,
+    "delta_precision": 0.08000000000000007,
+    "baseline_faithfulness": 0.72,
+    "variant_faithfulness": 0.75,
+    "delta_faithfulness": 0.030000000000000027,
+    "baseline_latency": 1.2,
+    "variant_latency": 1.0,
+    "delta_latency": -0.19999999999999996,
+    "guardrail_passed": true,
+    "guardrail_reason": "",
+    "created_at": "2025-11-04T04:36:15.025776Z"
+  },
+  "generated_at": "2025-11-04T04:36:53.537032+00:00",
+  "export_url": "http://localhost/api/ratings/export/"
+}

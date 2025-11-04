@@ -4,6 +4,14 @@ from .views import (
     # Vistas básicas
     health_check,
     api_info,
+    service_status,
+    submit_rating,
+    rating_summary,
+    export_ratings,
+    create_experiment_run,
+    list_experiments,
+    latest_experiment,
+    guardrail_status,
     # Vistas de conversaciones
     get_conversations,
     create_conversation,
@@ -34,6 +42,7 @@ urlpatterns = [
     # API básica
     path("health/", health_check, name="health_check"),
     path("info/", api_info, name="api_info"),
+    path("status/", service_status, name="service_status"),
     
     # Gestión de conversaciones
     path("conversations/", get_conversations, name="get_conversations"),
@@ -54,4 +63,15 @@ urlpatterns = [
     
     # Servir documentos
     path("documents/<str:filename>/", serve_document, name="serve_document"),
+
+    # Calificaciones
+    path("ratings/", submit_rating, name="submit_rating"),
+    path("ratings/summary/", rating_summary, name="rating_summary"),
+    path("ratings/export/", export_ratings, name="export_ratings"),
+
+    # Experimentos y guardrails
+    path("experiments/", list_experiments, name="list_experiments"),
+    path("experiments/latest/", latest_experiment, name="latest_experiment"),
+    path("experiments/create/", create_experiment_run, name="create_experiment_run"),
+    path("guardrails/status/", guardrail_status, name="guardrail_status"),
 ]

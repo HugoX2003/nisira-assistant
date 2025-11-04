@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ragEnhancedChat, getConversations, getMessages, getVectorStats, deleteConversation } from '../services/api';
+import { ragEnhancedChat, getConversations, getMessages, getVectorStats, deleteConversation, submitRating } from '../services/api';
 import '../styles/Chat.css';
 
 // Componente actualizado con nuevo diseño moderno
@@ -365,7 +365,39 @@ Relevancia: ${((source.similarity_score || 0) * 100).toFixed(1)}%`);
 });
 
 // Componente de mensaje optimizado
-const Message = React.memo(({ message, isUser, timestamp, sources }) => {
+const MessageFeedback = React.memo(({ value, disabled, onChange }) => {
+  const isLikeActive = value === 'like';
+  const isDislikeActive = value === 'dislike';
+
+  return (
+    <div className="message-feedback" role="group" aria-label="Califica la respuesta">
+      <button
+        type="button"
+        className={`feedback-btn feedback-like ${isLikeActive ? 'active' : ''}`}
+        onClick={() => onChange(isLikeActive ? 'clear' : 'like')}
+        disabled={disabled}
+        aria-pressed={isLikeActive}
+        aria-label={isLikeActive ? 'Quitar "me gusta"' : 'Marcar como útil'}
+      >
+        <span aria-hidden="true">👍</span>
+        <span className="feedback-label">Útil</span>
+      </button>
+      <button
+        type="button"
+        className={`feedback-btn feedback-dislike ${isDislikeActive ? 'active' : ''}`}
+        onClick={() => onChange(isDislikeActive ? 'clear' : 'dislike')}
+        disabled={disabled}
+        aria-pressed={isDislikeActive}
+        aria-label={isDislikeActive ? 'Quitar "no útil"' : 'Marcar como no útil'}
+      >
+        <span aria-hidden="true">👎</span>
+        <span className="feedback-label">No útil</span>
+      </button>
+    </div>
+  );
+});
+
+const Message = React.memo(({ message, isUser, timestamp, sources, rating, onRate, ratingBusy }) => {
   console.log('Renderizando mensaje:', { message: message?.substring(0, 50), isUser, sourcesCount: sources?.length });
   
   return (
@@ -380,6 +412,9 @@ const Message = React.memo(({ message, isUser, timestamp, sources }) => {
         </div>
         {!isUser && sources && sources.length > 0 && (
           <SourcesDropdown sources={sources} />
+        )}
+        {!isUser && onRate && (
+          <MessageFeedback value={rating} onChange={onRate} disabled={ratingBusy} />
         )}
       </div>
       <div className="message-timestamp">{timestamp}</div>
@@ -427,12 +462,28 @@ const useMessages = () => {
     setMessages([]);
   }, []);
 
+  const updateMessage = useCallback((backendId, updates) => {
+    if (!backendId) {
+      return;
+    }
+
+    setMessages(prev => prev.map(msg => {
+      if (msg.backendId !== backendId) {
+        return msg;
+      }
+
+      const patch = typeof updates === 'function' ? updates(msg) : updates;
+      return { ...msg, ...patch };
+    }));
+  }, []);
+
   return {
     messages,
     isLoading,
     setIsLoading,
     addMessage,
-    clearMessages
+    clearMessages,
+    updateMessage
   };
 };
 
@@ -471,10 +522,11 @@ const Chat = ({ onLogout, user }) => {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
   const [error, setError] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState({ show: false, conversationId: null });
+  const [ratingBusy, setRatingBusy] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const { messages, isLoading, setIsLoading, addMessage, clearMessages } = useMessages();
+  const { messages, isLoading, setIsLoading, addMessage, clearMessages, updateMessage } = useMessages();
   const { conversations, activeConversation, setActiveConversation, loadConversations } = useConversations();
 
   // Manejar cambios de tamaño de ventana
@@ -531,19 +583,23 @@ const Chat = ({ onLogout, user }) => {
   useEffect(() => {
     if (!activeConversation) {
       clearMessages();
+      setRatingBusy({});
       return;
     }
 
     const loadMessages = async () => {
       try {
         setError(null);
+        setRatingBusy({});
         const res = await getMessages(activeConversation);
         const msgs = (res.messages || []).map(m => ({
           id: `loaded-${m.id}`,
-          text: m.content || '', // Backend envía 'content'
-          sender: m.is_user ? 'user' : 'bot', // Backend envía 'is_user'
-          timestamp: new Date(m.timestamp).toLocaleTimeString(), // Backend envía 'timestamp'
-          sources: m.sources || []
+          backendId: m.id,
+          text: m.content || '',
+          sender: m.is_user ? 'user' : 'bot',
+          timestamp: new Date(m.timestamp).toLocaleTimeString(),
+          sources: m.sources || [],
+          rating: m.rating || null,
         }));
         
         console.log('Mensajes cargados:', msgs);
@@ -578,10 +634,12 @@ const Chat = ({ onLogout, user }) => {
     // Agregar mensaje del usuario inmediatamente
     const userMsg = {
       id: `user-${Date.now()}`,
+      backendId: null,
       text: userMessage,
       sender: 'user',
       timestamp: new Date().toLocaleTimeString(),
-      sources: []
+      sources: [],
+      rating: null,
     };
     
     addMessage(userMsg);
@@ -600,10 +658,12 @@ const Chat = ({ onLogout, user }) => {
       // Agregar respuesta del asistente con ID único
       const assistantMsg = {
         id: `bot-${Date.now()}`,
+        backendId: response.assistant_message?.id || null,
         text: response.assistant_message?.content || response.response || '',
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString(),
-        sources: response.sources || []
+        sources: response.sources || [],
+        rating: response.assistant_message?.rating || null,
       };
       
       console.log('Mensaje del asistente creado:', assistantMsg);
@@ -641,8 +701,9 @@ const Chat = ({ onLogout, user }) => {
     setActiveConversation(null);
     clearMessages();
     setError(null);
+    setRatingBusy({});
     inputRef.current?.focus();
-  }, [clearMessages]);
+  }, [clearMessages, setRatingBusy, setActiveConversation]);
 
   // Manejo de selección de conversación
   const handleConversationSelect = useCallback((conversationId) => {
@@ -670,6 +731,7 @@ const Chat = ({ onLogout, user }) => {
       if (conversationId === activeConversation) {
         setActiveConversation(null);
         clearMessages();
+        setRatingBusy({});
       }
       
       // Recargar conversaciones
@@ -681,6 +743,35 @@ const Chat = ({ onLogout, user }) => {
       setError('Error al eliminar conversación');
     }
   }, [deleteDialog, activeConversation, clearMessages, loadConversations]);
+
+  const handleRateMessage = useCallback(async (backendId, targetValue) => {
+    if (!backendId || !targetValue) {
+      return;
+    }
+
+    setRatingBusy(prev => ({ ...prev, [backendId]: true }));
+    try {
+      const result = await submitRating({ messageId: backendId, value: targetValue });
+      updateMessage(backendId, {
+        rating: result?.value || null,
+        ratingUpdatedAt: result?.updated_at || null,
+      });
+    } catch (error) {
+      console.error('Error guardando calificación:', error);
+      setError(error.message || 'No se pudo guardar la calificación');
+    } finally {
+      setRatingBusy(prev => {
+        const next = { ...prev };
+        delete next[backendId];
+        return next;
+      });
+    }
+  }, [updateMessage]);
+
+  const handleRateToggle = useCallback((backendId, currentValue, requestedValue) => {
+    const nextValue = currentValue === requestedValue ? 'clear' : requestedValue;
+    handleRateMessage(backendId, nextValue);
+  }, [handleRateMessage]);
 
   return (
     <div className="chat chat-container">
@@ -802,6 +893,9 @@ const Chat = ({ onLogout, user }) => {
                 isUser={msg.sender === 'user'}
                 timestamp={msg.timestamp}
                 sources={msg.sources}
+                rating={msg.rating}
+                onRate={msg.sender === 'bot' ? (value) => handleRateToggle(msg.backendId, msg.rating, value) : null}
+                ratingBusy={Boolean(msg.backendId && ratingBusy[msg.backendId])}
               />
             );
           })}

@@ -15,11 +15,49 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 
 try:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-    from langchain_google_genai import GoogleGenerativeAIEmbeddings
-    LANGCHAIN_AVAILABLE = True
-except ImportError:
-    LANGCHAIN_AVAILABLE = False
+    from sentence_transformers import SentenceTransformer  # type: ignore
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dependency
+    SentenceTransformer = None  # type: ignore
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
+if SENTENCE_TRANSFORMERS_AVAILABLE:
+    class SentenceTransformerAdapter:
+        """Envoltorio mínimo para usar SentenceTransformer como proveedor"""
+
+        def __init__(self, model_name: str):
+            self._model = SentenceTransformer(model_name, device='cpu')
+
+        def embed_query(self, text: str):  # type: ignore[override]
+            return self._model.encode(text, normalize_embeddings=True)
+
+        def embed_documents(self, texts: List[str]):  # type: ignore[override]
+            return self._model.encode(texts, normalize_embeddings=True)
+else:
+    SentenceTransformerAdapter = None  # type: ignore
+
+try:
+    from langchain_huggingface import HuggingFaceEmbeddings  # type: ignore
+    HUGGINGFACE_BACKEND = "langchain_huggingface"
+    HUGGINGFACE_AVAILABLE = True
+except ImportError:  # pragma: no cover - fallback
+    try:
+        from langchain_community.embeddings import HuggingFaceEmbeddings  # type: ignore
+        HUGGINGFACE_BACKEND = "langchain_community"
+        HUGGINGFACE_AVAILABLE = True
+    except ImportError:
+        HuggingFaceEmbeddings = None  # type: ignore
+        HUGGINGFACE_BACKEND = None
+        HUGGINGFACE_AVAILABLE = False
+
+try:
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings  # type: ignore
+    GOOGLE_EMBEDDINGS_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    GoogleGenerativeAIEmbeddings = None  # type: ignore
+    GOOGLE_EMBEDDINGS_AVAILABLE = False
+
+LANGCHAIN_AVAILABLE = HUGGINGFACE_AVAILABLE or GOOGLE_EMBEDDINGS_AVAILABLE or SENTENCE_TRANSFORMERS_AVAILABLE
 
 try:
     import numpy as np
@@ -44,17 +82,37 @@ class EmbeddingManager:
         
         # Configurar proveedores disponibles
         self._initialize_providers()
+
+    @staticmethod
+    def _normalize_vector(vector: Any) -> Optional[List[float]]:
+        """Convertir cualquier salida de embedding a lista de floats"""
+        if vector is None:
+            return None
+
+        if isinstance(vector, list):
+            return vector
+
+        if hasattr(vector, "tolist"):
+            try:
+                return vector.tolist()
+            except Exception:  # pragma: no cover - depende de backend
+                pass
+
+        try:
+            return list(vector)
+        except TypeError:  # pragma: no cover - tipos no iterables
+            return None
     
     def _initialize_providers(self):
         """Inicializar proveedores de embeddings disponibles"""
         if not LANGCHAIN_AVAILABLE:
-            logger.error("❌ LangChain no está disponible")
+            logger.error("❌ Ningún proveedor de embeddings está disponible (instala sentence-transformers o langchain-google-genai)")
             return
         
         self.available_providers = {}
         
         # Google Gemini (gratuito con límites)
-        if self.config['google_api_key']:
+        if GOOGLE_EMBEDDINGS_AVAILABLE and self.config['google_api_key']:
             try:
                 self.available_providers['google'] = {
                     'name': 'Google Gemini',
@@ -68,17 +126,22 @@ class EmbeddingManager:
                 logger.warning(f"⚠️  Error configurando Google Gemini: {e}")
         
         # Hugging Face (gratuito, sin API key necesaria)
-        try:
-            self.available_providers['huggingface'] = {
-                'name': 'Hugging Face',
-                'model': 'sentence-transformers/all-mpnet-base-v2',  # EL MEJOR MODELO - 768 dimensiones
-                'max_tokens': 512,  # Máxima calidad
-                'rate_limit': None,  # Sin límite en modelo local
-                'free_quota': True
-            }
-            logger.info("✅ Hugging Face disponible para embeddings (MÁXIMA CALIDAD - 768D)")
-        except Exception as e:
-            logger.warning(f"⚠️  Error configurando Hugging Face: {e}")
+        if HUGGINGFACE_AVAILABLE or SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                backend = HUGGINGFACE_BACKEND or "sentence_transformers"
+                self.available_providers['huggingface'] = {
+                    'name': 'Hugging Face',
+                    'model': 'sentence-transformers/all-mpnet-base-v2',  # EL MEJOR MODELO - 768 dimensiones
+                    'max_tokens': 512,  # Máxima calidad
+                    'rate_limit': None,  # Sin límite en modelo local
+                    'free_quota': True,
+                    'backend': backend
+                }
+                logger.info("✅ Hugging Face disponible para embeddings (MÁXIMA CALIDAD - 768D)")
+            except Exception as e:
+                logger.warning(f"⚠️  Error configurando Hugging Face: {e}")
+        else:
+            logger.warning("⚠️  No se encontraron adaptadores de Hugging Face; instala sentence-transformers")
         
         # Seleccionar proveedor por defecto (preferir HuggingFace para ahorrar cuota de Google)
         if 'huggingface' in self.available_providers:
@@ -117,17 +180,34 @@ class EmbeddingManager:
         
         try:
             if provider == 'google':
+                if not GOOGLE_EMBEDDINGS_AVAILABLE:
+                    raise RuntimeError("Google Generative AI embeddings no disponibles: instala langchain-google-genai")
                 model = GoogleGenerativeAIEmbeddings(
                     model=self.available_providers[provider]['model'],
                     google_api_key=self.config['google_api_key']
                 )
             
             elif provider == 'huggingface':
-                model = HuggingFaceEmbeddings(
-                    model_name=self.available_providers[provider]['model'],
-                    model_kwargs={'device': 'cpu'},  # Usar CPU para compatibilidad
-                    encode_kwargs={'normalize_embeddings': True}
-                )
+                provider_info = self.available_providers.get(provider, {})
+
+                if provider_info.get('backend') == "langchain_huggingface" and HUGGINGFACE_AVAILABLE and HuggingFaceEmbeddings is not None:
+                    model = HuggingFaceEmbeddings(
+                        model_name=provider_info.get('model'),
+                        model_kwargs={'device': 'cpu'},
+                        encode_kwargs={'normalize_embeddings': True}
+                    )
+                elif SENTENCE_TRANSFORMERS_AVAILABLE and SentenceTransformerAdapter is not None:
+                    model = SentenceTransformerAdapter(provider_info.get('model'))
+                    logger.info("ℹ️  Usando SentenceTransformer directo para embeddings Hugging Face")
+                elif HUGGINGFACE_AVAILABLE and HuggingFaceEmbeddings is not None:
+                    logger.warning("⚠️  Usando backend langchain_community (deprecado); instala sentence-transformers para un adaptador nativo")
+                    model = HuggingFaceEmbeddings(
+                        model_name=provider_info.get('model'),
+                        model_kwargs={'device': 'cpu'},
+                        encode_kwargs={'normalize_embeddings': True}
+                    )
+                else:
+                    raise RuntimeError("HuggingFaceEmbeddings no disponible: instala sentence-transformers")
             
             else:
                 raise ValueError(f"Proveedor no soportado: {provider}")
@@ -213,7 +293,12 @@ class EmbeddingManager:
             
             # Crear embedding
             embedding = model.embed_query(processed_text)
+            embedding = self._normalize_vector(embedding)
             
+            if embedding is None:
+                logger.error("❌ El backend de embeddings devolvió un resultado vacío")
+                return None
+
             # Cachear resultado
             self.cache[cache_key] = embedding
             
@@ -271,7 +356,8 @@ class EmbeddingManager:
                     
                     # Crear embeddings para este mini-batch
                     batch_embeddings = model.embed_documents(batch)
-                    embeddings.extend(batch_embeddings)
+                    normalized_batch = [self._normalize_vector(vec) for vec in batch_embeddings]
+                    embeddings.extend(normalized_batch)
                     
                     # Log progreso detallado
                     progress = min(i + batch_size, len(processed_texts))
@@ -283,6 +369,8 @@ class EmbeddingManager:
                 
                 # Cachear resultados
                 for text, embedding in zip(texts, embeddings):
+                    if embedding is None:
+                        continue
                     text_hash = self._get_text_hash(text)
                     cache_key = f"{provider}_{text_hash}"
                     self.cache[cache_key] = embedding
@@ -308,7 +396,7 @@ class EmbeddingManager:
             for i, future in enumerate(futures):
                 try:
                     embedding = future.result(timeout=30)  # 30 segundos timeout
-                    embeddings.append(embedding)
+                    embeddings.append(self._normalize_vector(embedding))
                     
                     if (i + 1) % 10 == 0:
                         logger.info(f"📊 Progreso: {i + 1}/{len(texts)} embeddings")

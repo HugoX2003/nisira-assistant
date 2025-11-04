@@ -738,7 +738,16 @@ python manage.py rag_manage clear
 
 ---
 
-## 🐛 Troubleshooting
+## � Monitoreo y Disponibilidad
+
+- **Endpoint principal:** `GET /status/` (sin autenticación) expone la salud de la API, worker de Drive, base de datos y vector DB junto con metadatos de build.
+- **Objetivo de uptime:** `uptime_slo_target` indica la meta ≥ 95 % usada en monitors externos.
+- **Runbook:** consulta `backend/docs/availability_runbook.md` para procedimientos de incidentes, mantenimiento y caos testing.
+- **Chaos tests:** `python manage.py test api.tests.ChaosHealthChecksTests` simula caídas de base de datos y vector DB para validar la respuesta del endpoint.
+
+---
+
+## �🐛 Troubleshooting
 
 ### Backend
 

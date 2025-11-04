@@ -1,0 +1,4 @@
+name,concurrent_users,requests_per_user,use_rag,total_requests,successful_requests,failed_requests,mean_latency_ms,median_latency_ms,p95_latency_ms,max_latency_ms,min_latency_ms
+baseline_chat_conc_5,5,4,False,20,20,0,21.02,17.45,50.28,57.57,13.98
+baseline_chat_conc_10,10,4,False,40,40,0,29.56,17.90,89.07,115.83,13.67
+rag_toggle_conc_6,6,3,True,18,18,0,34.55,27.16,81.31,94.85,13.40

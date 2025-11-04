@@ -11,6 +11,8 @@ Sistema de chat simple con Django REST Framework
 
 import logging
 from datetime import datetime
+import csv
+from io import StringIO
 
 # Django & DRF imports
 from rest_framework.decorators import api_view, permission_classes
@@ -26,9 +28,20 @@ from django.http import HttpResponse, Http404
 from django.conf import settings
 import os
 import mimetypes
+from django.db import transaction
+from django.db.models import Count, Q
+from django.db.models.functions import TruncDate
+from django.utils import timezone
 
 # Local imports
-from .models import Conversation, Message
+from .models import Conversation, Message, Rating, RatingFeedbackEvent, ExperimentRun
+from .serializers import (
+    RatingRequestSerializer,
+    RatingSerializer,
+    ExperimentRunCreateSerializer,
+    ExperimentRunSerializer,
+)
+from monitoring.health import collect_health_checks, get_build_metadata, overall_status
 
 # Configuración de logging
 logger = logging.getLogger(__name__)
@@ -51,6 +64,49 @@ except ImportError as e:
     RAG_MODULES_AVAILABLE = False
     RAGPipeline = None
     logger.warning(f"⚠️ Sistema RAG no disponible: {e}")
+
+
+def process_rating_event(event: RatingFeedbackEvent) -> RatingFeedbackEvent:
+    """Procesa un evento de calificación y maneja reintentos básicos."""
+    event.attempts += 1
+    event.last_attempt_at = timezone.now()
+
+    try:
+        logger.info(
+            "📨 Procesando evento de calificación %s (rating=%s, intento=%s)",
+            event.pk,
+            event.rating_id,
+            event.attempts,
+        )
+        # Aquí se integraría el envío a sistemas externos/telemetría.
+        event.status = RatingFeedbackEvent.Status.COMPLETED
+        event.completed_at = event.last_attempt_at
+        event.error_message = ""
+    except Exception as exc:  # pragma: no cover (bloque defensivo)
+        logger.exception("Error procesando evento de calificación %s", event.pk)
+        event.status = RatingFeedbackEvent.Status.FAILED
+        event.error_message = str(exc)[:500]
+
+    event.save(
+        update_fields=[
+            "status",
+            "attempts",
+            "last_attempt_at",
+            "completed_at",
+            "error_message",
+            "updated_at",
+        ]
+    )
+    return event
+
+
+def enqueue_rating_event(rating: Rating, reason: str = "user-submitted") -> RatingFeedbackEvent:
+    event = RatingFeedbackEvent.objects.create(
+        rating=rating,
+        reason=reason,
+        status=RatingFeedbackEvent.Status.PENDING,
+    )
+    return process_rating_event(event)
 
 
 @api_view(['GET'])
@@ -106,85 +162,61 @@ def custom_login(request):
                 'last_name': user.last_name,
             }
         }, status=status.HTTP_200_OK)
-        
-    except Exception as e:
-        logger.error(f"Error en login personalizado: {e}")
+
+    except Exception as exc:  # pragma: no cover (manejo defensivo)
+        logger.exception("Error inesperado en custom_login")
         return Response(
-            {'error': 'Login failed'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': 'Error interno del servidor'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def serve_document(request, filename):
-    """
-    Servir documentos PDF de forma segura a usuarios autenticados
-    """
-    try:
-        # Construir ruta segura del archivo
-        documents_dir = os.path.join(settings.BASE_DIR, 'data', 'documents')
-        file_path = os.path.join(documents_dir, filename)
-        
-        # Verificar que el archivo existe y está en el directorio permitido
-        if not os.path.exists(file_path):
-            raise Http404("Documento no encontrado")
-        
-        # Verificar que la ruta esté dentro del directorio de documentos (seguridad)
-        if not os.path.abspath(file_path).startswith(os.path.abspath(documents_dir)):
-            raise Http404("Acceso no autorizado")
-        
-        # Determinar el tipo MIME
-        content_type, _ = mimetypes.guess_type(file_path)
-        if content_type is None:
-            content_type = 'application/octet-stream'
-        
-        # Leer y servir el archivo
-        with open(file_path, 'rb') as f:
-            response = HttpResponse(f.read(), content_type=content_type)
-            response['Content-Disposition'] = f'inline; filename="{filename}"'
-            return response
-            
-    except Exception as e:
-        logger.error(f"Error sirviendo documento {filename}: {e}")
-        raise Http404("Error al acceder al documento")
+def serve_document(request, filename: str):
+    """Servir documentos almacenados en el directorio configurado."""
+    base_path = getattr(settings, 'DOCUMENTS_ROOT', os.path.join(settings.BASE_DIR, 'data', 'documents'))
+    file_path = os.path.join(base_path, filename)
+
+    if not os.path.exists(file_path):
+        raise Http404('Documento no encontrado')
+
+    content_type, _ = mimetypes.guess_type(file_path)
+    content_type = content_type or 'application/octet-stream'
+
+    with open(file_path, 'rb') as file_handle:
+        response = HttpResponse(file_handle.read(), content_type=content_type)
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        return response
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_conversations(request):
-    """
-    Obtener todas las conversaciones del usuario autenticado
-    """
+    """Listar conversaciones del usuario autenticado."""
     try:
-        conversations = Conversation.objects.filter(user=request.user).order_by('-created_at')
-        
-        conversation_data = []
-        for conv in conversations:
-            last_message = conv.messages.last()
-            message_count = conv.messages.count()
-            conversation_data.append({
-                'id': conv.id,
-                'title': conv.title,
-                'created_at': conv.created_at.isoformat(),
-                'updated_at': conv.updated_at.isoformat(),
-                'message_count': message_count,
-                'last_message': {
-                    'content': last_message.text[:100] + '...' if last_message and len(last_message.text) > 100 else last_message.text if last_message else '',
-                    'timestamp': last_message.created_at.isoformat() if last_message else None
-                } if last_message else None
-            })
-        
-        return Response({
-            'conversations': conversation_data,
-            'count': len(conversation_data)
-        })
-        
-    except Exception as e:
-        logger.error(f"Error al obtener conversaciones: {str(e)}")
+        conversations = (
+            Conversation.objects.filter(user=request.user)
+            .order_by('-updated_at')
+            .values('id', 'title', 'created_at', 'updated_at')
+        )
+
+        results = [
+            {
+                'id': entry['id'],
+                'title': entry['title'],
+                'created_at': entry['created_at'].isoformat() if entry['created_at'] else None,
+                'updated_at': entry['updated_at'].isoformat() if entry['updated_at'] else None,
+            }
+            for entry in conversations
+        ]
+
+        return Response({'count': len(results), 'results': results})
+    except Exception as exc:  # pragma: no cover (defensivo)
+        logger.exception("Error obteniendo conversaciones")
         return Response(
-            {'error': 'Error interno del servidor'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {'error': 'Error al obtener las conversaciones'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
 
@@ -226,6 +258,13 @@ def get_messages(request, conversation_id):
     try:
         conversation = Conversation.objects.get(id=conversation_id, user=request.user)
         messages = conversation.messages.all().order_by('created_at')
+        rating_map = {
+            rating.message_id: rating
+            for rating in Rating.objects.filter(
+                message_id__in=messages.values_list('id', flat=True),
+                user=request.user,
+            )
+        }
         
         message_data = []
         for msg in messages:
@@ -234,7 +273,9 @@ def get_messages(request, conversation_id):
                 'content': msg.text,
                 'is_user': msg.sender == 'user',
                 'timestamp': msg.created_at.isoformat(),
-                'sources': msg.sources  # Ahora las fuentes se guardan en la base de datos
+                'sources': msg.sources,
+                'rating': rating_map.get(msg.id).value if rating_map.get(msg.id) else None,
+                'rating_issue_tag': rating_map.get(msg.id).issue_tag if rating_map.get(msg.id) else None,
             })
         
         return Response({
@@ -314,13 +355,17 @@ def send_message(request):
                 'id': user_message.id,
                 'content': user_message.text,
                 'is_user': True,
-                'timestamp': user_message.created_at.isoformat()
+                'timestamp': user_message.created_at.isoformat(),
+                'rating': None,
+                'rating_issue_tag': Rating.IssueTag.NONE,
             },
             'assistant_message': {
                 'id': assistant_message.id,
                 'content': assistant_message.text,
                 'is_user': False,
-                'timestamp': assistant_message.created_at.isoformat()
+                'timestamp': assistant_message.created_at.isoformat(),
+                'rating': None,
+                'rating_issue_tag': Rating.IssueTag.NONE,
             },
             'conversation_id': conversation.id
         })
@@ -407,6 +452,388 @@ def api_info(request):
         'authentication': 'JWT Token required for most endpoints',
         'rag_available': RAG_MODULES_AVAILABLE
     })
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def service_status(request):
+    """Estado consolidado de los servicios principales."""
+    services = collect_health_checks()
+
+    return Response({
+        'status': overall_status(services),
+        'timestamp': datetime.now().isoformat(),
+        'services': services,
+        'build': get_build_metadata(),
+        'uptime_slo_target': 0.95,
+    })
+
+
+# ================================
+# CALIFICACIONES DE RESPUESTAS
+# ================================
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def submit_rating(request):
+    """Registrar o actualizar una calificación de un mensaje del asistente."""
+    serializer = RatingRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    message_id = payload['message_id']
+    value = payload['value']
+    comment = payload.get('comment', '').strip()
+    issue_tag = payload.get('issue_tag', Rating.IssueTag.NONE)
+
+    try:
+        message = Message.objects.select_related('conversation').get(
+            id=message_id,
+            conversation__user=request.user,
+        )
+    except Message.DoesNotExist:
+        return Response(
+            {'error': 'Mensaje no encontrado o sin permiso.'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if message.sender != 'bot':
+        return Response(
+            {'error': 'Solo se pueden calificar respuestas del asistente.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if issue_tag == 'auto':
+        lowered = comment.lower()
+        if any(keyword in lowered for keyword in ['irrelev', 'fuera de contexto']):
+            issue_tag = Rating.IssueTag.IRRELEVANT
+        elif any(keyword in lowered for keyword in ['sin fuente', 'sin evidencia', 'no cites']):
+            issue_tag = Rating.IssueTag.NO_EVIDENCE
+        elif any(keyword in lowered for keyword in ['tard', 'lento', 'demor']):
+            issue_tag = Rating.IssueTag.LATE
+        elif any(keyword in lowered for keyword in ['alucina', 'invent', 'incorrecto', 'falso']):
+            issue_tag = Rating.IssueTag.HALLUCINATION
+        else:
+            issue_tag = Rating.IssueTag.OTHER
+
+    queue_event = None
+    rating_instance = None
+    action = 'noop'
+
+    with transaction.atomic():
+        if value == 'clear':
+            deleted = Rating.objects.filter(message=message, user=request.user)
+            deleted_count = deleted.count()
+            if deleted_count:
+                deleted.delete()
+                action = 'removed'
+            else:
+                action = 'noop'
+        else:
+            rating_instance, created = Rating.objects.update_or_create(
+                message=message,
+                user=request.user,
+                defaults={
+                    'value': value,
+                    'comment': comment,
+                    'issue_tag': issue_tag,
+                },
+            )
+            action = 'created' if created else 'updated'
+            queue_event = enqueue_rating_event(rating_instance)
+
+    response_payload = {
+        'message_id': message.id,
+        'conversation_id': message.conversation_id,
+        'value': rating_instance.value if rating_instance else None,
+        'status': action,
+        'updated_at': (
+            rating_instance.updated_at.isoformat()
+            if rating_instance
+            else timezone.now().isoformat()
+        ),
+        'issue_tag': rating_instance.issue_tag if rating_instance else Rating.IssueTag.NONE,
+    }
+
+    if queue_event:
+        response_payload['queue_event'] = {
+            'id': queue_event.id,
+            'status': queue_event.status,
+            'attempts': queue_event.attempts,
+            'last_attempt_at': queue_event.last_attempt_at.isoformat()
+            if queue_event.last_attempt_at
+            else None,
+        }
+
+    return Response(response_payload)
+
+
+def _build_rating_summary() -> dict:
+    total = Rating.objects.count()
+    likes = Rating.objects.filter(value=Rating.RatingValue.LIKE).count()
+    dislikes = Rating.objects.filter(value=Rating.RatingValue.DISLIKE).count()
+    net_score = likes - dislikes
+    satisfaction = (likes / total) if total else 0
+    last_update = (
+        Rating.objects.order_by('-updated_at').values_list('updated_at', flat=True).first()
+    )
+
+    issue_breakdown = {
+        entry['issue_tag']: entry['count']
+        for entry in Rating.objects.values('issue_tag').annotate(count=Count('id'))
+    }
+
+    daily_breakdown_qs = (
+        Rating.objects.annotate(day=TruncDate('updated_at'))
+        .values('day')
+        .annotate(
+            total=Count('id'),
+            likes=Count('id', filter=Q(value=Rating.RatingValue.LIKE)),
+            dislikes=Count('id', filter=Q(value=Rating.RatingValue.DISLIKE)),
+        )
+        .order_by('-day')[:14]
+    )
+
+    recent_feedback = [
+        {
+            'id': rating.id,
+            'message_id': rating.message_id,
+            'conversation_id': rating.message.conversation_id,
+            'value': rating.value,
+            'comment': rating.comment,
+            'issue_tag': rating.issue_tag,
+            'updated_at': rating.updated_at.isoformat(),
+            'username': rating.user.username,
+        }
+        for rating in Rating.objects.select_related('message__conversation', 'user')
+        .order_by('-updated_at')[:10]
+    ]
+
+    queue_metrics = RatingFeedbackEvent.objects.aggregate(
+        pending=Count('id', filter=Q(status=RatingFeedbackEvent.Status.PENDING)),
+        failed=Count('id', filter=Q(status=RatingFeedbackEvent.Status.FAILED)),
+        processed=Count('id', filter=Q(status=RatingFeedbackEvent.Status.COMPLETED)),
+    )
+
+    latest_experiment = ExperimentRun.objects.first()
+
+    return {
+        'total': total,
+        'likes': likes,
+        'dislikes': dislikes,
+        'net_score': net_score,
+        'satisfaction_rate': satisfaction,
+        'last_updated': last_update.isoformat() if last_update else None,
+        'issue_breakdown': issue_breakdown,
+        'daily_breakdown': [
+            {
+                'date': entry['day'].isoformat() if entry['day'] else None,
+                'total': entry['total'],
+                'likes': entry['likes'],
+                'dislikes': entry['dislikes'],
+            }
+            for entry in daily_breakdown_qs
+        ],
+        'recent_feedback': recent_feedback,
+        'queue': {
+            'pending': queue_metrics.get('pending') or 0,
+            'failed': queue_metrics.get('failed') or 0,
+            'processed': queue_metrics.get('processed') or 0,
+        },
+        'latest_experiment': ExperimentRunSerializer(latest_experiment).data if latest_experiment else None,
+        'generated_at': timezone.now().isoformat(),
+    }
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def rating_summary(request):
+    """Resumen agregado de calificaciones para paneles internos."""
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    data = _build_rating_summary()
+    data['export_url'] = request.build_absolute_uri('/api/ratings/export/')
+    return Response(data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_ratings(request):
+    """Exportar calificaciones a CSV o JSON."""
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    export_format = request.query_params.get('export_format', 'json').lower()
+    ratings = Rating.objects.select_related('message__conversation', 'user').order_by('-updated_at')
+
+    if export_format == 'csv':
+        buffer = StringIO()
+        writer = csv.writer(buffer)
+        writer.writerow([
+            'rating_id',
+            'message_id',
+            'conversation_id',
+            'username',
+            'value',
+            'issue_tag',
+            'comment',
+            'updated_at',
+        ])
+        for rating in ratings:
+            writer.writerow([
+                rating.id,
+                rating.message_id,
+                rating.message.conversation_id if rating.message else None,
+                rating.user.username if rating.user_id else None,
+                rating.value,
+                rating.issue_tag,
+                rating.comment or '',
+                rating.updated_at.isoformat(),
+            ])
+
+        filename = f"ratings_export_{timezone.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        response = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    if export_format == 'json':
+        serializer = RatingSerializer(ratings, many=True)
+        data = serializer.data
+        return Response({'count': len(data), 'results': data})
+
+    return Response(
+        {'error': 'Formato no soportado. Usa csv o json.'},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_experiment_run(request):
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    serializer = ExperimentRunCreateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    with transaction.atomic():
+        experiment = serializer.save()
+
+    return Response(ExperimentRunSerializer(experiment).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_experiments(request):
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    total_count = ExperimentRun.objects.count()
+    limit_param = request.query_params.get('limit')
+    queryset = ExperimentRun.objects.all()
+    if limit_param:
+        try:
+            limit_value = int(limit_param)
+            if limit_value > 0:
+                queryset = queryset[:limit_value]
+        except ValueError:
+            return Response(
+                {'error': 'El parámetro limit debe ser un entero positivo.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    serializer = ExperimentRunSerializer(queryset, many=True)
+    return Response({'count': total_count, 'results': serializer.data})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def latest_experiment(request):
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    experiment = ExperimentRun.objects.first()
+    if not experiment:
+        return Response({'detail': 'Sin experimentos registrados.'}, status=status.HTTP_404_NOT_FOUND)
+
+    return Response(ExperimentRunSerializer(experiment).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def guardrail_status(request):
+    if not request.user.is_staff:
+        return Response(
+            {'error': 'Acceso restringido al personal autorizado.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    summary = _build_rating_summary()
+    latest_experiment = ExperimentRun.objects.first()
+
+    guardrail_passed = True
+    messages = []
+
+    if latest_experiment:
+        if not latest_experiment.guardrail_passed:
+            guardrail_passed = False
+            messages.append(latest_experiment.guardrail_reason or 'Último experimento bloqueado por guardrails.')
+    else:
+        messages.append('No hay experimentos registrados aún.')
+
+    failed_events = summary['queue']['failed']
+    if failed_events:
+        guardrail_passed = False
+        messages.append(f'{failed_events} eventos de feedback fallidos requieren revisión.')
+
+    threshold = request.query_params.get('satisfaction_threshold')
+    try:
+        threshold_value = float(threshold) if threshold is not None else 0.6
+    except ValueError:
+        return Response(
+            {'error': 'El parámetro satisfaction_threshold debe ser numérico.'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if summary['satisfaction_rate'] < threshold_value:
+        guardrail_passed = False
+        messages.append(
+            f"La satisfacción ({summary['satisfaction_rate']:.2%}) está por debajo del umbral {threshold_value:.2%}."
+        )
+
+    if not messages:
+        messages.append('Todos los guardrails están en verde.')
+
+    return Response(
+        {
+            'guardrail_passed': guardrail_passed,
+            'messages': messages,
+            'latest_experiment': ExperimentRunSerializer(latest_experiment).data if latest_experiment else None,
+            'metrics': {
+                'total_feedback': summary['total'],
+                'satisfaction_rate': summary['satisfaction_rate'],
+                'net_score': summary['net_score'],
+                'failed_feedback_events': failed_events,
+            },
+            'generated_at': summary['generated_at'],
+        }
+    )
 
 
 # ====================================
@@ -608,6 +1035,16 @@ def rag_enhanced_chat(request):
             return Response({
                 'error': 'Contenido del mensaje requerido'
             }, status=status.HTTP_400_BAD_REQUEST)
+
+        normalized_content = content.lower()
+        has_question_mark = '?' in content
+        greeting_keywords = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hello', 'hi']
+
+        is_simple_greeting = any(normalized_content.startswith(word) for word in greeting_keywords)
+        is_short_statement = len(content) <= 80 and not has_question_mark
+
+        if use_rag and (is_simple_greeting or is_short_statement):
+            use_rag = False
         
         # Obtener o crear conversación
         if conversation_id:
@@ -654,7 +1091,7 @@ def rag_enhanced_chat(request):
                 response_content = "Lo siento, no pude encontrar información relevante en los documentos para responder tu pregunta. ¿Podrías ser más específico?"
         else:
             # Respuesta básica sin RAG
-            response_content = "Mensaje recibido. (Respuesta sin RAG - funcionalidad básica)"
+            response_content = generate_basic_response(content)
         
         # Guardar respuesta del asistente
         assistant_message = Message.objects.create(
@@ -681,7 +1118,9 @@ def rag_enhanced_chat(request):
             'assistant_message': {
                 'id': assistant_message.id,
                 'content': assistant_message.text,
-                'timestamp': assistant_message.created_at.isoformat()
+                'timestamp': assistant_message.created_at.isoformat(),
+                'rating': None,
+                'rating_issue_tag': Rating.IssueTag.NONE,
             },
             'response': response_content,  # Para compatibilidad con el frontend
             'rag_used': use_rag and RAG_MODULES_AVAILABLE,

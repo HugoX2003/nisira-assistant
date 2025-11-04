@@ -44,18 +44,18 @@ DOCUMENT_PROCESSING_CONFIG = {
     # Configuración de chunking por tipo de documento
     "chunk_config": {
         ".pdf": {
-            "chunk_size": 2000,      # PDFs académicos necesitan chunks grandes para contexto
-            "chunk_overlap": 400,    # Overlap mayor para mantener coherencia
-            "min_chunk_size": 200,   # Mínimo para evitar fragmentos inútiles
+            "chunk_size": 1300,      # Chunks más cortos capturan detalles finos
+            "chunk_overlap": 260,    # Overlap proporcional para no perder contexto
+            "min_chunk_size": 180,   # Evita fragmentos diminutos
         },
         ".txt": {
-            "chunk_size": 1500,      # TXT suelen ser más directos
-            "chunk_overlap": 300,    
+            "chunk_size": 1100,      # Ajustado para textos continuos
+            "chunk_overlap": 220,    
             "min_chunk_size": 150,   
         },
         ".docx": {
-            "chunk_size": 1800,      # DOCX tienen estructura similar a PDF
-            "chunk_overlap": 350,    
+            "chunk_size": 1300,      # DOCX suelen tener secciones mixtas
+            "chunk_overlap": 260,    
             "min_chunk_size": 180,   
         },
         "default": {
@@ -112,6 +112,7 @@ RAG_CONFIG = {
         "rerank": True,          # Re-ranking de resultados
         "max_context_length": 12000,   # MÁS contexto para mejor comprensión
         "diversity_threshold": 0.4,  # MÁS diversidad en resultados
+        "max_per_source": 3,        # Permite múltiples chunks por documento antes de diversificar
         "citation_boost": True,   # Boost especial para chunks con citas
         "semantic_weight": 0.6,   # Peso de búsqueda semántica (60%)
         "lexical_weight": 0.4,    # Peso de búsqueda lexical (40%)

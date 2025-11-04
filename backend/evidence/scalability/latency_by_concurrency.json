@@ -1,0 +1,17 @@
+{
+  "baseline_chat_conc_5": {
+    "concurrency": 5,
+    "p95_latency_ms": 50.27591000834946,
+    "mean_latency_ms": 21.015264999005012
+  },
+  "baseline_chat_conc_10": {
+    "concurrency": 10,
+    "p95_latency_ms": 89.07042000355429,
+    "mean_latency_ms": 29.559392497321824
+  },
+  "rag_toggle_conc_6": {
+    "concurrency": 6,
+    "p95_latency_ms": 81.3083199856919,
+    "mean_latency_ms": 34.55482777887179
+  }
+}

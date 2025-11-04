@@ -522,7 +522,9 @@
   display: flex;
   flex-direction: column;
   animation: messageSlideIn 0.3s ease;
-  max-width: 75%;
+  width: 100%;
+  align-items: flex-start;
+  padding: 0.25rem 0;
 }
 
 @keyframes messageSlideIn {
@@ -537,12 +539,10 @@
 }
 
 .message-item.user-message {
-  align-self: flex-end;
   align-items: flex-end;
 }
 
 .message-item.assistant-message {
-  align-self: flex-start;
   align-items: flex-start;
 }
 
@@ -552,6 +552,10 @@
   box-shadow: var(--shadow-sm);
   position: relative;
   backdrop-filter: blur(10px);
+  max-width: min(760px, 85vw);
+  width: fit-content;
+  display: inline-flex;
+  flex-direction: column;
 }
 
 .user-message .message-bubble {
@@ -572,6 +576,72 @@
   font-size: 0.95rem;
   white-space: pre-wrap;
   word-wrap: break-word;
+  width: 100%;
+}
+
+.message-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(8px);
+}
+
+.feedback-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.feedback-btn:focus-visible {
+  outline: 2px solid var(--primary-yellow);
+  outline-offset: 2px;
+}
+
+.feedback-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.feedback-btn.active {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.feedback-like.active {
+  border-color: rgba(76, 175, 80, 0.45);
+  background: rgba(76, 175, 80, 0.25);
+  color: #7dd56f;
+}
+
+.feedback-dislike.active {
+  border-color: rgba(244, 67, 54, 0.45);
+  background: rgba(244, 67, 54, 0.22);
+  color: #ff7b7b;
+}
+
+.feedback-label {
+  font-size: 0.8rem;
 }
 
 /* ===================================
