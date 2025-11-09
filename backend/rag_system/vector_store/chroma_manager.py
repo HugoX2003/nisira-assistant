@@ -96,6 +96,23 @@ class ChromaManager:
         Returns:
             True si fue exitoso
         """
+        # Verificar si la colección existe, si no, recrearla
+        try:
+            if self.client is not None:
+                # Intentar obtener la colección
+                try:
+                    self.collection = self.client.get_collection(name=self.collection_name)
+                except Exception:
+                    # Si no existe, crearla
+                    logger.warning(f"⚠️  Colección '{self.collection_name}' no existe, creándola...")
+                    self.collection = self.client.create_collection(
+                        name=self.collection_name,
+                        metadata={"description": "Documentos RAG del sistema Nisira"}
+                    )
+                    logger.info(f"✅ Colección '{self.collection_name}' creada")
+        except Exception as e:
+            logger.error(f"❌ Error verificando/creando colección: {e}")
+        
         if not self.is_ready():
             logger.error("❌ ChromaDB no está listo")
             return False
@@ -354,6 +371,47 @@ class ChromaManager:
         except Exception as e:
             logger.error(f"❌ Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
+    
+    def list_collections(self) -> List[str]:
+        """
+        Listar todas las colecciones disponibles
+        
+        Returns:
+            Lista de nombres de colecciones
+        """
+        if not self.client:
+            return []
+        
+        try:
+            collections = self.client.list_collections()
+            return [col.name for col in collections]
+        except Exception as e:
+            logger.error(f"❌ Error listando colecciones: {e}")
+            return []
+    
+    def get_collection_count(self, collection_name: str = None) -> int:
+        """
+        Obtener número de documentos en una colección
+        
+        Args:
+            collection_name: Nombre de la colección (usa la actual si no se especifica)
+        
+        Returns:
+            Número de documentos
+        """
+        if not self.client:
+            return 0
+        
+        try:
+            if collection_name:
+                collection = self.client.get_collection(name=collection_name)
+                return collection.count()
+            elif self.collection:
+                return self.collection.count()
+            return 0
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo conteo: {e}")
+            return 0
     
     def delete_documents(self, filter_metadata: Dict[str, Any]) -> bool:
         """

@@ -233,3 +233,88 @@ class ExperimentRun(models.Model):
         status = "OK" if self.guardrail_passed else "BLOCKED"
         return f"ExperimentRun({self.name}:{self.variant_name} - {status})"
 
+
+class QueryMetrics(models.Model):
+    """
+    Modelo para almacenar métricas de cada consulta realizada al sistema RAG
+    Usado para análisis de rendimiento y tesis
+    """
+    # Identificación
+    query_id = models.CharField(max_length=100, unique=True, help_text="UUID de la consulta")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    conversation = models.ForeignKey(Conversation, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Texto de la consulta
+    query_text = models.TextField()
+    
+    # Métricas de Rendimiento (Performance)
+    total_latency = models.FloatField(help_text="Tiempo total de respuesta en segundos")
+    time_to_first_token = models.FloatField(help_text="Tiempo hasta el primer token en segundos")
+    retrieval_time = models.FloatField(help_text="Tiempo de recuperación de documentos en segundos")
+    generation_time = models.FloatField(help_text="Tiempo de generación de respuesta en segundos")
+    
+    # Clasificación de complejidad
+    is_complex_query = models.BooleanField(default=False, help_text="Si es una consulta compleja")
+    query_complexity_score = models.FloatField(null=True, blank=True, help_text="Score de complejidad 0-1")
+    
+    # Métricas de Recuperación
+    documents_retrieved = models.IntegerField(help_text="Número de documentos recuperados")
+    top_k = models.IntegerField(default=5, help_text="Valor de K usado")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_complex_query']),
+        ]
+    
+    def __str__(self):
+        return f"QueryMetrics({self.query_id[:8]}... - {self.total_latency:.2f}s)"
+
+
+class RAGASMetrics(models.Model):
+    """
+    Modelo para almacenar métricas de RAGAS (precisión y exactitud)
+    Calculadas periódicamente sobre un conjunto de queries
+    """
+    # Identificación del batch de evaluación
+    evaluation_id = models.CharField(max_length=100, unique=True)
+    query_metrics = models.ForeignKey(QueryMetrics, on_delete=models.CASCADE, null=True, blank=True)
+    
+    # Texto de la consulta y respuesta evaluada
+    query_text = models.TextField()
+    response_text = models.TextField()
+    retrieved_contexts = models.TextField(help_text="JSON con contextos recuperados")
+    
+    # Métricas RAGAS
+    precision_at_k = models.FloatField(help_text="Precision@k score (0-1)")
+    recall_at_k = models.FloatField(help_text="Recall@k score (0-1)")
+    faithfulness_score = models.FloatField(help_text="Faithfulness score (0-1)")
+    answer_relevancy = models.FloatField(help_text="Answer relevancy score (0-1)")
+    context_precision = models.FloatField(null=True, blank=True)
+    context_recall = models.FloatField(null=True, blank=True)
+    
+    # Tasa de alucinación (inversa de faithfulness)
+    hallucination_rate = models.FloatField(help_text="Tasa de alucinación (0-1)")
+    
+    # Metadata
+    k_value = models.IntegerField(default=5, help_text="Valor de K usado en la evaluación")
+    evaluation_timestamp = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-evaluation_timestamp']
+        indexes = [
+            models.Index(fields=['evaluation_timestamp']),
+        ]
+    
+    def save(self, *args, **kwargs):
+        # Calcular hallucination_rate como inversa de faithfulness
+        self.hallucination_rate = 1.0 - self.faithfulness_score
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"RAGASMetrics({self.evaluation_id[:8]}... - F:{self.faithfulness_score:.2f})"
+

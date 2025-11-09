@@ -494,13 +494,18 @@ const useConversations = () => {
 
   const loadConversations = useCallback(async (autoSelect = true) => {
     try {
+      console.log('📋 Cargando conversaciones...');
       const response = await getConversations();
       const conversationsList = response.conversations || [];
+      console.log('📋 Conversaciones recibidas:', conversationsList.length, conversationsList);
       setConversations(conversationsList);
       
       // Solo auto-seleccionar si se especifica Y hay conversaciones
       if (autoSelect && conversationsList.length > 0) {
+        console.log('🎯 Auto-seleccionando conversación:', conversationsList[0].id);
         setActiveConversation(conversationsList[0].id);
+      } else {
+        console.log('⏭️ No auto-seleccionar (autoSelect:', autoSelect, ', count:', conversationsList.length, ')');
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
@@ -671,10 +676,14 @@ const Chat = ({ onLogout, user }) => {
       
       // Actualizar conversación activa si se creó una nueva
       if (response.conversation_id && response.conversation_id !== activeConversation) {
+        console.log('🔄 Nueva conversación creada, ID:', response.conversation_id);
         setActiveConversation(response.conversation_id);
-        // Recargar lista de conversaciones
-        await loadConversations(false);
       }
+      
+      // SIEMPRE recargar lista de conversaciones después de enviar mensaje
+      // Esto asegura que las nuevas conversaciones aparezcan inmediatamente
+      await loadConversations(false);
+      console.log('✅ Lista de conversaciones actualizada');
       
     } catch (error) {
       console.error('Error en chat:', error);
@@ -698,6 +707,7 @@ const Chat = ({ onLogout, user }) => {
 
   // Manejo de nueva conversación
   const handleNewConversation = useCallback(() => {
+    // Limpiar para nueva conversación
     setActiveConversation(null);
     clearMessages();
     setError(null);

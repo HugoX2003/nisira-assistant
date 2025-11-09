@@ -2,11 +2,12 @@ import React, { useState, useEffect } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Chat from "./components/Chat";
+import AdminPanel from "./components/AdminPanel";
 import { getCurrentUser, clearUserData } from "./services/api";
 
 /**
  * Componente principal de la aplicación
- * Maneja la navegación entre las pantallas de login, registro y chat
+ * Maneja la navegación entre las pantallas de login, registro, chat y admin
  */
 function App() {
   // Verificar si hay un token en localStorage al iniciar
@@ -21,8 +22,20 @@ function App() {
     return isValid;
   };
 
+  // Verificar si el usuario es admin
+  const isAdminUser = (userData) => {
+    return userData && userData.username === 'admin';
+  };
+
+  // Determinar vista inicial
+  const getInitialView = () => {
+    if (!checkAuth()) return "login";
+    const userData = getCurrentUser();
+    return isAdminUser(userData) ? "admin" : "chat";
+  };
+
   // Estados para controlar qué pantalla mostrar
-  const [currentView, setCurrentView] = useState(checkAuth() ? "chat" : "login");
+  const [currentView, setCurrentView] = useState(getInitialView());
   const [loggedIn, setLoggedIn] = useState(checkAuth());
   const [user, setUser] = useState(getCurrentUser());
 
@@ -32,17 +45,28 @@ function App() {
     const currentUser = getCurrentUser();
     setLoggedIn(isAuthenticated);
     setUser(currentUser);
-    setCurrentView(isAuthenticated ? "chat" : "login");
+    
+    if (isAuthenticated) {
+      setCurrentView(isAdminUser(currentUser) ? "admin" : "chat");
+    } else {
+      setCurrentView("login");
+    }
   }, []);
 
   /**
    * Función que se ejecuta cuando el usuario se loguea exitosamente
-   * Cambia el estado para mostrar la pantalla de chat
+   * Cambia el estado para mostrar la pantalla de chat o admin
    */
   function handleLogin(userData) {
     setLoggedIn(true);
     setUser(userData);
-    setCurrentView("chat");
+    
+    // Si es admin, mostrar panel de administración
+    if (isAdminUser(userData)) {
+      setCurrentView("admin");
+    } else {
+      setCurrentView("chat");
+    }
   }
 
   /**
@@ -98,6 +122,10 @@ function App() {
       
       {currentView === "chat" && loggedIn && (
         <Chat onLogout={handleLogout} user={user} />
+      )}
+
+      {currentView === "admin" && loggedIn && (
+        <AdminPanel onLogout={handleLogout} user={user} />
       )}
     </div>
   );

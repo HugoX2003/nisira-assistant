@@ -28,7 +28,9 @@ GOOGLE_DRIVE_CONFIG = {
     "credentials_file": BASE_DIR / "credentials.json",
     "credentials_path": str(BASE_DIR / "credentials.json"),  # Ruta completa para compatibilidad
     "token_file": DATA_DIR / "token.json",
-    "scopes": ["https://www.googleapis.com/auth/drive.readonly"],
+    "scopes": [
+        "https://www.googleapis.com/auth/drive",  # Acceso completo a Drive (necesario para ver archivos existentes)
+    ],
     "sync_folder_name": "Prueba RAG",  # Carpeta en Drive del administrador
     "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8"),  # ID de la carpeta en Drive
     "download_path": str(DOCUMENTS_DIR),  # Directorio local para descargas
@@ -84,7 +86,12 @@ API_CONFIG = {
         "chat_model_name": "gemini-2.0-flash-exp", 
         "embedding_model": "models/text-embedding-004",
         "max_tokens": 8192,
-        "temperature": 0.7,
+    # NOTE: For RAG responses we prefer to use the RAG-specific
+    # temperature defined in the RAG configuration (see RAG_PROMPT_CONFIG
+    # below). To avoid accidental divergence between general model
+    # defaults and RAG behaviour, leave the model-level temperature as
+    # None so it won't override RAG prompt settings.
+    "temperature": None,
         "requests_per_minute": 15,  # Límite gratuito
     },
     "huggingface": {
@@ -141,34 +148,31 @@ RAG_CONFIG = {
             "base_url": "https://api.groq.com/openai/v1",
         },
         
-        "system_prompt": """Eres un asistente académico especializado en análisis de textos políticos y sociales peruanos. Tu tarea es analizar únicamente el contexto proporcionado y extraer información precisa, especialmente citas bibliográficas.
+        "system_prompt": """Eres un asistente académico especializado en documentación técnica. Responde de forma clara, directa y concisa.
 
-REGLAS ESTRICTAS:
-1. SIEMPRE analiza TODO el contexto proporcionado línea por línea
-2. Si encuentras cualquier cita bibliográfica (como Arias(2020), García(2019), etc.), SIEMPRE inclúyela en tu respuesta
-3. Para consultas sobre autores específicos, busca exhaustivamente todas las menciones
-4. Extrae TODAS las citas textuales relevantes y ponlas entre comillas
-5. Si un documento menciona teorías, clasificaciones o análisis, enuméralos completamente
-6. Identifica SIEMPRE el nombre del archivo fuente cuando sea relevante
-7. Para citas específicas como "Arias(2020)", busca tanto el autor como el año en el contexto
-8. Si no encuentras información específica, di claramente que no está en el contexto proporcionado
-6. Si hay información pero es parcial, especifica qué información tienes disponible
+IDIOMA: Responde SIEMPRE en ESPAÑOL. Si los documentos están en inglés, tradúcelos naturalmente manteniendo términos técnicos comunes en inglés (ej: "framework", "API", "machine learning").
 
-ESTRUCTURA OBLIGATORIA:
-- Identificar AUTOR del contenido si está presente
-- Citar textualmente las partes relevantes entre comillas
-- Proporcionar el documento fuente específico
-- Enumerar puntos o teorías si las hay
+FORMATO DE RESPUESTA:
+- Sé directo y conciso, evita listas largas innecesarias
+- Usa párrafos cortos y fluidos en lugar de muchas viñetas
+- Solo usa listas cuando sea realmente necesario para claridad
+- Integra las citas en el texto de forma natural: Según el documento, "..." (fuente.pdf)
+- No uses títulos o secciones a menos que la respuesta sea muy larga
 
-IMPORTANTE: Antes de responder "no tengo información", verifica TODO el contexto línea por línea.
+REGLAS:
+1. Analiza TODO el contexto proporcionado antes de responder
+2. Incluye citas bibliográficas si las encuentras (Autor(año))
+3. Cita textualmente entre comillas las partes relevantes
+4. Identifica el archivo fuente cuando sea útil
+5. Si no encuentras información, dilo claramente
 
-Contexto académico: {context}
+Contexto: {context}
 
 Pregunta: {question}
 
-Respuesta académica fundamentada:""",
+Respuesta en español (directa y concisa):""",
         "max_response_tokens": 1500,
-        "temperature": 0.2,  # Más determinista para precisión académica
+        "temperature": 0.3,  # Más determinista para precisión académica
     }
 }
 

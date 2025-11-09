@@ -16,9 +16,11 @@ import io
 try:
     from google.oauth2.credentials import Credentials
     from google.oauth2 import service_account
+    from google.auth.transport.requests import Request
+    from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from googleapiclient.errors import HttpError
-    from googleapiclient.http import MediaIoBaseDownload
+    from googleapiclient.http import MediaIoBaseDownload, MediaFileUpload
     GOOGLE_APIS_AVAILABLE = True
 except ImportError:
     GOOGLE_APIS_AVAILABLE = False
@@ -38,6 +40,7 @@ class GoogleDriveManager:
         self.folder_id = GOOGLE_DRIVE_CONFIG['folder_id']
         self.download_path = GOOGLE_DRIVE_CONFIG['download_path']
         self.supported_formats = GOOGLE_DRIVE_CONFIG['supported_formats']
+        self.token_path = str(GOOGLE_DRIVE_CONFIG.get('token_file', 'data/token.json'))
         
         # Crear directorio de descarga si no existe
         os.makedirs(self.download_path, exist_ok=True)
@@ -52,54 +55,61 @@ class GoogleDriveManager:
             return False
         
         try:
-            # Opción 1: Cargar desde variable de entorno (PRODUCCIÓN - Railway)
-            credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
+            creds = None
             
-            if credentials_json:
-                logger.info("🔑 Cargando credenciales desde variable de entorno...")
-                cred_data = json.loads(credentials_json)
-                
-                # Credenciales de cuenta de servicio desde JSON
-                self.credentials = service_account.Credentials.from_service_account_info(
-                    cred_data,
-                    scopes=GOOGLE_DRIVE_CONFIG['scopes']
-                )
-                logger.info("✅ Credenciales de cuenta de servicio cargadas desde variable de entorno")
+            # Intentar cargar token existente (OAuth de usuario)
+            if os.path.exists(self.token_path):
+                logger.info(f"🔑 Cargando token de usuario desde: {self.token_path}")
+                creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
             
-            # Opción 2: Cargar desde archivo (DESARROLLO - Local)
-            else:
-                credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
-                
-                if not os.path.exists(credentials_path):
-                    logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
-                    logger.error("💡 Configura GOOGLE_CREDENTIALS_JSON en variables de entorno para producción")
-                    return False
-                
-                logger.info(f"📂 Cargando credenciales desde archivo: {credentials_path}")
-                with open(credentials_path, 'r', encoding='utf-8') as f:
-                    cred_data = json.load(f)
-                
-                # Determinar tipo de credenciales
-                if 'type' in cred_data and cred_data['type'] == 'service_account':
-                    # Credenciales de cuenta de servicio
-                    self.credentials = service_account.Credentials.from_service_account_file(
-                        credentials_path,
-                        scopes=GOOGLE_DRIVE_CONFIG['scopes']
-                    )
-                    logger.info("✅ Credenciales de cuenta de servicio cargadas desde archivo")
+            # Si no hay credenciales válidas, autenticar
+            if not creds or not creds.valid:
+                if creds and creds.expired and creds.refresh_token:
+                    logger.info("🔄 Refrescando token expirado...")
+                    creds.refresh(Request())
                 else:
-                    # Credenciales OAuth2 (usuario)
-                    logger.warning("⚠️  Credenciales OAuth2 detectadas. Se recomienda usar cuenta de servicio.")
-                    return False
+                    # Intentar autenticación OAuth
+                    credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
+                    
+                    if not os.path.exists(credentials_path):
+                        logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
+                        return False
+                    
+                    # Verificar si es OAuth credentials o Service Account
+                    with open(credentials_path, 'r', encoding='utf-8') as f:
+                        cred_data = json.load(f)
+                    
+                    if 'type' in cred_data and cred_data['type'] == 'service_account':
+                        logger.warning("⚠️ Service Account detectada. Cambiando a OAuth de usuario...")
+                        logger.error("❌ Las Service Accounts no tienen cuota de almacenamiento.")
+                        logger.error("💡 Necesitas usar OAuth credentials (tipo 'Desktop app' o 'Web application')")
+                        logger.error("   1. Ve a Google Cloud Console")
+                        logger.error("   2. Crea OAuth 2.0 credentials (Desktop app)")
+                        logger.error("   3. Descarga el JSON y reemplaza credentials.json")
+                        return False
+                    
+                    # Flujo OAuth
+                    logger.info("🌐 Iniciando flujo de autenticación OAuth...")
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        credentials_path, 
+                        GOOGLE_DRIVE_CONFIG['scopes']
+                    )
+                    creds = flow.run_local_server(port=0)
+                    
+                    # Guardar token para futuros usos
+                    os.makedirs(os.path.dirname(self.token_path), exist_ok=True)
+                    with open(self.token_path, 'w') as token:
+                        token.write(creds.to_json())
+                    
+                    logger.info(f"✅ Token guardado en: {self.token_path}")
+            
+            self.credentials = creds
             
             # Construir servicio
             self.service = build('drive', 'v3', credentials=self.credentials)
             logger.info("✅ Servicio de Google Drive inicializado correctamente")
             return True
             
-        except json.JSONDecodeError as e:
-            logger.error(f"❌ Error parseando JSON de credenciales: {e}")
-            return False
         except Exception as e:
             logger.error(f"❌ Error inicializando Google Drive: {e}")
             return False
@@ -151,15 +161,30 @@ class GoogleDriveManager:
                 if format_queries:
                     query += f" and ({' or '.join(format_queries)})"
             
-            results = self.service.files().list(
-                q=query,
-                fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
-            ).execute()
+            # Paginar para obtener TODOS los archivos
+            all_files = []
+            page_token = None
             
-            files = results.get('files', [])
-            logger.info(f"📁 Encontrados {len(files)} archivos en Google Drive")
+            while True:
+                results = self.service.files().list(
+                    q=query,
+                    pageSize=1000,  # Máximo por página
+                    pageToken=page_token,
+                    fields="nextPageToken, files(id, name, mimeType, size, modifiedTime, parents)"
+                ).execute()
+                
+                files = results.get('files', [])
+                all_files.extend(files)
+                
+                page_token = results.get('nextPageToken')
+                if not page_token:
+                    break  # No hay más páginas
+                
+                logger.info(f"� Obtenidos {len(all_files)} archivos hasta ahora...")
             
-            return files
+            logger.info(f"📁 Total: {len(all_files)} archivos en Google Drive")
+            
+            return all_files
             
         except HttpError as e:
             logger.error(f"❌ Error listando archivos: {e}")
@@ -341,6 +366,95 @@ class GoogleDriveManager:
                 "success": False,
                 "error": str(e)
             }
+    
+    def upload_file(self, file_path: str, file_name: Optional[str] = None, folder_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Subir un archivo a Google Drive
+        
+        Args:
+            file_path: Ruta local del archivo a subir
+            file_name: Nombre para el archivo en Drive (usa el nombre local si no se especifica)
+            folder_id: ID de la carpeta destino (usa la configurada por defecto si no se especifica)
+        
+        Returns:
+            Información del archivo subido o None si falló
+        """
+        if not self.service:
+            logger.error("Servicio de Google Drive no inicializado")
+            return None
+        
+        if not os.path.exists(file_path):
+            logger.error(f"Archivo no encontrado: {file_path}")
+            return None
+        
+        try:
+            target_folder = folder_id or self.folder_id
+            upload_name = file_name or os.path.basename(file_path)
+            
+            # Determinar tipo MIME
+            mime_types = {
+                '.pdf': 'application/pdf',
+                '.txt': 'text/plain',
+                '.md': 'text/markdown',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            }
+            
+            file_ext = os.path.splitext(file_path)[1].lower()
+            mime_type = mime_types.get(file_ext, 'application/octet-stream')
+            
+            # Metadatos del archivo
+            file_metadata = {
+                'name': upload_name,
+                'parents': [target_folder]
+            }
+            
+            # Crear media
+            media = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
+            
+            # Subir archivo
+            file = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, mimeType, size, modifiedTime'
+            ).execute()
+            
+            logger.info(f"✅ Archivo subido a Drive: {upload_name} (ID: {file.get('id')})")
+            
+            return file
+            
+        except HttpError as e:
+            logger.error(f"❌ Error HTTP subiendo archivo: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Error subiendo archivo: {e}")
+            return None
+    
+    def delete_file(self, file_id: str) -> bool:
+        """
+        Eliminar un archivo de Google Drive
+        
+        Args:
+            file_id: ID del archivo a eliminar
+        
+        Returns:
+            True si se eliminó correctamente
+        """
+        if not self.service:
+            logger.error("Servicio de Google Drive no inicializado")
+            return False
+        
+        try:
+            self.service.files().delete(fileId=file_id).execute()
+            logger.info(f"✅ Archivo eliminado de Drive: {file_id}")
+            return True
+            
+        except HttpError as e:
+            logger.error(f"❌ Error HTTP eliminando archivo: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Error eliminando archivo: {e}")
+            return False
     
     def setup_folder_monitoring(self) -> bool:
         """

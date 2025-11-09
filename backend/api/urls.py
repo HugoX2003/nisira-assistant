@@ -31,6 +31,21 @@ from .views import (
     rag_system_status
 )
 
+# Importar vistas de admin
+from .admin_views import (
+    list_drive_files,
+    upload_to_drive,
+    delete_drive_file,
+    sync_drive_documents,
+    get_embeddings_status,
+    generate_embeddings,
+    verify_embeddings,
+    clear_embeddings,
+    get_embedding_progress,
+    get_system_metrics,
+    get_pipeline_status
+)
+
 # URLs de la API
 urlpatterns = [
     # Autenticación JWT
@@ -74,4 +89,17 @@ urlpatterns = [
     path("experiments/latest/", latest_experiment, name="latest_experiment"),
     path("experiments/create/", create_experiment_run, name="create_experiment_run"),
     path("guardrails/status/", guardrail_status, name="guardrail_status"),
+    
+    # Panel de Administración (solo admin)
+    path("admin/drive/files/", list_drive_files, name="admin_list_drive_files"),
+    path("admin/drive/upload/", upload_to_drive, name="admin_upload_to_drive"),
+    path("admin/drive/delete/<str:file_id>/", delete_drive_file, name="admin_delete_drive_file"),
+    path("admin/drive/sync/", sync_drive_documents, name="admin_sync_drive_documents"),
+    path("admin/embeddings/status/", get_embeddings_status, name="admin_embeddings_status"),
+    path("admin/embeddings/generate/", generate_embeddings, name="admin_generate_embeddings"),
+    path("admin/embeddings/verify/", verify_embeddings, name="admin_verify_embeddings"),
+    path("admin/embeddings/clear/", clear_embeddings, name="admin_clear_embeddings"),
+    path("admin/embeddings/progress/", get_embedding_progress, name="admin_embedding_progress"),
+    path("admin/metrics/", get_system_metrics, name="admin_get_metrics"),
+    path("admin/pipeline/status/", get_pipeline_status, name="admin_pipeline_status"),
 ]

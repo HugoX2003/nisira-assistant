@@ -211,7 +211,7 @@ def get_conversations(request):
             for entry in conversations
         ]
 
-        return Response({'count': len(results), 'results': results})
+        return Response({'count': len(results), 'conversations': results})
     except Exception as exc:  # pragma: no cover (defensivo)
         logger.exception("Error obteniendo conversaciones")
         return Response(
@@ -1021,10 +1021,15 @@ def rag_query(request):
 def rag_enhanced_chat(request):
     """
     Chat mejorado con RAG - Integra RAG en las conversaciones normales
+    ✨ AHORA CON TRACKING DE MÉTRICAS PARA TESIS
     """
     if not RAG_MODULES_AVAILABLE:
         # Fallback al chat normal si RAG no está disponible
         return send_message(request)
+    
+    # ✨ INICIAR TRACKING DE MÉTRICAS
+    from .metrics_tracker import MetricsTracker
+    tracker = MetricsTracker()
     
     try:
         conversation_id = request.data.get('conversation_id')
@@ -1036,14 +1041,17 @@ def rag_enhanced_chat(request):
                 'error': 'Contenido del mensaje requerido'
             }, status=status.HTTP_400_BAD_REQUEST)
 
+        # Detectar si es un saludo simple (solo desactivar RAG para saludos básicos)
         normalized_content = content.lower()
-        has_question_mark = '?' in content
-        greeting_keywords = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hello', 'hi']
+        greeting_keywords = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hello', 'hi', 'hey']
+        
+        # Solo desactivar RAG si es un saludo simple y muy corto
+        is_simple_greeting = (
+            any(normalized_content.startswith(word) for word in greeting_keywords) 
+            and len(content) <= 30  # Saludos muy cortos
+        )
 
-        is_simple_greeting = any(normalized_content.startswith(word) for word in greeting_keywords)
-        is_short_statement = len(content) <= 80 and not has_question_mark
-
-        if use_rag and (is_simple_greeting or is_short_statement):
+        if use_rag and is_simple_greeting:
             use_rag = False
         
         # Obtener o crear conversación
@@ -1067,11 +1075,17 @@ def rag_enhanced_chat(request):
             sender='user'
         )
         
+        # ✨ INICIAR TRACKING DE LA CONSULTA
+        tracker.start_query(content, user=request.user, conversation=conversation)
+        
         # Variable para almacenar las fuentes
         sources = []
         
         # Generar respuesta
         if use_rag:
+            # ✨ INICIAR MEDICIÓN DE RECUPERACIÓN
+            tracker.start_retrieval()
+            
             # Usar RAG para generar respuesta
             pipeline = RAGPipeline()
             rag_result = pipeline.query(
@@ -1080,17 +1094,41 @@ def rag_enhanced_chat(request):
                 include_generation=True
             )
             
+            # ✨ FINALIZAR MEDICIÓN DE RECUPERACIÓN
+            sources_count = len(rag_result.get('sources', []))
+            tracker.end_retrieval(num_documents=sources_count, k=5)
+            
+            # ✨ INICIAR MEDICIÓN DE GENERACIÓN
+            tracker.start_generation()
+            
             if rag_result['success'] and rag_result.get('answer'):
                 response_content = rag_result['answer']
                 sources = rag_result.get('sources', [])
+                
+                # ✨ MARCAR PRIMER TOKEN (asumimos que ya se generó)
+                tracker.mark_first_token()
+                
+                # ✨ CAPTURAR RESPUESTA Y CONTEXTOS PARA RAGAS
+                # Extraer el texto de los contextos recuperados
+                contexts_text = [
+                    source.get('content', '') or source.get('text', '')
+                    for source in sources
+                    if source.get('content') or source.get('text')
+                ]
+                tracker.set_answer_and_contexts(response_content, contexts_text)
                 
                 # NO agregar fuentes al texto del mensaje
                 # Las fuentes se envían por separado en la respuesta JSON
             else:
                 # Respuesta genérica si RAG falla
                 response_content = "Lo siento, no pude encontrar información relevante en los documentos para responder tu pregunta. ¿Podrías ser más específico?"
+                tracker.mark_first_token()
+            
+            # ✨ FINALIZAR MEDICIÓN DE GENERACIÓN
+            tracker.end_generation()
         else:
             # Respuesta básica sin RAG
+            tracker.mark_first_token()
             response_content = generate_basic_response(content)
         
         # Guardar respuesta del asistente
@@ -1108,6 +1146,11 @@ def rag_enhanced_chat(request):
         # Actualizar timestamp de conversación
         conversation.save()
         
+        # ✨ GUARDAR MÉTRICAS EN BASE DE DATOS
+        saved_metrics = tracker.save_metrics()
+        if saved_metrics:
+            logger.info(f"✅ Métricas guardadas para query: {saved_metrics.query_id[:8]}")
+        
         return Response({
             'conversation_id': conversation.id,
             'user_message': {
@@ -1124,11 +1167,18 @@ def rag_enhanced_chat(request):
             },
             'response': response_content,  # Para compatibilidad con el frontend
             'rag_used': use_rag and RAG_MODULES_AVAILABLE,
-            'sources': sources
+            'sources': sources,
+            'metrics': tracker.get_summary()  # ✨ INCLUIR MÉTRICAS EN RESPUESTA
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"Error en chat RAG: {e}")
+        logger.error(f"❌ Error en chat RAG: {e}")
+        # Intentar guardar métricas incluso si hay error
+        try:
+            tracker.save_metrics()
+        except:
+            pass
+        
         return Response({
             'error': 'Error procesando mensaje con RAG',
             'details': str(e)
