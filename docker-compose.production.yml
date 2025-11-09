@@ -31,20 +31,20 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       DEBUG: "False"
       ALLOWED_HOSTS: ${ALLOWED_HOSTS}
-      
+
       # Database
       DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-rag_asistente}
-      
+
       # APIs
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
-      
+
       # Gunicorn
       PORT: 8000
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
       GUNICORN_TIMEOUT: 300
-      
+
       # RAG
       INIT_RAG: "false"
     depends_on:
@@ -76,7 +76,8 @@ services:
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test:
+        ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s
       timeout: 10s
       retries: 3
