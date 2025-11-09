@@ -95,12 +95,23 @@ class RAGASEvaluator:
             
             # Evaluar con métricas disponibles
             metrics_to_use = self.metrics.copy()
-            if not ground_truth and context_recall in metrics_to_use:
-                # Context recall requiere ground_truth
-                metrics_to_use.remove(context_recall)
+            if not ground_truth:
+                # Context recall y context precision requieren ground_truth (reference)
+                if context_recall in metrics_to_use:
+                    metrics_to_use.remove(context_recall)
+                if context_precision in metrics_to_use:
+                    metrics_to_use.remove(context_precision)
+                logger.debug("⚠️ Métricas deshabilitadas (sin ground_truth): context_precision, context_recall")
             
             # Ejecutar evaluación
             logger.debug(f"🔍 Evaluando con RAGAS: {len(metrics_to_use)} métricas")
+            
+            # Verificar que haya API key de OpenAI disponible
+            import os
+            if not os.getenv('OPENAI_API_KEY'):
+                logger.warning("⚠️ OPENAI_API_KEY no configurada, usando evaluación simulada")
+                return self._fallback_evaluation()
+            
             results = evaluate(dataset, metrics=metrics_to_use)
             
             # Extraer resultados
@@ -116,6 +127,7 @@ class RAGASEvaluator:
             
         except Exception as e:
             logger.error(f"❌ Error en evaluación RAGAS: {e}")
+            logger.info("💡 Tip: Configura OPENAI_API_KEY para usar RAGAS, o deshabilita RAGAS en settings")
             return self._fallback_evaluation()
     
     def evaluate_batch(
@@ -159,8 +171,21 @@ class RAGASEvaluator:
             
             # Determinar métricas disponibles
             metrics_to_use = self.metrics.copy()
-            if not ground_truths and context_recall in metrics_to_use:
-                metrics_to_use.remove(context_recall)
+            if not ground_truths:
+                # Context recall y context precision requieren ground_truth
+                if context_recall in metrics_to_use:
+                    metrics_to_use.remove(context_recall)
+                if context_precision in metrics_to_use:
+                    metrics_to_use.remove(context_precision)
+            
+            # Verificar que haya API key de OpenAI disponible
+            import os
+            if not os.getenv('OPENAI_API_KEY'):
+                logger.warning("⚠️ OPENAI_API_KEY no configurada, usando evaluación simulada para batch")
+                return {
+                    'aggregate': self._fallback_evaluation(),
+                    'per_query': [self._fallback_evaluation() for _ in questions]
+                }
             
             # Evaluar
             logger.info(f"🔍 Evaluando batch de {len(questions)} consultas con RAGAS")
