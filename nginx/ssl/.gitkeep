@@ -1,0 +1,2 @@
+# Certificados SSL para Nginx (producción)
+# Generar con: certbot --nginx -d tu-dominio.com

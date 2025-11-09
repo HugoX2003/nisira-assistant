@@ -1,47 +1,52 @@
-# Backend Dockerfile for Django RAG system
-# ---------------------------------------
-# Multi-stage builds are not essential here, but we keep the image slim by
-# basing it on python:3.12-slim and installing only the required system deps.
+# Backend Dockerfile Optimizado para Producción
+# Multi-stage build para reducir tamaño de imagen final
 
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
-# System dependencies required for building some Python packages (mysqlclient, pillow, etc.)
+# System dependencies
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        build-essential \
        default-libmysqlclient-dev \
-       libjpeg62-turbo-dev \
-       zlib1g-dev \
        libpq-dev \
        curl \
+       ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first to leverage Docker layer caching
+# Install Python dependencies
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    && pip install psycopg2-binary gunicorn whitenoise \
+    && rm -rf /root/.cache/pip
 
-# Copy project files into the image
-COPY . /app
+# Copy project files
+COPY . /app/
 
-# Ensure environment files and credentials are present in the container
-# NOTE: embedding secrets in images is insecure; prefer runtime secrets in production.
-COPY .env /app/.env
-COPY credentials.json /app/credentials.json
+# Create necessary directories
+RUN mkdir -p /app/data/documents /app/data/processed /app/chroma_db /app/staticfiles
 
-# Collect static assets during build so the runtime container is ready to serve them
-RUN DJANGO_SETTINGS_MODULE=core.build_settings python manage.py collectstatic --noinput
+# Collect static files
+RUN python manage.py collectstatic --noinput --settings=core.production_settings || true
 
-# Entrypoint script handles migrations and starts Gunicorn
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Make entrypoint executable
+RUN chmod +x /app/docker/entrypoint.sh
+
+# Create non-root user
+RUN useradd -m -u 1000 django && chown -R django:django /app
+USER django
 
 EXPOSE 8000
 
-CMD ["/entrypoint.sh"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD curl -f http://localhost:8000/api/health/ || exit 1
+
+CMD ["/app/docker/entrypoint.sh"]
+

@@ -1,0 +1,123 @@
+# Digital Ocean App Platform Configuration
+# Este archivo le dice a Digital Ocean cómo desplegar tu app
+
+name: nisira-assistant
+
+# Base de datos PostgreSQL administrada
+databases:
+  - name: db
+    engine: PG
+    version: "16"
+    size: basic-xs  # $7/mes - ideal para empezar
+    num_nodes: 1
+    production: true
+
+# Servicios
+services:
+  # Backend Django
+  - name: backend
+    github:
+      repo: HugoX2003/nisira-assistant
+      branch: main
+      deploy_on_push: true
+    source_dir: /backend
+    dockerfile_path: backend/Dockerfile
+    
+    # Variables de entorno
+    envs:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.production_settings
+      
+      - key: SECRET_KEY
+        value: H8kL9mN2pQ4rS6tU7vX9yZ1aB3cD5eF7gH9jK1lM3nP5qR7sT9uV
+        type: SECRET
+      
+      - key: DEBUG
+        value: "False"
+      
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+      
+      - key: OPENROUTER_API_KEY
+        value: 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
+        type: SECRET
+      
+      - key: GOOGLE_API_KEY
+        value: AIzaSyC0V18JMVm8fs3v1BuzBCXOyAITfZuIVw8
+        type: SECRET
+      
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        value: 1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8
+      
+      - key: PORT
+        value: "8000"
+      
+      - key: GUNICORN_WORKERS
+        value: "2"
+      
+      - key: GUNICORN_TIMEOUT
+        value: "300"
+    
+    # Recursos
+    instance_count: 1
+    instance_size_slug: basic-xxs  # $5/mes
+    
+    # Puerto HTTP
+    http_port: 8000
+    
+    # Health check
+    health_check:
+      http_path: /api/health/
+      initial_delay_seconds: 30
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    
+    # Volúmenes persistentes (para ChromaDB y documentos)
+    volumes:
+      - name: rag-data
+        path: /app/data
+        size: 1GB
+      
+      - name: chroma-db
+        path: /app/chroma_db
+        size: 2GB
+
+  # Frontend React
+  - name: frontend
+    github:
+      repo: HugoX2003/nisira-assistant
+      branch: main
+      deploy_on_push: true
+    source_dir: /frontend
+    dockerfile_path: frontend/Dockerfile
+    
+    # Variables de entorno
+    envs:
+      - key: REACT_APP_API_URL
+        value: ${backend.PUBLIC_URL}
+    
+    # Recursos
+    instance_count: 1
+    instance_size_slug: basic-xxs  # $5/mes
+    
+    # Puerto HTTP
+    http_port: 80
+    
+    # Build args
+    build_command: npm run build
+
+# Dominios (Digital Ocean te da uno gratis)
+# Si tienes dominio propio, agrégalo aquí
+domains:
+  - domain: nisira-assistant.ondigitalocean.app
+    type: DEFAULT
+
+# Región
+region: nyc
+
+# Alerts (opcional)
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
