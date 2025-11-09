@@ -12,12 +12,14 @@ from dotenv import load_dotenv
 # ============================================================================
 # CARGA DE VARIABLES DE ENTORNO
 # ============================================================================
-load_dotenv()
+# Cargar el .env desde la carpeta backend
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 # ============================================================================
 # RUTAS BASE
 # ============================================================================
-BASE_DIR = Path(__file__).resolve().parent.parent
+# BASE_DIR ya definido arriba
 
 # ============================================================================
 # CONFIGURACIÓN BÁSICA
