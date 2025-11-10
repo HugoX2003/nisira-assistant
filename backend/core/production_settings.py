@@ -10,8 +10,8 @@ DEBUG = False
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'change-me-in-production')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
-# Base de datos PostgreSQL (Railway)
-# Durante build (collectstatic), usar SQLite temporal
+# Base de datos
+# Preferir PostgreSQL si está disponible, sino usar SQLite
 if os.environ.get('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(
@@ -21,11 +21,12 @@ if os.environ.get('DATABASE_URL'):
         )
     }
 else:
-    # Fallback para build time (sin DATABASE_URL)
+    # Fallback a SQLite si no hay PostgreSQL
+    # Útil para testing o cuando PostgreSQL no está disponible
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': ':memory:',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         }
     }
 
