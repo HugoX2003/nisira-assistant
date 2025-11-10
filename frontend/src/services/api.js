@@ -12,6 +12,10 @@ const defaultBase = (typeof window !== 'undefined')
 // Soportar tanto REACT_APP_API_BASE como REACT_APP_API_URL
 const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || defaultBase;
 
+console.log('🔧 API_BASE configurado:', API_BASE);
+console.log('🔧 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+console.log('🔧 REACT_APP_API_BASE:', process.env.REACT_APP_API_BASE);
+
 // ================================
 // MANEJO DE TOKENS
 // ================================
