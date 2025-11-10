@@ -13,3 +13,5 @@ node_modules/
 data/processed/
 chroma_db/
 staticfiles/
+credentials.json
+token.json

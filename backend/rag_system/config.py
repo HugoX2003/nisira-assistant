@@ -24,9 +24,22 @@ PROCESSED_DIR = DATA_DIR / "processed"
 CHROMA_DIR = BASE_DIR / "chroma_db"
 
 # ===== GOOGLE DRIVE CONFIGURACIÓN =====
+# Intentar usar credenciales desde variable de entorno primero (para deployment)
+import json
+_credentials_json_env = os.getenv("GOOGLE_CREDENTIALS_JSON")
+_credentials_file_path = BASE_DIR / "credentials.json"
+
+# Si hay credenciales en env var y no existe el archivo, crearlo temporalmente
+if _credentials_json_env and not _credentials_file_path.exists():
+    try:
+        _creds_data = json.loads(_credentials_json_env)
+        _credentials_file_path.write_text(json.dumps(_creds_data, indent=2))
+    except Exception as e:
+        logging.warning(f"No se pudo crear credentials.json desde env var: {e}")
+
 GOOGLE_DRIVE_CONFIG = {
-    "credentials_file": BASE_DIR / "credentials.json",
-    "credentials_path": str(BASE_DIR / "credentials.json"),  # Ruta completa para compatibilidad
+    "credentials_file": _credentials_file_path,
+    "credentials_path": str(_credentials_file_path),  # Ruta completa para compatibilidad
     "token_file": DATA_DIR / "token.json",
     "scopes": [
         "https://www.googleapis.com/auth/drive",  # Acceso completo a Drive (necesario para ver archivos existentes)
