@@ -40,12 +40,14 @@ if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
 # CORS para frontend
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
+    "https://nisira-assistant-8dq2a.ondigitalocean.app",
     "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com", 
     "http://localhost:3000",  # Para desarrollo local
 ]
 
 # CSRF
 CSRF_TRUSTED_ORIGINS = [
+    "https://nisira-assistant-8dq2a.ondigitalocean.app",
     "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com",  
 ]
 
@@ -76,6 +78,8 @@ LOGGING = {
 }
 
 # Seguridad adicional
+# IMPORTANTE: Digital Ocean maneja SSL/HTTPS, debemos confiar en el header X-Forwarded-Proto
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
