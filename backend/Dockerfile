@@ -27,11 +27,14 @@ RUN pip install --upgrade pip \
     && pip install psycopg2-binary gunicorn whitenoise \
     && rm -rf /root/.cache/pip
 
-# Copy project files
+# Copy project files (excluding credentials.json, will use env var instead)
 COPY . /app/
 
 # Create necessary directories
 RUN mkdir -p /app/data/documents /app/data/processed /app/chroma_db /app/staticfiles
+
+# Create placeholder credentials.json if not exists (will be overridden by env var)
+RUN touch /app/credentials.json || true
 
 # Collect static files
 RUN python manage.py collectstatic --noinput --settings=core.production_settings || true
