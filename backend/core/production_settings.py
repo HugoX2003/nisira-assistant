@@ -29,58 +29,26 @@ else:
         }
     }
 
-# Archivos estáticos
+# Archivos estáticos (solo para Django admin)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
-
-# Directorios adicionales de archivos estáticos
-# Incluimos el directorio completo de React build (js, css, assets)
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'core', 'static'),
-]
-
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
-# WhiteNoise: servir archivos directamente sin collectstatic modificándolos
-WHITENOISE_USE_FINDERS = True
-WHITENOISE_AUTOREFRESH = False  # En producción debe ser False
-WHITENOISE_IMMUTABLE_FILE_TEST = None  # Permitir que todos los archivos sean cacheables
-
-# Configuración de templates para servir index.html de React
-TEMPLATES = [
-    {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            os.path.join(BASE_DIR, 'core', 'static', 'frontend'),  # Directorio donde está index.html
-        ],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-            ],
-        },
-    },
-]
 
 # Agregar WhiteNoise
 if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
     MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
-# CORS para frontend
+# CORS para frontend en Heroku
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "https://nisira-assistant-8dq2a.ondigitalocean.app",
-    "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com", 
+    "https://nisira-assistant-frontend.herokuapp.com",
     "http://localhost:3000",  # Para desarrollo local
 ]
+CORS_ALLOW_CREDENTIALS = True
 
 # CSRF
 CSRF_TRUSTED_ORIGINS = [
-    "https://nisira-assistant-8dq2a.ondigitalocean.app",
-    "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com",  
+    "https://nisira-assistant-frontend.herokuapp.com",
 ]
 
 # ChromaDB persistente con volumen Railway
