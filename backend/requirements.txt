@@ -49,7 +49,7 @@ chromadb>=0.4.0
 # === EMBEDDINGS Y NLP (CPU-only, sin CUDA) ===
 # IMPORTANTE: torch CPU-only (sin librerías NVIDIA CUDA)
 torch>=2.0.0 ; sys_platform != 'win32'
-torch>=2.0.0+cpu ; sys_platform == 'win32'
+torch==2.3.1+cpu ; sys_platform == 'win32'
 sentence-transformers>=2.2.0
 
 # === RAGAS - Evaluación RAG ===
