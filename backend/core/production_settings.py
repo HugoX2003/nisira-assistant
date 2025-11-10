@@ -41,14 +41,14 @@ if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
 # CORS para frontend en Heroku
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = [
-    "https://nisira-assistant-frontend.herokuapp.com",
+    "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com",
     "http://localhost:3000",  # Para desarrollo local
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 # CSRF
 CSRF_TRUSTED_ORIGINS = [
-    "https://nisira-assistant-frontend.herokuapp.com",
+    "https://nisira-assistant-frontend-2ae5b156ad38.herokuapp.com",
 ]
 
 # ChromaDB persistente con volumen Railway

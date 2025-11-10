@@ -9,8 +9,8 @@ const defaultBase = (typeof window !== 'undefined')
   ? `${window.location.protocol}//${window.location.hostname}:8000`
   : 'http://127.0.0.1:8000';
 
-// Soportar tanto REACT_APP_API_BASE como REACT_APP_API_URL
-const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || defaultBase;
+// Priorizar REACT_APP_API_URL que incluye /api
+const API_BASE = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE || defaultBase;
 
 console.log('🔧 API_BASE configurado:', API_BASE);
 console.log('🔧 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
