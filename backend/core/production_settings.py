@@ -33,12 +33,18 @@ else:
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
 
-# Directorio adicional para archivos estáticos de React
+# Directorios adicionales de archivos estáticos
+# Incluimos el directorio completo de React build (js, css, assets)
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'core', 'static', 'frontend', 'static'),
+    os.path.join(BASE_DIR, 'core', 'static'),
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# WhiteNoise: servir archivos directamente sin collectstatic modificándolos
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = False  # En producción debe ser False
+WHITENOISE_IMMUTABLE_FILE_TEST = None  # Permitir que todos los archivos sean cacheables
 
 # Configuración de templates para servir index.html de React
 TEMPLATES = [
