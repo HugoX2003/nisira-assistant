@@ -40,8 +40,8 @@ RUN pip install --upgrade pip \
 # Copy backend source code
 COPY backend/ /app/
 
-# Copy credential files (do NOT copy .env - use environment variables instead)
-COPY backend/credentials.json /app/credentials.json
+# Copy credential files REMOVED - using GOOGLE_CREDENTIALS_JSON env var instead
+# credentials.json will be created automatically from env var if needed
 
 # Insert built frontend into Django static directory before collectstatic
 RUN mkdir -p /app/core/static/frontend

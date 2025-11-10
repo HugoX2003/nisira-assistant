@@ -14,4 +14,8 @@ staticfiles/
 frontend/build/
 frontend/node_modules/
 backend/venv/
+credentials.json
+token.json
+backend/credentials.json
+backend/token.json
 
