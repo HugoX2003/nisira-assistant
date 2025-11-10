@@ -1,3 +1,8 @@
+# === PyTorch CPU-only (SIN CUDA) ===
+# IMPORTANTE: Esta línea especifica usar solo CPU, no GPUs
+# Reduce tamaño de descarga de 2GB a 200MB
+--extra-index-url https://download.pytorch.org/whl/cpu
+
 # === DEPENDENCIAS CORE DJANGO ===
 Django>=5.0
 djangorestframework>=3.15
@@ -42,8 +47,9 @@ openpyxl>=3.1.0
 chromadb>=0.4.0
 
 # === EMBEDDINGS Y NLP (CPU-only, sin CUDA) ===
-# IMPORTANTE: torch se instala desde PyPI normal
-torch>=2.0.0
+# IMPORTANTE: torch CPU-only (sin librerías NVIDIA CUDA)
+torch>=2.0.0 ; sys_platform != 'win32'
+torch>=2.0.0+cpu ; sys_platform == 'win32'
 sentence-transformers>=2.2.0
 
 # === RAGAS - Evaluación RAG ===
