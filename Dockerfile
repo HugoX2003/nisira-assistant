@@ -35,11 +35,4 @@ RUN DJANGO_SETTINGS_MODULE=core.build_settings python manage.py collectstatic --
 EXPOSE 8000
 
 # Run migrations and start Gunicorn directly
-CMD python manage.py migrate --noinput && \
-    gunicorn core.wsgi:application \
-    --bind 0.0.0.0:${PORT:-8000} \
-    --workers ${GUNICORN_WORKERS:-2} \
-    --timeout ${GUNICORN_TIMEOUT:-300} \
-    --access-logfile - \
-    --error-logfile - \
-    --log-level info
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn core.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers ${GUNICORN_WORKERS:-2} --timeout ${GUNICORN_TIMEOUT:-300} --access-logfile - --error-logfile - --log-level info"]
