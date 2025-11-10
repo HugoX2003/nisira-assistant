@@ -2,6 +2,7 @@ from django.urls import path
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .views import (
     # Vistas básicas
+    home_view,
     health_check,
     api_info,
     service_status,
@@ -48,6 +49,9 @@ from .admin_views import (
 
 # URLs de la API
 urlpatterns = [
+    # Vista de inicio/bienvenida
+    path("", home_view, name="home"),
+    
     # Autenticación JWT
     path("auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("auth/login/", custom_login, name="custom_login"),

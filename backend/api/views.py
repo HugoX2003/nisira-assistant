@@ -46,6 +46,47 @@ from monitoring.health import collect_health_checks, get_build_metadata, overall
 # Configuración de logging
 logger = logging.getLogger(__name__)
 
+
+# ============================================================================
+# VISTA DE BIENVENIDA / HOME
+# ============================================================================
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def home_view(request):
+    """
+    Vista de bienvenida para la raíz de la API.
+    Muestra información básica sobre los endpoints disponibles.
+    """
+    return Response({
+        "message": "Bienvenido a NISIRA Assistant API",
+        "version": "1.0.0",
+        "status": "operational",
+        "endpoints": {
+            "health": "/health/",
+            "api_info": "/info/",
+            "authentication": {
+                "login": "/auth/login/",
+                "register": "/auth/register/",
+                "token": "/auth/token/",
+            },
+            "rag_system": {
+                "status": "/rag/status/",
+                "query": "/rag/query/",
+                "chat": "/rag/chat/",
+            },
+            "admin": "/admin/",
+            "swagger": "/api/schema/swagger-ui/",
+        },
+        "documentation": "https://github.com/HugoX2003/nisira-assistant",
+    })
+
+
+# ============================================================================
+# VISTAS BÁSICAS DE SALUD Y ESTADO
+# ============================================================================
+
+
 # RAG System imports
 try:
     import sys
