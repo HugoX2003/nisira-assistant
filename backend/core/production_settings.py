@@ -31,7 +31,33 @@ else:
 
 # Archivos estáticos
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_URL = '/static/'
+
+# Directorio adicional para archivos estáticos de React
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'core', 'static', 'frontend', 'static'),
+]
+
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Configuración de templates para servir index.html de React
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [
+            os.path.join(BASE_DIR, 'core', 'static', 'frontend'),  # Directorio donde está index.html
+        ],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
 
 # Agregar WhiteNoise
 if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
