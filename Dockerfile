@@ -32,9 +32,9 @@ COPY backend/ /app/
 # Collect static assets (Django admin only, no frontend)
 RUN DJANGO_SETTINGS_MODULE=core.build_settings python manage.py collectstatic --noinput
 
-# Copy and prepare entrypoint
-COPY backend/docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copy and prepare simple start script
+COPY backend/start.sh /start.sh
+RUN chmod +x /start.sh
 
 EXPOSE 8000
-CMD ["/entrypoint.sh"]
+CMD ["/start.sh"]
