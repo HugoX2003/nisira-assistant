@@ -11,7 +11,9 @@ __pycache__/
 venv/
 node_modules/
 data/processed/
-chroma_db/
+# Mantener staticfiles fuera del contexto, pero permitir corpus persistente
 staticfiles/
+# Permitir incluir la base de datos vectorial existente
+!chroma_db/**
 credentials.json
 token.json

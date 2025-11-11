@@ -19,3 +19,7 @@ token.json
 backend/credentials.json
 backend/token.json
 
+# Ensure prebuilt backend assets are included in the image
+!backend/data/documents/**
+!backend/chroma_db/**
+

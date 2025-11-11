@@ -111,12 +111,16 @@ test_*.py
 debug_*.py
 
 # Documentos y PDFs (RAG)
-backend/data/documents/*.pdf
 backend/data/processed/
 *.pdf
 
 # Base de datos vectorial ChromaDB
-backend/chroma_db/
+# (Se mantiene ignorada por default)
+# backend/chroma_db/
+
+# Permitir incluir el corpus y la base vectorial preprocesados
+!backend/data/documents/**
+!backend/chroma_db/**
 
 # Scripts de reindexación temporal
 *reindex*.py
