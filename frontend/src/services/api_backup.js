@@ -46,7 +46,7 @@ const api = axios.create({ baseURL: API_BASE });
 // Interceptor para agregar el token JWT a las peticiones (lee de memoria y localStorage)
 api.interceptors.request.use((config) => {
   const url = (config.url || '').toString();
-  const isAuthEndpoint = url.includes('/auth/token') || url.includes('/auth/refresh') || url.includes('/auth/register');
+  const isAuthEndpoint = url.includes('/api/auth/token') || url.includes('/api/auth/refresh') || url.includes('/api/auth/register');
   if (!isAuthEndpoint) {
     const token = getStoredAccessToken();
     if (token) {
@@ -64,14 +64,14 @@ api.interceptors.response.use(
     const originalRequest = error.config || {};
     const status = error.response?.status;
     const url = (originalRequest.url || '').toString();
-    const isAuthEndpoint = url.includes('/auth/token') || url.includes('/auth/refresh') || url.includes('/auth/register');
+  const isAuthEndpoint = url.includes('/api/auth/token') || url.includes('/api/auth/refresh') || url.includes('/api/auth/register');
 
     if (status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
       const rToken = getStoredRefreshToken();
       if (rToken) {
         try {
-          const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refresh: rToken });
+          const { data } = await axios.post(`${API_BASE}/api/auth/refresh`, { refresh: rToken });
           setAccessToken(data.access);
           if (data.refresh) setRefreshToken(data.refresh);
           originalRequest.headers = originalRequest.headers || {};
@@ -90,10 +90,10 @@ api.interceptors.response.use(
 
 /**
  * Función para iniciar sesión
- * Envía credenciales al endpoint /auth/token y obtiene los tokens JWT
+ * Envía credenciales al endpoint /api/auth/token y obtiene los tokens JWT
  */
 export async function login(username, password) {
-  const { data } = await api.post("/auth/token", { username, password });
+  const { data } = await api.post("/api/auth/token", { username, password });
   // Guardar el token de acceso para futuras peticiones
   setAccessToken(data.access);
   setRefreshToken(data.refresh || '');
@@ -103,10 +103,10 @@ export async function login(username, password) {
 
 /**
  * Función para registrar nuevos usuarios
- * Envía datos al endpoint /auth/register
+ * Envía datos al endpoint /api/auth/register
  */
 export async function register(username, email, password) {
-  const { data } = await api.post("/auth/register", { username, email, password });
+  const { data } = await api.post("/api/auth/register", { username, email, password });
   return data;
 }
 

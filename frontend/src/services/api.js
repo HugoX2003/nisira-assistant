@@ -9,7 +9,7 @@ const defaultBase = (typeof window !== 'undefined')
   ? `${window.location.protocol}//${window.location.hostname}:8000`
   : 'http://127.0.0.1:8000';
 
-// Priorizar REACT_APP_API_URL que incluye /api
+// Priorizar REACT_APP_API_URL para entornos productivos
 const API_BASE = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE || defaultBase;
 
 console.log('🔧 API_BASE configurado:', API_BASE);
@@ -97,7 +97,7 @@ class TokenManager {
       throw new Error('No hay refresh token disponible');
     }
 
-    this.refreshPromise = api.post('/auth/refresh/', {
+  this.refreshPromise = api.post('/api/auth/refresh/', {
       refresh: this.refreshToken
     });
 
@@ -136,9 +136,9 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const url = (config.url || '').toString();
-    const isAuthEndpoint = url.includes('/auth/token') || 
-                          url.includes('/auth/refresh') || 
-                          url.includes('/auth/register') ||
+  const isAuthEndpoint = url.includes('/api/auth/token') || 
+              url.includes('/api/auth/refresh') || 
+              url.includes('/api/auth/register') ||
                           url.includes('/health');
 
     if (!isAuthEndpoint) {
@@ -233,7 +233,7 @@ function handleApiError(error, operation = 'operación') {
 
 export async function login(username, password) {
   try {
-    const response = await api.post('/auth/login/', { username, password });
+  const response = await api.post('/api/auth/login/', { username, password });
     const { access, refresh, user } = response.data;
     
     tokenManager.setTokens(access, refresh);
@@ -275,7 +275,7 @@ export function clearUserData() {
 
 export async function register(username, email, password) {
   try {
-    const response = await api.post('/auth/register/', {
+  const response = await api.post('/api/auth/register/', {
       username,
       email,
       password

@@ -4,7 +4,7 @@ import "../styles/Login.css";
 
 /**
  * Componente de registro de usuarios
- * Permite crear nuevas cuentas conectando con el endpoint /auth/register del backend
+ * Permite crear nuevas cuentas conectando con el endpoint /api/auth/register del backend
  */
 export default function Register({ onRegister, onBackToLogin }) {
   // Estados del formulario de registro
