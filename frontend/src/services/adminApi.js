@@ -3,7 +3,15 @@
  * Endpoints exclusivos para el usuario admin
  */
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const rawBaseUrl =
+  process.env.REACT_APP_API_URL ||
+  process.env.REACT_APP_API_BASE ||
+  'http://localhost:8000';
+
+const trimmedBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+const API_BASE_URL = trimmedBaseUrl.endsWith('/api')
+  ? trimmedBaseUrl
+  : `${trimmedBaseUrl}/api`;
 
 /**
  * Función auxiliar para hacer peticiones con autenticación
