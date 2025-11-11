@@ -10,10 +10,13 @@ __pycache__/
 .vscode/
 venv/
 node_modules/
-data/processed/
-# Mantener staticfiles fuera del contexto, pero permitir corpus persistente
+
+# ⚠️ CRÍTICO: NO copiar datos locales al contenedor Docker
+# El servidor debe descargar los archivos reales desde Google Drive
+# NO usar archivos locales (que podrían ser punteros Git LFS corruptos)
+data/
+chroma_db/
+
 staticfiles/
-# Permitir incluir la base de datos vectorial existente
-!chroma_db/**
 credentials.json
 token.json
