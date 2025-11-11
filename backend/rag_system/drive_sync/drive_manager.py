@@ -49,59 +49,61 @@ class GoogleDriveManager:
         self._initialize_service()
     
     def _initialize_service(self):
-        """Inicializar el servicio de Google Drive"""
+        """Inicializar el servicio de Google Drive con Service Account"""
         if not GOOGLE_APIS_AVAILABLE:
             logger.error("Google APIs no están disponibles. Instalar google-api-python-client")
             return False
         
         try:
-            creds = None
+            credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
             
-            # Intentar cargar token existente (OAuth de usuario)
-            if os.path.exists(self.token_path):
-                logger.info(f"🔑 Cargando token de usuario desde: {self.token_path}")
-                creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
+            if not os.path.exists(credentials_path):
+                logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
+                return False
             
-            # Si no hay credenciales válidas, autenticar
-            if not creds or not creds.valid:
-                if creds and creds.expired and creds.refresh_token:
-                    logger.info("🔄 Refrescando token expirado...")
-                    creds.refresh(Request())
-                else:
-                    # Intentar autenticación OAuth
-                    credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
-                    
-                    if not os.path.exists(credentials_path):
-                        logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
-                        return False
-                    
-                    # Verificar si es OAuth credentials o Service Account
-                    with open(credentials_path, 'r', encoding='utf-8') as f:
-                        cred_data = json.load(f)
-                    
-                    if 'type' in cred_data and cred_data['type'] == 'service_account':
-                        logger.warning("⚠️ Service Account detectada. Cambiando a OAuth de usuario...")
-                        logger.error("❌ Las Service Accounts no tienen cuota de almacenamiento.")
-                        logger.error("💡 Necesitas usar OAuth credentials (tipo 'Desktop app' o 'Web application')")
-                        logger.error("   1. Ve a Google Cloud Console")
-                        logger.error("   2. Crea OAuth 2.0 credentials (Desktop app)")
-                        logger.error("   3. Descarga el JSON y reemplaza credentials.json")
-                        return False
-                    
-                    # Flujo OAuth
-                    logger.info("🌐 Iniciando flujo de autenticación OAuth...")
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        credentials_path, 
-                        GOOGLE_DRIVE_CONFIG['scopes']
-                    )
-                    creds = flow.run_local_server(port=0)
-                    
-                    # Guardar token para futuros usos
-                    os.makedirs(os.path.dirname(self.token_path), exist_ok=True)
-                    with open(self.token_path, 'w') as token:
-                        token.write(creds.to_json())
-                    
-                    logger.info(f"✅ Token guardado en: {self.token_path}")
+            # Cargar credenciales
+            with open(credentials_path, 'r', encoding='utf-8') as f:
+                cred_data = json.load(f)
+            
+            # Verificar tipo de credenciales
+            if 'type' in cred_data and cred_data['type'] == 'service_account':
+                logger.info("� Usando Service Account credentials")
+                creds = service_account.Credentials.from_service_account_file(
+                    credentials_path,
+                    scopes=GOOGLE_DRIVE_CONFIG['scopes']
+                )
+                logger.info(f"✅ Service Account: {cred_data.get('client_email', 'N/A')}")
+            else:
+                # OAuth credentials (flujo antiguo - deprecated pero mantenido por compatibilidad)
+                logger.info("🔑 Usando OAuth credentials")
+                
+                creds = None
+                
+                # Intentar cargar token existente
+                if os.path.exists(self.token_path):
+                    logger.info(f"🔑 Cargando token desde: {self.token_path}")
+                    creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
+                
+                # Si no hay credenciales válidas, autenticar
+                if not creds or not creds.valid:
+                    if creds and creds.expired and creds.refresh_token:
+                        logger.info("🔄 Refrescando token expirado...")
+                        creds.refresh(Request())
+                    else:
+                        # Flujo OAuth
+                        logger.info("🌐 Iniciando flujo de autenticación OAuth...")
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            credentials_path, 
+                            GOOGLE_DRIVE_CONFIG['scopes']
+                        )
+                        creds = flow.run_local_server(port=0)
+                        
+                        # Guardar token
+                        os.makedirs(os.path.dirname(self.token_path), exist_ok=True)
+                        with open(self.token_path, 'w') as token:
+                            token.write(creds.to_json())
+                        
+                        logger.info(f"✅ Token guardado en: {self.token_path}")
             
             self.credentials = creds
             
