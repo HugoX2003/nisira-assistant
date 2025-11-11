@@ -210,6 +210,80 @@ sudo chown -R 1000:1000 backend/data backend/chroma_db
 - HTTPS recomendado (Certbot + Let's Encrypt)
 - Usuario no-root en contenedores
 
+## 📦 Despliegue con Git LFS (Embeddings Precalculados)
+
+Este proyecto usa **Git LFS** para almacenar embeddings y documentos precalculados (~950 MB), evitando regenerarlos en cada deploy y ahorrando RAM/CPU.
+
+### ⚙️ DigitalOcean App Platform
+
+El archivo `.do/app.yaml` ya incluye los comandos necesarios. Al hacer deploy:
+
+1. DigitalOcean detectará `.do/app.yaml` automáticamente
+2. Instalará Git LFS antes del build
+3. Descargará los embeddings (`backend/chroma_db/`)
+4. Tu app arrancará con los datos listos ✅
+
+**Variables de entorno requeridas:**
+```
+ENABLE_GOOGLE_DRIVE=false
+GOOGLE_API_KEY=tu_api_key
+OPENROUTER_API_KEY=tu_api_key (opcional)
+SECRET_KEY=tu_secret_django
+```
+
+### 🟣 Heroku
+
+Heroku requiere un buildpack adicional para Git LFS. Ver instrucciones detalladas en [HEROKU_LFS_SETUP.md](./HEROKU_LFS_SETUP.md).
+
+**Resumen rápido:**
+
+```bash
+# Añadir buildpack de Git LFS (ANTES del de Python)
+heroku buildpacks:add --index 1 https://github.com/raxod502/heroku-buildpack-git-lfs
+
+# Verificar orden
+heroku buildpacks
+
+# Deploy
+git push heroku main
+```
+
+### 🔍 Verificar que LFS funcionó
+
+Después del deploy, confirma que los embeddings se descargaron:
+
+```bash
+# DigitalOcean
+doctl apps logs <app-id> --type build | grep "LFS"
+
+# Heroku
+heroku run bash
+file /app/backend/chroma_db/chroma.sqlite3  # Debe decir "SQLite 3.x database"
+```
+
+Si dice `ASCII text`, los objetos LFS no se descargaron. Revisa que el buildpack/comando LFS esté configurado.
+
+### 🚨 Importante: Historia Git Reescrita
+
+El proyecto migró a Git LFS, lo que reescribió la historia de `main`. Si tienes un clon local:
+
+```bash
+# Actualizar tu clon local
+git fetch --all
+git reset --hard origin/main
+git lfs install
+git lfs pull
+```
+
+O reclonar:
+
+```bash
+git clone https://github.com/HugoX2003/nisira-assistant.git
+cd nisira-assistant
+git lfs install
+git lfs pull
+```
+
 ## 🤝 Contribuir
 
 1. Fork el proyecto

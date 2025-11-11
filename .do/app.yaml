@@ -23,6 +23,16 @@ services:
     source_dir: /backend
     dockerfile_path: backend/Dockerfile
     
+    # ✨ IMPORTANTE: Comandos para habilitar Git LFS y descargar embeddings
+    build_command: |
+      echo "📦 Instalando Git LFS..."
+      apt-get update && apt-get install -y git-lfs
+      git lfs install
+      echo "⬇️  Descargando objetos LFS (embeddings precalculados)..."
+      git lfs fetch --all
+      git lfs checkout
+      echo "✅ Embeddings descargados, listo para build"
+    
     # Variables de entorno
     envs:
       - key: DJANGO_SETTINGS_MODULE
@@ -34,6 +44,9 @@ services:
       
       - key: DEBUG
         value: "False"
+      
+      - key: ENABLE_GOOGLE_DRIVE
+        value: "false"  # 🔒 Desactiva Drive en producción (evita warnings)
       
       - key: DATABASE_URL
         value: ${db.DATABASE_URL}
