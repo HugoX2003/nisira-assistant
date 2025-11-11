@@ -7,6 +7,7 @@ y búsqueda eficiente de embeddings de documentos.
 """
 
 import os
+import shutil
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 import json
@@ -71,7 +72,31 @@ class ChromaManager:
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error inicializando ChromaDB: {e}")
+            err_text = str(e)
+            logger.error(f"❌ Error inicializando ChromaDB: {err_text}")
+            # Si el archivo es un puntero LFS o está corrupto, limpiar y reintentar una vez
+            if "file is not a database" in err_text.lower():
+                try:
+                    logger.warning("🧹 Limpiando directorio de persistencia de ChromaDB y reintentando...")
+                    for entry in os.listdir(self.persist_directory):
+                        path = os.path.join(self.persist_directory, entry)
+                        if os.path.isdir(path):
+                            shutil.rmtree(path, ignore_errors=True)
+                        else:
+                            try:
+                                os.remove(path)
+                            except FileNotFoundError:
+                                pass
+                    # Reintentar
+                    self.client = chromadb.PersistentClient(path=self.persist_directory)
+                    self.collection = self.client.create_collection(
+                        name=self.collection_name,
+                        metadata={"description": "Documentos RAG del sistema Nisira"}
+                    )
+                    logger.info("✅ ChromaDB reinicializado con colección vacía tras limpiar persistencia")
+                    return True
+                except Exception as e2:
+                    logger.error(f"❌ Reintento fallido de ChromaDB tras limpieza: {e2}")
             return False
     
     def is_ready(self) -> bool:

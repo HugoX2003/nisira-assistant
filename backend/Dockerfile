@@ -33,8 +33,8 @@ COPY . /app/
 # Create necessary directories
 RUN mkdir -p /app/data/documents /app/data/processed /app/chroma_db /app/staticfiles
 
-# Create placeholder credentials.json if not exists (will be overridden by env var)
-RUN touch /app/credentials.json || true
+## Nota: No crear credentials.json vacío. Si no existe, el sistema asumirá que Google Drive no está configurado
+## y evitará logs ruidosos y flujos de autenticación innecesarios en producción.
 
 # Collect static files
 RUN python manage.py collectstatic --noinput --settings=core.production_settings || true

@@ -42,6 +42,7 @@ fi
 
 # Collect static files
 echo "📁 Collecting static files..."
+mkdir -p /app/staticfiles || true
 python manage.py collectstatic --noinput || true
 
 echo "🚀 Launching Gunicorn on port ${PORT}"

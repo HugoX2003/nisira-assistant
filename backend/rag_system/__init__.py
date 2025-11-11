@@ -89,29 +89,31 @@ def initialize_rag_system():
         }
 
 def get_rag_status():
-    """
-    Obtener estado actual del sistema RAG
-    
-    Returns:
-        dict: Estado detallado del sistema
-    """
+    """Obtener estado actual del sistema RAG con respeto al flag de Drive"""
+    config_status = validate_configuration()
     status = {
         "version": __version__,
         "modules_available": RAG_MODULES_AVAILABLE,
-        "configuration": validate_configuration()
+        "configuration": config_status
     }
-    
+
     if RAG_MODULES_AVAILABLE:
         try:
-            # Verificar estado de componentes
+            drive_ready = False
+            if config_status.get("drive_enabled"):
+                try:
+                    drive_ready = GoogleDriveManager().is_authenticated()
+                except Exception:
+                    drive_ready = False
+
             status["components"] = {
-                "google_drive": GoogleDriveManager().is_authenticated(),
+                "google_drive": drive_ready,
                 "embeddings": EmbeddingManager().is_ready(),
                 "vector_store": ChromaManager().is_ready(),
             }
         except Exception as e:
             status["components_error"] = str(e)
-    
+
     return status
 
 # Funciones de conveniencia para Django

@@ -44,12 +44,13 @@ GOOGLE_DRIVE_CONFIG = {
     "scopes": [
         "https://www.googleapis.com/auth/drive",  # Acceso completo a Drive (necesario para ver archivos existentes)
     ],
-    "sync_folder_name": "Prueba RAG",  # Carpeta en Drive del administrador
+    "sync_folder_name": os.getenv("GOOGLE_DRIVE_FOLDER_NAME", "Prueba RAG"),  # Permitir override
     "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8"),  # ID de la carpeta en Drive
     "download_path": str(DOCUMENTS_DIR),  # Directorio local para descargas
     "supported_formats": [".pdf", ".txt", ".docx", ".doc", ".pptx", ".xlsx"],  # Formatos soportados
-    "sync_interval": 300,  # 5 minutos
+    "sync_interval": int(os.getenv("GOOGLE_DRIVE_SYNC_INTERVAL", "300")),  # Override via env
     "max_file_size": 50 * 1024 * 1024,  # 50MB máximo
+    "enabled": os.getenv("ENABLE_GOOGLE_DRIVE", "false").lower() == "true",  # Nuevo flag para desactivar Drive en prod
 }
 
 # ===== PROCESAMIENTO DE DOCUMENTOS =====
@@ -228,26 +229,27 @@ def get_api_key(api_name: str) -> Optional[str]:
     return None
 
 def validate_configuration() -> Dict[str, bool]:
-    """Validar que la configuración esté completa"""
+    """Validar que la configuración esté completa. Incluye flag para Drive"""
     status = {
         "directories": True,
         "google_credentials": False,
         "api_keys": False,
+        "drive_enabled": GOOGLE_DRIVE_CONFIG.get("enabled", False),
     }
-    
-    # Validar directorios
+
     try:
         ensure_directories()
         status["directories"] = True
     except Exception:
         status["directories"] = False
-    
-    # Validar credenciales de Google
-    status["google_credentials"] = GOOGLE_DRIVE_CONFIG["credentials_file"].exists()
-    
-    # Validar API keys
+
+    # Credenciales solo cuentan si Drive está habilitado
+    if status["drive_enabled"]:
+        status["google_credentials"] = GOOGLE_DRIVE_CONFIG["credentials_file"].exists()
+    else:
+        status["google_credentials"] = False
+
     status["api_keys"] = get_api_key("gemini") is not None
-    
     return status
 
 # ===== CONFIGURACIÓN DJANGO INTEGRATION =====
