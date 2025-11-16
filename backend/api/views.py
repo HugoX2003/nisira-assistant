@@ -1328,6 +1328,7 @@ def register_user(request):
         
         # Validación de username vacío
         if not username:
+            logger.warning(f"❌ Registro fallido: username vacío")
             return Response(
                 {'error': 'El nombre de usuario es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1335,12 +1336,14 @@ def register_user(request):
         
         # Validar longitud de username (3-20 caracteres)
         if len(username) < 3:
+            logger.warning(f"❌ Registro fallido: username muy corto ({username})")
             return Response(
                 {'error': 'El nombre de usuario debe tener al menos 3 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if len(username) > 20:
+            logger.warning(f"❌ Registro fallido: username muy largo ({username})")
             return Response(
                 {'error': 'El nombre de usuario no puede tener más de 20 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1349,6 +1352,7 @@ def register_user(request):
         # Validar caracteres en username (solo letras, números y guion bajo)
         import re
         if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            logger.warning(f"❌ Registro fallido: username con caracteres inválidos ({username})")
             return Response(
                 {'error': 'El nombre de usuario solo puede contener letras, números y guion bajo (_)'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1356,6 +1360,7 @@ def register_user(request):
         
         # Validar que empiece con letra
         if not username[0].isalpha():
+            logger.warning(f"❌ Registro fallido: username no empieza con letra ({username})")
             return Response(
                 {'error': 'El nombre de usuario debe comenzar con una letra'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1363,6 +1368,7 @@ def register_user(request):
             
         # Validación de email vacío
         if not email:
+            logger.warning(f"❌ Registro fallido: email vacío (username: {username})")
             return Response(
                 {'error': 'El email es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1371,6 +1377,7 @@ def register_user(request):
         # Validar formato de email
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
         if not re.match(email_pattern, email):
+            logger.warning(f"❌ Registro fallido: formato email inválido ({email})")
             return Response(
                 {'error': 'El formato del email no es válido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1378,6 +1385,7 @@ def register_user(request):
             
         # Validación de contraseña vacía
         if not password:
+            logger.warning(f"❌ Registro fallido: contraseña vacía (username: {username})")
             return Response(
                 {'error': 'La contraseña es requerida'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1385,6 +1393,7 @@ def register_user(request):
             
         # Validar longitud mínima de contraseña
         if len(password) < 6:
+            logger.warning(f"❌ Registro fallido: contraseña muy corta (username: {username})")
             return Response(
                 {'error': 'La contraseña debe tener al menos 6 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1392,6 +1401,7 @@ def register_user(request):
         
         # Validar que contenga al menos una letra y un número
         if not re.search(r'[a-zA-Z]', password) or not re.search(r'[0-9]', password):
+            logger.warning(f"❌ Registro fallido: contraseña sin letra/número (username: {username})")
             return Response(
                 {'error': 'La contraseña debe contener al menos una letra y un número'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1399,12 +1409,14 @@ def register_user(request):
         
         # Verificar si el usuario ya existe
         if User.objects.filter(username=username).exists():
+            logger.warning(f"❌ Registro fallido: username ya existe ({username})")
             return Response(
                 {'error': 'El nombre de usuario ya está en uso'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         if User.objects.filter(email=email).exists():
+            logger.warning(f"❌ Registro fallido: email ya registrado ({email})")
             return Response(
                 {'error': 'El email ya está registrado'},
                 status=status.HTTP_400_BAD_REQUEST

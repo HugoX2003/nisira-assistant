@@ -73,6 +73,27 @@ class PostgresVectorStore:
                     use_vector = False
                     self.use_vector_type = False
                 
+                # Verificar si la tabla existe y su tipo de columna
+                cur.execute("""
+                    SELECT column_name, data_type, udt_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'rag_embeddings' 
+                    AND column_name = 'embedding_vector'
+                """)
+                existing_column = cur.fetchone()
+                
+                # Si la tabla existe pero con tipo incorrecto, migrar
+                if existing_column:
+                    column_type = existing_column[2]  # udt_name
+                    
+                    if use_vector and column_type != 'vector':
+                        logger.warning(f"⚠️ Columna embedding_vector es tipo '{column_type}', migrando a vector...")
+                        
+                        # Renombrar tabla antigua
+                        cur.execute("ALTER TABLE IF EXISTS rag_embeddings RENAME TO rag_embeddings_old;")
+                        self.conn.commit()
+                        logger.info("✅ Tabla antigua respaldada como rag_embeddings_old")
+                
                 # Crear tabla
                 if use_vector:
                     # Con pgvector
@@ -88,6 +109,44 @@ class PostgresVectorStore:
                     """)
                     self.conn.commit()
                     logger.info("✅ Tabla rag_embeddings creada con tipo vector")
+                    
+                    # Migrar datos de tabla antigua si existe
+                    cur.execute("""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_name = 'rag_embeddings_old'
+                        )
+                    """)
+                    if cur.fetchone()[0]:
+                        logger.info("🔄 Migrando datos de rag_embeddings_old...")
+                        try:
+                            # Migrar datos - convertir TEXT/JSONB a vector
+                            cur.execute(f"""
+                                INSERT INTO rag_embeddings (id, chunk_text, embedding_vector, metadata, created_at, updated_at)
+                                SELECT 
+                                    id,
+                                    chunk_text,
+                                    CASE 
+                                        WHEN embedding_vector::text LIKE '[%' THEN embedding_vector::text::vector({self.embedding_dim})
+                                        ELSE NULL
+                                    END as embedding_vector,
+                                    metadata,
+                                    created_at,
+                                    updated_at
+                                FROM rag_embeddings_old
+                                WHERE embedding_vector IS NOT NULL
+                            """)
+                            migrated = cur.rowcount
+                            self.conn.commit()
+                            logger.info(f"✅ {migrated} embeddings migrados exitosamente")
+                            
+                            # Eliminar tabla antigua
+                            cur.execute("DROP TABLE rag_embeddings_old;")
+                            self.conn.commit()
+                            logger.info("✅ Tabla antigua eliminada")
+                        except Exception as migrate_error:
+                            logger.error(f"❌ Error migrando datos: {migrate_error}")
+                            self.conn.rollback()
                     
                     # Crear índice IVFFlat (solo si hay suficientes datos)
                     try:
