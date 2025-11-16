@@ -733,19 +733,23 @@ def generate_embeddings(request):
         logger.info(f"🚀 generate_embeddings - Backend configurado: {vector_backend}")
         logger.info(f"🚀 DATABASE_URL presente: {bool(database_url)}")
         
-        # Obtener documentos del directorio
-        documents_path = os.path.join(settings.BASE_DIR, 'data', 'documents')
+        # Usar DocumentLoader para obtener archivos (PostgreSQL o filesystem)
+        from rag_system.storage import DocumentLoader
+        doc_loader = DocumentLoader()
         
-        if not os.path.exists(documents_path):
+        logger.info(f"📁 Almacenamiento de archivos: {doc_loader.get_storage_type()}")
+        
+        # Obtener lista de archivos disponibles
+        available_files = doc_loader.list_available_files()
+        
+        if not available_files:
             return Response(
-                {"error": "Directorio de documentos no existe"},
+                {"error": "No hay archivos disponibles para procesar"},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Listar archivos
-        files = os.listdir(documents_path)
-        pdf_files = [f for f in files if f.lower().endswith('.pdf')]
-        txt_files = [f for f in files if f.lower().endswith(('.txt', '.md'))]
+        pdf_files = [f for f in available_files if f['file_name'].lower().endswith('.pdf')]
+        txt_files = [f for f in available_files if f['file_name'].lower().endswith(('.txt', '.md'))]
         
         processed_files = []
         skipped_files = []
@@ -780,104 +784,106 @@ def generate_embeddings(request):
         _save_progress(progress)
         
         # Procesar PDFs
-        for idx, pdf_file in enumerate(pdf_files, 1):
+        for idx, file_info in enumerate(pdf_files, 1):
             try:
+                pdf_file = file_info['file_name']
                 progress["current"] = idx
                 progress["current_file"] = pdf_file
                 progress["logs"].append(f"📄 [{idx}/{total_files}] Procesando: {pdf_file}")
                 _save_progress(progress)
                 
                 logger.info(f"📄 [{idx}/{len(pdf_files)}] Procesando PDF: {pdf_file}")
-                file_path = os.path.join(documents_path, pdf_file)
                 
-                # Calcular hash del archivo
-                file_hash = calculate_file_hash(file_path)
-                
-                # Verificar si ya fue procesado (solo si es ChromaDB)
-                if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, pdf_file):
-                    logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {pdf_file}")
-                    progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
-                    _save_progress(progress)
-                    skipped_files.append(pdf_file)
-                    continue
-                
-                # Procesar PDF
-                logger.info(f"   🔍 Extrayendo texto del PDF...")
-                result = pdf_processor.process_pdf(file_path)
-                
-                if result.get('success') and result.get('chunks'):
-                    chunks = result['chunks']
-                    logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
-                    # Preparar textos y metadatas
-                    texts = []
-                    metadatas = []
+                # Usar DocumentLoader para obtener ruta del archivo
+                with doc_loader.get_file_path(pdf_file, file_info.get('id')) as file_path:
+                    # Calcular hash del archivo
+                    file_hash = calculate_file_hash(file_path)
                     
-                    for chunk in chunks:
-                        # Metadata base con hash para deduplicación
-                        base_metadata = {
-                            "source": pdf_file, 
-                            "type": "pdf", 
-                            "file_name": pdf_file,
-                            "file_hash": file_hash  # Agregar hash para identificación única
-                        }
+                    # Verificar si ya fue procesado (solo si es ChromaDB)
+                    if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, pdf_file):
+                        logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {pdf_file}")
+                        progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
+                        _save_progress(progress)
+                        skipped_files.append(pdf_file)
+                        continue
+                    
+                    # Procesar PDF
+                    logger.info(f"   🔍 Extrayendo texto del PDF...")
+                    result = pdf_processor.process_pdf(file_path)
+                
+                    if result.get('success') and result.get('chunks'):
+                        chunks = result['chunks']
+                        logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
+                        # Preparar textos y metadatas
+                        texts = []
+                        metadatas = []
                         
-                        # Si chunk es un string, usarlo directamente
-                        if isinstance(chunk, str):
-                            texts.append(chunk)
-                            metadatas.append(base_metadata)
-                        # Si chunk es un dict, extraer texto y metadata
-                        elif isinstance(chunk, dict):
-                            texts.append(chunk.get('text', str(chunk)))
-                            meta = chunk.get('metadata', {})
-                            if not isinstance(meta, dict):
-                                meta = {}
-                            # Combinar metadata existente con base_metadata
-                            meta.update(base_metadata)
-                            metadatas.append(meta)
+                        for chunk in chunks:
+                            # Metadata base con hash para deduplicación
+                            base_metadata = {
+                                "source": pdf_file, 
+                                "type": "pdf", 
+                                "file_name": pdf_file,
+                                "file_hash": file_hash  # Agregar hash para identificación única
+                            }
+                            
+                            # Si chunk es un string, usarlo directamente
+                            if isinstance(chunk, str):
+                                texts.append(chunk)
+                                metadatas.append(base_metadata)
+                            # Si chunk es un dict, extraer texto y metadata
+                            elif isinstance(chunk, dict):
+                                texts.append(chunk.get('text', str(chunk)))
+                                meta = chunk.get('metadata', {})
+                                if not isinstance(meta, dict):
+                                    meta = {}
+                                # Combinar metadata existente con base_metadata
+                                meta.update(base_metadata)
+                                metadatas.append(meta)
+                            else:
+                                # Convertir a string si es otro tipo
+                                texts.append(str(chunk))
+                                metadatas.append(base_metadata)
+                        
+                        # Generar embeddings
+                        logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
+                        embeddings = embedding_manager.create_embeddings_batch(texts)
+                        logger.info(f"   ✅ Embeddings generados exitosamente")
+                        
+                        # Preparar documentos para ChromaDB
+                        logger.info(f"   💾 Guardando en ChromaDB...")
+                        documents = []
+                        for text, metadata in zip(texts, metadatas):
+                            documents.append({
+                                'text': text,
+                                'metadata': metadata
+                            })
+                        
+                        # Agregar al vector store (ChromaDB o PostgreSQL según configuración)
+                        logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
+                        logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                        storage_result = vector_store.add_documents(
+                            documents=documents,
+                            embeddings=embeddings
+                        )
+                        logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
+                        
+                        if not storage_result:
+                            logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
                         else:
-                            # Convertir a string si es otro tipo
-                            texts.append(str(chunk))
-                            metadatas.append(base_metadata)
-                    
-                    # Generar embeddings
-                    logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
-                    embeddings = embedding_manager.create_embeddings_batch(texts)
-                    logger.info(f"   ✅ Embeddings generados exitosamente")
-                    
-                    # Preparar documentos para ChromaDB
-                    logger.info(f"   💾 Guardando en ChromaDB...")
-                    documents = []
-                    for text, metadata in zip(texts, metadatas):
-                        documents.append({
-                            'text': text,
-                            'metadata': metadata
+                            logger.info(f"   ✅ PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
+                        progress["processed"] += 1
+                        progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
+                        _save_progress(progress)
+                        
+                        processed_files.append({
+                            "name": pdf_file,
+                            "chunks": len(chunks),
+                            "type": "pdf"
                         })
-                    
-                    # Agregar al vector store (ChromaDB o PostgreSQL según configuración)
-                    logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
-                    logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
-                    storage_result = vector_store.add_documents(
-                        documents=documents,
-                        embeddings=embeddings
-                    )
-                    logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
-                    
-                    if not storage_result:
-                        logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
                     else:
-                        logger.info(f"   ✅ PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
-                    progress["processed"] += 1
-                    progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
-                    _save_progress(progress)
-                    
-                    processed_files.append({
-                        "name": pdf_file,
-                        "chunks": len(chunks),
-                        "type": "pdf"
-                    })
-                else:
-                    logger.warning(f"   ⚠️  No se extrajeron chunks del PDF '{pdf_file}'")
-                    skipped_files.append(pdf_file)
+                        logger.warning(f"   ⚠️  No se extrajeron chunks del PDF '{pdf_file}'")
+                        skipped_files.append(pdf_file)
                     
             except Exception as e:
                 logger.error(f"   ❌ ERROR procesando {pdf_file}: {e}")
@@ -889,8 +895,9 @@ def generate_embeddings(request):
         logger.info(f"📝 PDFs completados. Procesando archivos de texto...")
         
         # Procesar archivos de texto
-        for idx, txt_file in enumerate(txt_files, 1):
+        for idx, file_info in enumerate(txt_files, 1):
             try:
+                txt_file = file_info['file_name']
                 current_file_idx = len(pdf_files) + idx
                 progress["current"] = current_file_idx
                 progress["current_file"] = txt_file
@@ -898,94 +905,95 @@ def generate_embeddings(request):
                 _save_progress(progress)
                 
                 logger.info(f"📝 [{idx}/{len(txt_files)}] Procesando TXT: {txt_file}")
-                file_path = os.path.join(documents_path, txt_file)
                 
-                # Calcular hash del archivo
-                file_hash = calculate_file_hash(file_path)
-                
-                # Verificar si ya fue procesado (solo si es ChromaDB)
-                if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, txt_file):
-                    logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {txt_file}")
-                    progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
-                    _save_progress(progress)
-                    skipped_files.append(txt_file)
-                    continue
-                
-                # Procesar texto
-                logger.info(f"   🔍 Extrayendo texto...")
-                chunks = text_processor.process_text_file(file_path)
-                
-                if chunks:
-                    logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
-                    # Preparar textos y metadatas
-                    texts = []
-                    metadatas = []
+                # Usar DocumentLoader para obtener ruta del archivo
+                with doc_loader.get_file_path(txt_file, file_info.get('id')) as file_path:
+                    # Calcular hash del archivo
+                    file_hash = calculate_file_hash(file_path)
                     
-                    for chunk in chunks:
-                        # Metadata base con hash para deduplicación
-                        base_metadata = {
-                            "source": txt_file, 
-                            "type": "text", 
-                            "file_name": txt_file,
-                            "file_hash": file_hash  # Agregar hash para identificación única
-                        }
+                    # Verificar si ya fue procesado (solo si es ChromaDB)
+                    if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, txt_file):
+                        logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {txt_file}")
+                        progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
+                        _save_progress(progress)
+                        skipped_files.append(txt_file)
+                        continue
+                    
+                    # Procesar texto
+                    logger.info(f"   🔍 Extrayendo texto...")
+                    chunks = text_processor.process_text_file(file_path)
+                    
+                    if chunks:
+                        logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
+                        # Preparar textos y metadatas
+                        texts = []
+                        metadatas = []
                         
-                        # Si chunk es un string, usarlo directamente
-                        if isinstance(chunk, str):
-                            texts.append(chunk)
-                            metadatas.append(base_metadata)
-                        # Si chunk es un dict, extraer texto y metadata
-                        elif isinstance(chunk, dict):
-                            texts.append(chunk.get('text', str(chunk)))
-                            meta = chunk.get('metadata', {})
-                            if not isinstance(meta, dict):
-                                meta = {}
-                            # Combinar metadata existente con base_metadata
-                            meta.update(base_metadata)
-                            metadatas.append(meta)
+                        for chunk in chunks:
+                            # Metadata base con hash para deduplicación
+                            base_metadata = {
+                                "source": txt_file, 
+                                "type": "text", 
+                                "file_name": txt_file,
+                                "file_hash": file_hash  # Agregar hash para identificación única
+                            }
+                            
+                            # Si chunk es un string, usarlo directamente
+                            if isinstance(chunk, str):
+                                texts.append(chunk)
+                                metadatas.append(base_metadata)
+                            # Si chunk es un dict, extraer texto y metadata
+                            elif isinstance(chunk, dict):
+                                texts.append(chunk.get('text', str(chunk)))
+                                meta = chunk.get('metadata', {})
+                                if not isinstance(meta, dict):
+                                    meta = {}
+                                # Combinar metadata existente con base_metadata
+                                meta.update(base_metadata)
+                                metadatas.append(meta)
+                            else:
+                                # Convertir a string si es otro tipo
+                                texts.append(str(chunk))
+                                metadatas.append(base_metadata)
+                        
+                        # Generar embeddings
+                        logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
+                        embeddings = embedding_manager.create_embeddings_batch(texts)
+                        logger.info(f"   ✅ Embeddings generados exitosamente")
+                        
+                        # Preparar documentos para ChromaDB
+                        logger.info(f"   💾 Guardando en ChromaDB...")
+                        documents = []
+                        for text, metadata in zip(texts, metadatas):
+                            documents.append({
+                                'text': text,
+                                'metadata': metadata
+                            })
+                        
+                        logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
+                        logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                        storage_result = vector_store.add_documents(
+                            documents=documents,
+                            embeddings=embeddings
+                        )
+                        logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
+                        
+                        if not storage_result:
+                            logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{txt_file}'")
                         else:
-                            # Convertir a string si es otro tipo
-                            texts.append(str(chunk))
-                            metadatas.append(base_metadata)
-                    
-                    # Generar embeddings
-                    logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
-                    embeddings = embedding_manager.create_embeddings_batch(texts)
-                    logger.info(f"   ✅ Embeddings generados exitosamente")
-                    
-                    # Preparar documentos para ChromaDB
-                    logger.info(f"   💾 Guardando en ChromaDB...")
-                    documents = []
-                    for text, metadata in zip(texts, metadatas):
-                        documents.append({
-                            'text': text,
-                            'metadata': metadata
+                            logger.info(f"   ✅ TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
+                        progress["processed"] += 1
+                        progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
+                        _save_progress(progress)
+                        
+                        processed_files.append({
+                            "name": txt_file,
+                            "chunks": len(chunks),
+                            "type": "text"
                         })
-                    
-                    logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
-                    logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
-                    storage_result = vector_store.add_documents(
-                        documents=documents,
-                        embeddings=embeddings
-                    )
-                    logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
-                    
-                    if not storage_result:
-                        logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{txt_file}'")
                     else:
-                        logger.info(f"   ✅ TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
-                    progress["processed"] += 1
-                    progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
-                    _save_progress(progress)
-                    
-                    processed_files.append({
-                        "name": txt_file,
-                        "chunks": len(chunks),
-                        "type": "text"
-                    })
-                else:
-                    logger.warning(f"   ⚠️  No se extrajeron chunks del TXT '{txt_file}'")
-                    skipped_files.append(txt_file)
+                        logger.warning(f"   ⚠️  No se extrajeron chunks del TXT '{txt_file}'")
+                        skipped_files.append(txt_file)
                     
             except Exception as e:
                 logger.error(f"   ❌ ERROR procesando {txt_file}: {e}")

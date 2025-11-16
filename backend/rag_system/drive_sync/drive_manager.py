@@ -26,6 +26,7 @@ except ImportError:
     GOOGLE_APIS_AVAILABLE = False
 
 from ..config import GOOGLE_DRIVE_CONFIG
+from ..storage.postgres_file_store import PostgresFileStore
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,24 @@ class GoogleDriveManager:
         self.supported_formats = GOOGLE_DRIVE_CONFIG['supported_formats']
         self.token_path = str(GOOGLE_DRIVE_CONFIG.get('token_file', 'data/token.json'))
         
-        # Crear directorio de descarga si no existe
-        os.makedirs(self.download_path, exist_ok=True)
+        # Inicializar PostgreSQL File Store para almacenamiento persistente
+        database_url = os.getenv('DATABASE_URL')
+        self.use_postgres = bool(database_url)
+        
+        if self.use_postgres:
+            self.file_store = PostgresFileStore(database_url)
+            if self.file_store.is_ready():
+                logger.info("✅ Usando PostgreSQL para almacenamiento de archivos (PERSISTENTE)")
+            else:
+                logger.warning("⚠️  PostgreSQL no disponible, usando filesystem (EFÍMERO)")
+                self.use_postgres = False
+        else:
+            logger.warning("⚠️  DATABASE_URL no configurado, usando filesystem (EFÍMERO)")
+            self.use_postgres = False
+        
+        # Crear directorio de descarga temporal si no se usa PostgreSQL
+        if not self.use_postgres:
+            os.makedirs(self.download_path, exist_ok=True)
         
         # Inicializar servicio
         self._initialize_service()
@@ -195,16 +212,17 @@ class GoogleDriveManager:
             logger.error(f"❌ Error inesperado: {e}")
             return []
     
-    def download_file(self, file_id: str, file_name: str) -> Optional[str]:
+    def download_file(self, file_id: str, file_name: str, file_modified_time: str = None) -> Optional[str]:
         """
-        Descargar un archivo de Google Drive
+        Descargar un archivo de Google Drive y guardarlo en PostgreSQL o filesystem
         
         Args:
             file_id: ID del archivo en Google Drive
             file_name: Nombre del archivo
+            file_modified_time: Fecha de modificación del archivo en Drive
         
         Returns:
-            Ruta local del archivo descargado o None si falló
+            ID del archivo guardado (UUID para PostgreSQL, path para filesystem) o None si falló
         """
         if not self.service:
             logger.error("Servicio de Google Drive no inicializado")
@@ -215,32 +233,70 @@ class GoogleDriveManager:
             file_metadata = self.service.files().get(fileId=file_id).execute()
             mime_type = file_metadata.get('mimeType', '')
             
-            # Ruta de destino
-            local_path = os.path.join(self.download_path, file_name)
-            
-            # Descargar archivo
+            # Descargar a memoria
             if 'google-apps' in mime_type:
                 # Archivo de Google Workspace - exportar como PDF
                 request = self.service.files().export_media(
                     fileId=file_id,
                     mimeType='application/pdf'
                 )
-                local_path = local_path.replace(os.path.splitext(local_path)[1], '.pdf')
+                file_name = os.path.splitext(file_name)[0] + '.pdf'
+                mime_type = 'application/pdf'
             else:
                 # Archivo normal
                 request = self.service.files().get_media(fileId=file_id)
             
-            # Descargar contenido
-            with io.FileIO(local_path, 'wb') as fh:
-                downloader = MediaIoBaseDownload(fh, request)
-                done = False
-                while done is False:
-                    status, done = downloader.next_chunk()
-                    if status:
-                        logger.debug(f"Descarga {int(status.progress() * 100)}% - {file_name}")
+            # Descargar contenido a memoria
+            file_content = io.BytesIO()
+            downloader = MediaIoBaseDownload(file_content, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                if status:
+                    logger.debug(f"Descarga {int(status.progress() * 100)}% - {file_name}")
             
-            logger.info(f"✅ Archivo descargado: {local_path}")
-            return local_path
+            # Obtener bytes
+            file_bytes = file_content.getvalue()
+            
+            # Guardar según configuración
+            if self.use_postgres:
+                # Guardar en PostgreSQL
+                modified_time = None
+                if file_modified_time:
+                    try:
+                        modified_time = datetime.fromisoformat(
+                            file_modified_time.replace('Z', '+00:00')
+                        )
+                    except:
+                        pass
+                
+                saved_id = self.file_store.save_file(
+                    file_name=file_name,
+                    file_content=file_bytes,
+                    mime_type=mime_type,
+                    drive_file_id=file_id,
+                    drive_modified_time=modified_time,
+                    metadata={
+                        'source': 'google_drive',
+                        'original_mime': file_metadata.get('mimeType', ''),
+                        'size': len(file_bytes)
+                    }
+                )
+                
+                if saved_id:
+                    logger.info(f"💾 Archivo guardado en PostgreSQL: {file_name} (ID: {saved_id})")
+                    return saved_id
+                else:
+                    logger.error(f"❌ Error guardando en PostgreSQL: {file_name}")
+                    return None
+            else:
+                # Guardar en filesystem (fallback)
+                local_path = os.path.join(self.download_path, file_name)
+                with open(local_path, 'wb') as f:
+                    f.write(file_bytes)
+                
+                logger.info(f"📁 Archivo guardado en filesystem: {local_path}")
+                return local_path
             
         except HttpError as e:
             logger.error(f"❌ Error descargando {file_name}: {e}")
@@ -288,6 +344,7 @@ class GoogleDriveManager:
             }
         
         logger.info("🔄 Iniciando sincronización de documentos desde Google Drive")
+        logger.info(f"💾 Modo de almacenamiento: {'PostgreSQL (persistente)' if self.use_postgres else 'Filesystem (efímero)'}")
         
         try:
             # Listar archivos en Drive
@@ -300,9 +357,6 @@ class GoogleDriveManager:
                     "files_processed": 0
                 }
             
-            # Directorio local para comparar
-            local_files = os.listdir(self.download_path) if os.path.exists(self.download_path) else []
-            
             downloaded_files = []
             skipped_files = []
             errors = []
@@ -312,35 +366,56 @@ class GoogleDriveManager:
                 file_name = file_info['name']
                 modified_time = file_info.get('modifiedTime')
                 
-                # Verificar si ya existe localmente
-                local_path = os.path.join(self.download_path, file_name)
-                
                 should_download = True
                 
-                if os.path.exists(local_path):
-                    # Comparar fechas de modificación
-                    local_mtime = datetime.fromtimestamp(
-                        os.path.getmtime(local_path), 
-                        tz=timezone.utc
-                    )
+                # Verificar si ya existe
+                if self.use_postgres:
+                    # Verificar en PostgreSQL
+                    if self.file_store.file_exists(file_id):
+                        # Verificar si necesita actualización
+                        stored_mtime = self.file_store.get_file_modified_time(file_id)
+                        
+                        if stored_mtime and modified_time:
+                            drive_mtime = datetime.fromisoformat(
+                                modified_time.replace('Z', '+00:00')
+                            )
+                            
+                            # Comparar sin zona horaria para evitar problemas
+                            stored_naive = stored_mtime.replace(tzinfo=None) if stored_mtime.tzinfo else stored_mtime
+                            drive_naive = drive_mtime.replace(tzinfo=None) if drive_mtime.tzinfo else drive_mtime
+                            
+                            if stored_naive >= drive_naive:
+                                should_download = False
+                                skipped_files.append(file_name)
+                else:
+                    # Verificar en filesystem
+                    local_path = os.path.join(self.download_path, file_name)
                     
-                    if modified_time:
-                        drive_mtime = datetime.fromisoformat(
-                            modified_time.replace('Z', '+00:00')
+                    if os.path.exists(local_path):
+                        # Comparar fechas de modificación
+                        local_mtime = datetime.fromtimestamp(
+                            os.path.getmtime(local_path), 
+                            tz=timezone.utc
                         )
                         
-                        if local_mtime >= drive_mtime:
-                            should_download = False
-                            skipped_files.append(file_name)
+                        if modified_time:
+                            drive_mtime = datetime.fromisoformat(
+                                modified_time.replace('Z', '+00:00')
+                            )
+                            
+                            if local_mtime >= drive_mtime:
+                                should_download = False
+                                skipped_files.append(file_name)
                 
                 if should_download:
-                    downloaded_path = self.download_file(file_id, file_name)
-                    if downloaded_path:
+                    downloaded_id = self.download_file(file_id, file_name, modified_time)
+                    if downloaded_id:
                         downloaded_files.append({
                             "name": file_name,
-                            "path": downloaded_path,
                             "id": file_id,
-                            "modified_time": modified_time
+                            "stored_id": downloaded_id,
+                            "modified_time": modified_time,
+                            "storage": "postgres" if self.use_postgres else "filesystem"
                         })
                     else:
                         errors.append(f"Error descargando {file_name}")
@@ -351,6 +426,7 @@ class GoogleDriveManager:
                 "downloaded": len(downloaded_files),
                 "skipped": len(skipped_files),
                 "errors": len(errors),
+                "storage_type": "PostgreSQL" if self.use_postgres else "Filesystem",
                 "downloaded_files": downloaded_files,
                 "skipped_files": skipped_files
             }
@@ -481,15 +557,23 @@ class GoogleDriveManager:
             "authenticated": self.is_authenticated(),
             "folder_id": self.folder_id,
             "download_path": self.download_path,
-            "supported_formats": self.supported_formats
+            "supported_formats": self.supported_formats,
+            "storage_type": "PostgreSQL" if self.use_postgres else "Filesystem"
         }
         
-        if os.path.exists(self.download_path):
-            local_files = os.listdir(self.download_path)
-            status["local_files_count"] = len(local_files)
-            status["local_files"] = local_files
+        if self.use_postgres:
+            # Estadísticas de PostgreSQL
+            stats = self.file_store.get_stats()
+            status["storage_stats"] = stats
+            status["files_count"] = stats.get("total_files", 0)
         else:
-            status["local_files_count"] = 0
-            status["local_files"] = []
+            # Estadísticas de filesystem
+            if os.path.exists(self.download_path):
+                local_files = os.listdir(self.download_path)
+                status["local_files_count"] = len(local_files)
+                status["local_files"] = local_files
+            else:
+                status["local_files_count"] = 0
+                status["local_files"] = []
         
         return status
