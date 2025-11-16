@@ -139,6 +139,7 @@ class PostgresVectorStore:
         try:
             with self.conn.cursor() as cur:
                 # Preparar datos para inserción batch
+                now = datetime.now()
                 values = []
                 for doc, embedding in zip(documents, embeddings):
                     if embedding is None:
@@ -148,7 +149,7 @@ class PostgresVectorStore:
                     chunk_text = doc['text']
                     metadata = doc.get('metadata', {})
                     metadata['doc_id'] = doc_id
-                    metadata['added_at'] = datetime.now().isoformat()
+                    metadata['added_at'] = now.isoformat()
                     
                     # Convertir embedding a formato JSON
                     embedding_json = json.dumps(embedding)
@@ -157,7 +158,9 @@ class PostgresVectorStore:
                         doc_id,
                         chunk_text,
                         embedding_json,
-                        Json(metadata)
+                        Json(metadata),
+                        now,
+                        now
                     ))
                 
                 if not values:
@@ -173,11 +176,11 @@ class PostgresVectorStore:
                     cur,
                     """
                     INSERT INTO rag_embeddings 
-                    (id, chunk_text, embedding_vector, metadata)
+                    (id, chunk_text, embedding_vector, metadata, created_at, updated_at)
                     VALUES %s
                     """,
                     values,
-                    template="(%s, %s, %s::jsonb, %s)"
+                    template="(%s, %s, %s::jsonb, %s, %s, %s)"
                 )
                 
                 logger.info("🔵 INSERT completado, ejecutando COMMIT...")
