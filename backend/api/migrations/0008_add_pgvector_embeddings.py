@@ -7,11 +7,11 @@ import django.contrib.postgres.fields
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('api', '0002_add_sources_to_message'),
+        ('api', '0007_add_wer_score'),
     ]
 
     operations = [
-        # Habilitar extensión pgvector
+        # Habilitar extensión pgvector (opcional, funciona sin ella)
         migrations.RunSQL(
             sql='CREATE EXTENSION IF NOT EXISTS vector;',
             reverse_sql='DROP EXTENSION IF EXISTS vector;'
