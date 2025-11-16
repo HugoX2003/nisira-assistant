@@ -41,12 +41,45 @@ class PostgresFileStore:
     def _initialize_connection(self):
         """Conectar a PostgreSQL"""
         try:
-            self.conn = psycopg2.connect(self.database_url)
+            self.conn = psycopg2.connect(
+                self.database_url,
+                connect_timeout=10,
+                keepalives=1,
+                keepalives_idle=30,
+                keepalives_interval=10,
+                keepalives_count=5
+            )
             self.conn.autocommit = False
             logger.info("✅ Conectado a PostgreSQL para almacenamiento de archivos")
         except Exception as e:
             logger.error(f"❌ Error conectando a PostgreSQL: {e}")
             self.conn = None
+    
+    def _ensure_connection(self):
+        """Verificar y reconectar si es necesario"""
+        try:
+            if self.conn is None or self.conn.closed:
+                logger.warning("⚠️ Conexión cerrada, reconectando...")
+                self._initialize_connection()
+                if self.conn and not self.conn.closed:
+                    self._ensure_table_exists()
+                return self.conn is not None and not self.conn.closed
+            
+            # Verificar que la conexión esté viva
+            with self.conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            return True
+        except Exception as e:
+            logger.warning(f"⚠️ Conexión perdida, reconectando: {e}")
+            try:
+                if self.conn:
+                    self.conn.close()
+            except:
+                pass
+            self._initialize_connection()
+            if self.conn and not self.conn.closed:
+                self._ensure_table_exists()
+            return self.conn is not None and not self.conn.closed
     
     def _ensure_table_exists(self):
         """Crear tabla de archivos si no existe"""
@@ -90,7 +123,9 @@ class PostgresFileStore:
     
     def is_ready(self) -> bool:
         """Verificar si el store está listo"""
-        return PSYCOPG2_AVAILABLE and self.conn is not None
+        if not PSYCOPG2_AVAILABLE:
+            return False
+        return self._ensure_connection()
     
     def save_file(self, 
                   file_name: str, 
@@ -117,89 +152,102 @@ class PostgresFileStore:
             logger.error("❌ PostgreSQL no está listo")
             return None
         
-        try:
-            file_id = str(uuid.uuid4())
-            file_size = len(file_content)
-            now = datetime.now()
-            
-            with self.conn.cursor() as cur:
-                # Verificar si ya existe el archivo de Drive
-                if drive_file_id:
-                    cur.execute(
-                        "SELECT id FROM document_files WHERE drive_file_id = %s",
-                        (drive_file_id,)
-                    )
-                    existing = cur.fetchone()
-                    
-                    if existing:
-                        # Actualizar archivo existente
-                        logger.info(f"📝 Actualizando archivo existente: {file_name}")
-                        cur.execute("""
-                            UPDATE document_files 
-                            SET file_content = %s,
-                                file_size = %s,
-                                mime_type = %s,
-                                drive_modified_time = %s,
-                                metadata = %s,
-                                updated_at = %s
-                            WHERE drive_file_id = %s
-                            RETURNING id
-                        """, (
-                            psycopg2.Binary(file_content),
-                            file_size,
-                            mime_type,
-                            drive_modified_time,
-                            Json(metadata or {}),
-                            now,
-                            drive_file_id
-                        ))
-                        file_id = str(cur.fetchone()[0])
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                file_id = str(uuid.uuid4())
+                file_size = len(file_content)
+                now = datetime.now()
+                
+                with self.conn.cursor() as cur:
+                    # Verificar si ya existe el archivo de Drive
+                    if drive_file_id:
+                        cur.execute(
+                            "SELECT id FROM document_files WHERE drive_file_id = %s",
+                            (drive_file_id,)
+                        )
+                        existing = cur.fetchone()
+                        
+                        if existing:
+                            # Actualizar archivo existente
+                            logger.info(f"📝 Actualizando archivo existente: {file_name}")
+                            cur.execute("""
+                                UPDATE document_files 
+                                SET file_content = %s,
+                                    file_size = %s,
+                                    mime_type = %s,
+                                    drive_modified_time = %s,
+                                    metadata = %s,
+                                    updated_at = %s
+                                WHERE drive_file_id = %s
+                                RETURNING id
+                            """, (
+                                psycopg2.Binary(file_content),
+                                file_size,
+                                mime_type,
+                                drive_modified_time,
+                                Json(metadata or {}),
+                                now,
+                                drive_file_id
+                            ))
+                            file_id = str(cur.fetchone()[0])
+                        else:
+                            # Insertar nuevo archivo
+                            cur.execute("""
+                                INSERT INTO document_files 
+                                (id, file_name, file_content, file_size, mime_type, 
+                                 drive_file_id, drive_modified_time, metadata, created_at, updated_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                file_id,
+                                file_name,
+                                psycopg2.Binary(file_content),
+                                file_size,
+                                mime_type,
+                                drive_file_id,
+                                drive_modified_time,
+                                Json(metadata or {}),
+                                now,
+                                now
+                            ))
                     else:
-                        # Insertar nuevo archivo
+                        # Sin drive_file_id, insertar directamente
                         cur.execute("""
                             INSERT INTO document_files 
                             (id, file_name, file_content, file_size, mime_type, 
-                             drive_file_id, drive_modified_time, metadata, created_at, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                             metadata, created_at, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             file_id,
                             file_name,
                             psycopg2.Binary(file_content),
                             file_size,
                             mime_type,
-                            drive_file_id,
-                            drive_modified_time,
                             Json(metadata or {}),
                             now,
                             now
                         ))
+                    
+                    self.conn.commit()
+                    logger.info(f"💾 Archivo guardado en PostgreSQL: {file_name} ({file_size} bytes)")
+                    return file_id
+                    
+            except Exception as e:
+                logger.error(f"❌ Error guardando archivo {file_name} (intento {attempt+1}/{max_retries}): {e}")
+                if self.conn:
+                    try:
+                        self.conn.rollback()
+                    except:
+                        pass
+                
+                if attempt < max_retries - 1:
+                    # Reconectar y reintentar
+                    if not self._ensure_connection():
+                        return None
                 else:
-                    # Sin drive_file_id, insertar directamente
-                    cur.execute("""
-                        INSERT INTO document_files 
-                        (id, file_name, file_content, file_size, mime_type, 
-                         metadata, created_at, updated_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        file_id,
-                        file_name,
-                        psycopg2.Binary(file_content),
-                        file_size,
-                        mime_type,
-                        Json(metadata or {}),
-                        now,
-                        now
-                    ))
-                
-                self.conn.commit()
-                logger.info(f"💾 Archivo guardado en PostgreSQL: {file_name} ({file_size} bytes)")
-                return file_id
-                
-        except Exception as e:
-            logger.error(f"❌ Error guardando archivo {file_name}: {e}")
-            if self.conn:
-                self.conn.rollback()
-            return None
+                    return None
+        
+        return None
     
     def get_file(self, file_id: str = None, file_name: str = None) -> Optional[Dict[str, Any]]:
         """
@@ -314,20 +362,29 @@ class PostgresFileStore:
         if not self.is_ready():
             return False
         
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute("""
-                    SELECT EXISTS(
-                        SELECT 1 FROM document_files 
-                        WHERE drive_file_id = %s
-                    )
-                """, (drive_file_id,))
-                
-                return cur.fetchone()[0]
-                
-        except Exception as e:
-            logger.error(f"❌ Error verificando existencia: {e}")
-            return False
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT EXISTS(
+                            SELECT 1 FROM document_files 
+                            WHERE drive_file_id = %s
+                        )
+                    """, (drive_file_id,))
+                    
+                    return cur.fetchone()[0]
+                    
+            except Exception as e:
+                logger.error(f"❌ Error verificando existencia (intento {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # Reconectar y reintentar
+                    if not self._ensure_connection():
+                        return False
+                else:
+                    return False
+        
+        return False
     
     def get_file_modified_time(self, drive_file_id: str) -> Optional[datetime]:
         """
@@ -342,20 +399,29 @@ class PostgresFileStore:
         if not self.is_ready():
             return None
         
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute("""
-                    SELECT drive_modified_time
-                    FROM document_files
-                    WHERE drive_file_id = %s
-                """, (drive_file_id,))
-                
-                row = cur.fetchone()
-                return row[0] if row else None
-                
-        except Exception as e:
-            logger.error(f"❌ Error obteniendo fecha: {e}")
-            return None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT drive_modified_time
+                        FROM document_files
+                        WHERE drive_file_id = %s
+                    """, (drive_file_id,))
+                    
+                    row = cur.fetchone()
+                    return row[0] if row else None
+                    
+            except Exception as e:
+                logger.error(f"❌ Error obteniendo fecha (intento {attempt+1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    # Reconectar y reintentar
+                    if not self._ensure_connection():
+                        return None
+                else:
+                    return None
+        
+        return None
     
     def delete_file(self, file_id: str) -> bool:
         """
