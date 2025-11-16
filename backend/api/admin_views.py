@@ -551,31 +551,73 @@ def get_embeddings_status(request):
         )
     
     try:
-        chroma_manager = ChromaManager()
+        # Determinar qué vector store usar
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        # Obtener colecciones
-        collections = chroma_manager.list_collections()
+        logger.info(f"🔍 get_embeddings_status - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
         
-        total_documents = 0
-        collections_info = []
-        
-        for collection_name in collections:
-            try:
-                count = chroma_manager.get_collection_count(collection_name)
-                total_documents += count
-                collections_info.append({
-                    "name": collection_name,
-                    "document_count": count
+        # Usar el vector store configurado
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            
+            if not vector_store.is_ready():
+                logger.error("❌ PostgresVectorStore no está listo")
+                return Response({
+                    "success": False,
+                    "error": "PostgreSQL no está disponible",
+                    "backend": "postgres",
+                    "total_collections": 0,
+                    "total_documents": 0
                 })
-            except Exception as e:
-                logger.warning(f"Error obteniendo info de colección {collection_name}: {e}")
-        
-        return Response({
-            "success": True,
-            "total_collections": len(collections),
-            "total_documents": total_documents,
-            "collections": collections_info
-        })
+            
+            # Obtener estadísticas de PostgreSQL
+            stats = vector_store.get_collection_stats()
+            logger.info(f"📊 Stats de PostgreSQL: {stats}")
+            
+            return Response({
+                "success": True,
+                "backend": "postgres",
+                "total_collections": 1,  # PostgreSQL usa una sola tabla
+                "total_documents": stats.get('total_documents', 0),
+                "collections": [{
+                    "name": "rag_embeddings",
+                    "document_count": stats.get('total_documents', 0)
+                }],
+                "storage_info": stats
+            })
+        else:
+            # Fallback a ChromaDB
+            chroma_manager = ChromaManager()
+            
+            # Obtener colecciones
+            collections = chroma_manager.list_collections()
+            
+            total_documents = 0
+            collections_info = []
+            
+            for collection_name in collections:
+                try:
+                    count = chroma_manager.get_collection_count(collection_name)
+                    total_documents += count
+                    collections_info.append({
+                        "name": collection_name,
+                        "document_count": count
+                    })
+                except Exception as e:
+                    logger.warning(f"Error obteniendo info de colección {collection_name}: {e}")
+            
+            logger.info(f"📊 ChromaDB: {len(collections)} colecciones, {total_documents} documentos totales")
+            
+            return Response({
+                "success": True,
+                "backend": "chroma",
+                "total_collections": len(collections),
+                "total_documents": total_documents,
+                "collections": collections_info
+            })
         
     except Exception as e:
         logger.error(f"Error obteniendo estado de embeddings: {e}")
@@ -683,6 +725,14 @@ def generate_embeddings(request):
         )
     
     try:
+        # Determinar qué vector store usar
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
+        
+        logger.info(f"🚀 generate_embeddings - Backend configurado: {vector_backend}")
+        logger.info(f"🚀 DATABASE_URL presente: {bool(database_url)}")
+        
         # Obtener documentos del directorio
         documents_path = os.path.join(settings.BASE_DIR, 'data', 'documents')
         
@@ -701,7 +751,15 @@ def generate_embeddings(request):
         skipped_files = []
         errors = []
         
-        chroma_manager = ChromaManager()
+        # Inicializar vector store según configuración
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            logger.info("✅ Usando PostgreSQL como vector store")
+        else:
+            vector_store = ChromaManager()
+            logger.info("✅ Usando ChromaDB como vector store")
+        
         embedding_manager = EmbeddingManager()
         pdf_processor = PDFProcessor()
         text_processor = TextProcessor()
@@ -735,8 +793,8 @@ def generate_embeddings(request):
                 # Calcular hash del archivo
                 file_hash = calculate_file_hash(file_path)
                 
-                # Verificar si ya fue procesado
-                if check_file_already_processed(chroma_manager, file_hash, pdf_file):
+                # Verificar si ya fue procesado (solo si es ChromaDB)
+                if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, pdf_file):
                     logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {pdf_file}")
                     progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
                     _save_progress(progress)
@@ -795,13 +853,19 @@ def generate_embeddings(request):
                             'metadata': metadata
                         })
                     
-                    # Agregar a ChromaDB
-                    chroma_manager.add_documents(
+                    # Agregar al vector store (ChromaDB o PostgreSQL según configuración)
+                    logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
+                    logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                    storage_result = vector_store.add_documents(
                         documents=documents,
                         embeddings=embeddings
                     )
+                    logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
                     
-                    logger.info(f"   ✅ PDF '{pdf_file}' procesado completamente ({len(chunks)} chunks)")
+                    if not storage_result:
+                        logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
+                    else:
+                        logger.info(f"   ✅ PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                     progress["processed"] += 1
                     progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
                     _save_progress(progress)
@@ -839,8 +903,8 @@ def generate_embeddings(request):
                 # Calcular hash del archivo
                 file_hash = calculate_file_hash(file_path)
                 
-                # Verificar si ya fue procesado
-                if check_file_already_processed(chroma_manager, file_hash, txt_file):
+                # Verificar si ya fue procesado (solo si es ChromaDB)
+                if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, txt_file):
                     logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {txt_file}")
                     progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
                     _save_progress(progress)
@@ -898,12 +962,18 @@ def generate_embeddings(request):
                             'metadata': metadata
                         })
                     
-                    chroma_manager.add_documents(
+                    logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
+                    logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                    storage_result = vector_store.add_documents(
                         documents=documents,
                         embeddings=embeddings
                     )
+                    logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
                     
-                    logger.info(f"   ✅ TXT '{txt_file}' procesado completamente ({len(chunks)} chunks)")
+                    if not storage_result:
+                        logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{txt_file}'")
+                    else:
+                        logger.info(f"   ✅ TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                     progress["processed"] += 1
                     progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
                     _save_progress(progress)
@@ -967,36 +1037,59 @@ def verify_embeddings(request):
         )
     
     try:
-        chroma_manager = ChromaManager()
+        # Determinar qué vector store usar
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        # Obtener todos los documentos
-        collections = chroma_manager.list_collections()
+        logger.info(f"🔍 verify_embeddings - Backend: {vector_backend}")
         
         verification_results = []
         
-        for collection_name in collections:
-            try:
-                # Obtener metadatos de la colección
-                collection_info = {
-                    "collection": collection_name,
-                    "document_count": chroma_manager.get_collection_count(collection_name),
-                    "status": "OK"
-                }
-                
-                # TODO: Implementar detección de duplicados
-                # Usar hashes de contenido para detectar duplicados
-                
-                verification_results.append(collection_info)
-                
-            except Exception as e:
-                verification_results.append({
-                    "collection": collection_name,
-                    "status": "ERROR",
-                    "error": str(e)
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            
+            if not vector_store.is_ready():
+                return Response({
+                    "success": False,
+                    "error": "PostgreSQL no está disponible"
                 })
+            
+            stats = vector_store.get_collection_stats()
+            verification_results.append({
+                "collection": "rag_embeddings",
+                "document_count": stats.get('total_documents', 0),
+                "status": "OK",
+                "backend": "postgres"
+            })
+        else:
+            # ChromaDB
+            chroma_manager = ChromaManager()
+            collections = chroma_manager.list_collections()
+            
+            for collection_name in collections:
+                try:
+                    collection_info = {
+                        "collection": collection_name,
+                        "document_count": chroma_manager.get_collection_count(collection_name),
+                        "status": "OK",
+                        "backend": "chroma"
+                    }
+                    verification_results.append(collection_info)
+                except Exception as e:
+                    verification_results.append({
+                        "collection": collection_name,
+                        "status": "ERROR",
+                        "error": str(e),
+                        "backend": "chroma"
+                    })
+        
+        logger.info(f"✅ Verificación completada: {len(verification_results)} colecciones")
         
         return Response({
             "success": True,
+            "backend": vector_backend,
             "collections_verified": len(verification_results),
             "results": verification_results
         })

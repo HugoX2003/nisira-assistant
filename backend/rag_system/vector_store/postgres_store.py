@@ -122,8 +122,14 @@ class PostgresVectorStore:
         Returns:
             True si fue exitoso
         """
+        logger.info(f"🔵 PostgreSQL add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
+        logger.info(f"🔵 DB connection status: {self.conn is not None}")
+        logger.info(f"🔵 DB URL configured: {bool(self.database_url)}")
+        
         if not self.is_ready():
             logger.error("❌ PostgreSQL no está listo")
+            logger.error(f"   - PSYCOPG2_AVAILABLE: {PSYCOPG2_AVAILABLE}")
+            logger.error(f"   - self.conn: {self.conn}")
             return False
         
         if len(documents) != len(embeddings):
@@ -158,7 +164,11 @@ class PostgresVectorStore:
                     logger.warning("⚠️ No hay documentos válidos para insertar")
                     return True
                 
+                logger.info(f"🔵 Preparados {len(values)} valores para insertar en PostgreSQL")
+                logger.info(f"🔵 Muestra del primer valor: id={values[0][0][:8]}..., texto_len={len(values[0][1])}, metadata_keys={list(values[0][3].keys()) if hasattr(values[0][3], 'keys') else 'N/A'}")
+                
                 # Inserción batch
+                logger.info("🔵 Ejecutando INSERT batch en PostgreSQL...")
                 execute_values(
                     cur,
                     """
@@ -170,8 +180,15 @@ class PostgresVectorStore:
                     template="(%s, %s, %s::jsonb, %s)"
                 )
                 
+                logger.info("🔵 INSERT completado, ejecutando COMMIT...")
                 self.conn.commit()
-                logger.info(f"✅ {len(values)} documentos insertados en PostgreSQL")
+                logger.info(f"✅ {len(values)} documentos CONFIRMADOS en PostgreSQL (COMMIT exitoso)")
+                
+                # Verificar que realmente se insertaron
+                cur.execute("SELECT COUNT(*) FROM rag_embeddings")
+                total_count = cur.fetchone()[0]
+                logger.info(f"📊 Total de documentos en tabla rag_embeddings: {total_count}")
+                
                 return True
                 
         except Exception as e:

@@ -121,12 +121,16 @@ class ChromaManager:
         Returns:
             True si fue exitoso
         """
+        logger.info(f"🟡 ChromaDB add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
+        logger.info(f"🟡 Client status: {self.client is not None}, Collection: {self.collection_name}")
+        
         # Verificar si la colección existe, si no, recrearla
         try:
             if self.client is not None:
                 # Intentar obtener la colección
                 try:
                     self.collection = self.client.get_collection(name=self.collection_name)
+                    logger.info(f"🟡 Colección '{self.collection_name}' encontrada")
                 except Exception:
                     # Si no existe, crearla
                     logger.warning(f"⚠️  Colección '{self.collection_name}' no existe, creándola...")
@@ -140,6 +144,9 @@ class ChromaManager:
         
         if not self.is_ready():
             logger.error("❌ ChromaDB no está listo")
+            logger.error(f"   - CHROMADB_AVAILABLE: {CHROMADB_AVAILABLE}")
+            logger.error(f"   - self.client: {self.client}")
+            logger.error(f"   - self.collection: {self.collection}")
             return False
         
         if len(documents) != len(embeddings):
