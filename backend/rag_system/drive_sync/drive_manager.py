@@ -230,8 +230,8 @@ class GoogleDriveManager:
             logger.error("Servicio de Google Drive no inicializado")
             return None
         
-        # Límite de tamaño para PostgreSQL (50MB para evitar OOM kills)
-        MAX_FILE_SIZE_POSTGRES = 50 * 1024 * 1024  # 50MB
+        # Límite de tamaño para PostgreSQL (200MB - ajustado para servidor con RAM suficiente)
+        MAX_FILE_SIZE_POSTGRES = 200 * 1024 * 1024  # 200MB
         
         try:
             # Obtener metadatos del archivo
@@ -242,7 +242,7 @@ class GoogleDriveManager:
             # Verificar tamaño si vamos a usar PostgreSQL
             if self.use_postgres and file_size > MAX_FILE_SIZE_POSTGRES:
                 logger.warning(f"⚠️ Archivo muy grande ({file_size / 1024 / 1024:.1f}MB): {file_name}")
-                logger.warning(f"   Límite para PostgreSQL: {MAX_FILE_SIZE_POSTGRES / 1024 / 1024}MB")
+                logger.warning(f"   Límite para PostgreSQL: {MAX_FILE_SIZE_POSTGRES / 1024 / 1024:.0f}MB")
                 logger.warning(f"   Saltando archivo para evitar crash del servidor")
                 return "TOO_LARGE"
             
