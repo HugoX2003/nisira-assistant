@@ -39,6 +39,13 @@ from ..vector_store.postgres_store import PostgresVectorStore
 
 logger = logging.getLogger(__name__)
 
+# DEBUG: Log de configuración al cargar el módulo
+print("=" * 80)
+print("🚀 RAG PIPELINE MODULE LOADED")
+print(f"🔍 VECTOR_STORE_CONFIG: {VECTOR_STORE_CONFIG}")
+print(f"🔍 DATABASE_URL presente: {bool(VECTOR_STORE_CONFIG.get('database_url'))}")
+print("=" * 80)
+
 class RAGPipeline:
     """
     Pipeline principal del sistema RAG
