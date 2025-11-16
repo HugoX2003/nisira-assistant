@@ -799,8 +799,17 @@ def generate_embeddings(request):
                     # Calcular hash del archivo
                     file_hash = calculate_file_hash(file_path)
                     
-                    # Verificar si ya fue procesado (solo si es ChromaDB)
-                    if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, pdf_file):
+                    # Verificar si ya fue procesado (UNIVERSAL para ChromaDB y PostgreSQL)
+                    already_processed = False
+                    
+                    if vector_backend == 'postgres':
+                        # PostgreSQL: usar método nativo check_document_exists
+                        already_processed = vector_store.check_document_exists(pdf_file, file_hash)
+                    else:
+                        # ChromaDB: usar función existente
+                        already_processed = check_file_already_processed(vector_store, file_hash, pdf_file)
+                    
+                    if already_processed:
                         logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {pdf_file}")
                         progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
                         _save_progress(progress)
@@ -911,8 +920,17 @@ def generate_embeddings(request):
                     # Calcular hash del archivo
                     file_hash = calculate_file_hash(file_path)
                     
-                    # Verificar si ya fue procesado (solo si es ChromaDB)
-                    if vector_backend != 'postgres' and check_file_already_processed(vector_store, file_hash, txt_file):
+                    # Verificar si ya fue procesado (UNIVERSAL para ChromaDB y PostgreSQL)
+                    already_processed = False
+                    
+                    if vector_backend == 'postgres':
+                        # PostgreSQL: usar método nativo check_document_exists
+                        already_processed = vector_store.check_document_exists(txt_file, file_hash)
+                    else:
+                        # ChromaDB: usar función existente
+                        already_processed = check_file_already_processed(vector_store, file_hash, txt_file)
+                    
+                    if already_processed:
                         logger.info(f"   ⏭️  Archivo ya procesado anteriormente, saltando: {txt_file}")
                         progress["logs"].append(f"   ⏭️  Ya existe en embeddings, saltando")
                         _save_progress(progress)
@@ -1104,6 +1122,114 @@ def verify_embeddings(request):
         
     except Exception as e:
         logger.error(f"Error verificando embeddings: {e}")
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def list_processed_files(request):
+    """
+    Listar archivos que ya tienen embeddings generados
+    Muestra estadísticas de chunks y fechas de procesamiento
+    """
+    if not RAG_MODULES_AVAILABLE:
+        return Response(
+            {"error": "Sistema RAG no disponible"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    
+    try:
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
+        
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            
+            if not vector_store.is_ready():
+                return Response({
+                    "success": False,
+                    "error": "PostgreSQL no está disponible"
+                })
+            
+            # Obtener lista de archivos procesados
+            processed_files = vector_store.get_processed_files()
+            
+            return Response({
+                "success": True,
+                "total_files": len(processed_files),
+                "files": processed_files,
+                "backend": "postgres"
+            })
+        else:
+            # Para ChromaDB, implementar lógica similar si es necesario
+            return Response({
+                "success": False,
+                "error": "Función solo disponible para PostgreSQL por ahora"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error listando archivos procesados: {e}")
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def delete_document_embeddings(request, file_name):
+    """
+    Eliminar embeddings de un documento específico
+    Útil cuando quieres reprocesar un archivo
+    """
+    if not RAG_MODULES_AVAILABLE:
+        return Response(
+            {"error": "Sistema RAG no disponible"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    
+    try:
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
+        
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            
+            if not vector_store.is_ready():
+                return Response({
+                    "success": False,
+                    "error": "PostgreSQL no está disponible"
+                })
+            
+            # Obtener file_hash del request si está disponible
+            file_hash = request.data.get('file_hash')
+            
+            # Eliminar embeddings del documento
+            deleted_count = vector_store.delete_document_embeddings(file_name, file_hash)
+            
+            return Response({
+                "success": deleted_count > 0,
+                "deleted_embeddings": deleted_count,
+                "file_name": file_name,
+                "message": f"✅ Eliminados {deleted_count} embeddings de '{file_name}'"
+            })
+        else:
+            return Response({
+                "success": False,
+                "error": "Función solo disponible para PostgreSQL por ahora"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error eliminando embeddings: {e}")
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

@@ -46,7 +46,9 @@ from .admin_views import (
     get_system_metrics,
     get_query_list,
     get_query_detail,
-    get_pipeline_status
+    get_pipeline_status,
+    list_processed_files,
+    delete_document_embeddings
 )
 
 # URLs de la API
@@ -106,6 +108,8 @@ urlpatterns = [
     path("admin/embeddings/verify/", verify_embeddings, name="admin_verify_embeddings"),
     path("admin/embeddings/clear/", clear_embeddings, name="admin_clear_embeddings"),
     path("admin/embeddings/progress/", get_embedding_progress, name="admin_embedding_progress"),
+    path("admin/embeddings/processed/", list_processed_files, name="admin_list_processed_files"),
+    path("admin/embeddings/delete/<str:file_name>/", delete_document_embeddings, name="admin_delete_document_embeddings"),
     path("admin/metrics/", get_system_metrics, name="admin_get_metrics"),
     path("admin/metrics/queries/", get_query_list, name="admin_get_query_list"),
     path("admin/metrics/queries/<str:query_id>/", get_query_detail, name="admin_get_query_detail"),

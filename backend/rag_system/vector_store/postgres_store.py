@@ -472,6 +472,127 @@ class PostgresVectorStore:
             logger.error(f"❌ Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
     
+    def check_document_exists(self, file_name: str, file_hash: str = None) -> bool:
+        """
+        Verificar si un documento ya tiene embeddings
+        
+        Args:
+            file_name: Nombre del archivo
+            file_hash: Hash opcional del contenido del archivo
+            
+        Returns:
+            True si el documento ya fue procesado
+        """
+        if not self.is_ready():
+            return False
+        
+        try:
+            with self.conn.cursor() as cur:
+                if file_hash:
+                    # Verificar por hash (más preciso)
+                    cur.execute("""
+                        SELECT COUNT(*) FROM rag_embeddings 
+                        WHERE metadata->>'file_name' = %s 
+                        AND metadata->>'file_hash' = %s
+                    """, (file_name, file_hash))
+                else:
+                    # Verificar solo por nombre
+                    cur.execute("""
+                        SELECT COUNT(*) FROM rag_embeddings 
+                        WHERE metadata->>'file_name' = %s
+                    """, (file_name,))
+                
+                count = cur.fetchone()[0]
+                return count > 0
+                
+        except Exception as e:
+            logger.error(f"❌ Error verificando duplicado: {e}")
+            return False
+    
+    def get_processed_files(self) -> List[Dict[str, Any]]:
+        """
+        Obtener lista de archivos procesados con estadísticas
+        
+        Returns:
+            Lista de archivos con chunks y metadatos
+        """
+        if not self.is_ready():
+            return []
+        
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        metadata->>'file_name' as file_name,
+                        metadata->>'file_hash' as file_hash,
+                        metadata->>'type' as file_type,
+                        COUNT(*) as chunks_count,
+                        MIN(created_at) as first_processed,
+                        MAX(created_at) as last_processed
+                    FROM rag_embeddings
+                    WHERE metadata->>'file_name' IS NOT NULL
+                    GROUP BY metadata->>'file_name', metadata->>'file_hash', metadata->>'type'
+                    ORDER BY last_processed DESC
+                """)
+                
+                results = []
+                for row in cur.fetchall():
+                    results.append({
+                        'file_name': row[0],
+                        'file_hash': row[1],
+                        'file_type': row[2],
+                        'chunks_count': row[3],
+                        'first_processed': row[4].isoformat() if row[4] else None,
+                        'last_processed': row[5].isoformat() if row[5] else None,
+                    })
+                
+                return results
+                
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo archivos procesados: {e}")
+            return []
+    
+    def delete_document_embeddings(self, file_name: str, file_hash: str = None) -> int:
+        """
+        Eliminar todos los embeddings de un documento específico
+        
+        Args:
+            file_name: Nombre del archivo
+            file_hash: Hash opcional del archivo
+            
+        Returns:
+            Cantidad de embeddings eliminados
+        """
+        if not self.is_ready():
+            return 0
+        
+        try:
+            with self.conn.cursor() as cur:
+                if file_hash:
+                    cur.execute("""
+                        DELETE FROM rag_embeddings 
+                        WHERE metadata->>'file_name' = %s 
+                        AND metadata->>'file_hash' = %s
+                        RETURNING id
+                    """, (file_name, file_hash))
+                else:
+                    cur.execute("""
+                        DELETE FROM rag_embeddings 
+                        WHERE metadata->>'file_name' = %s
+                        RETURNING id
+                    """, (file_name,))
+                
+                deleted_count = len(cur.fetchall())
+                self.conn.commit()
+                
+                logger.info(f"🗑️ Eliminados {deleted_count} embeddings de '{file_name}'")
+                return deleted_count
+                
+        except Exception as e:
+            logger.error(f"❌ Error eliminando embeddings: {e}")
+            self.conn.rollback()
+            return 0
+
     def reset_collection(self) -> bool:
         """
         Eliminar todos los embeddings (CUIDADO)
