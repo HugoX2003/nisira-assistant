@@ -44,6 +44,8 @@ from .admin_views import (
     clear_embeddings,
     get_embedding_progress,
     get_system_metrics,
+    get_query_list,
+    get_query_detail,
     get_pipeline_status
 )
 
@@ -105,5 +107,7 @@ urlpatterns = [
     path("admin/embeddings/clear/", clear_embeddings, name="admin_clear_embeddings"),
     path("admin/embeddings/progress/", get_embedding_progress, name="admin_embedding_progress"),
     path("admin/metrics/", get_system_metrics, name="admin_get_metrics"),
+    path("admin/metrics/queries/", get_query_list, name="admin_get_query_list"),
+    path("admin/metrics/queries/<str:query_id>/", get_query_detail, name="admin_get_query_detail"),
     path("admin/pipeline/status/", get_pipeline_status, name="admin_pipeline_status"),
 ]

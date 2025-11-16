@@ -277,28 +277,31 @@ class QueryMetrics(models.Model):
 
 class RAGASMetrics(models.Model):
     """
-    Modelo para almacenar métricas de RAGAS (precisión y exactitud)
-    Calculadas periódicamente sobre un conjunto de queries
+    Modelo para almacenar métricas de precisión y exactitud del sistema RAG
+    Calculadas usando un evaluador personalizado (sin dependencias externas)
     """
     # Identificación del batch de evaluación
     evaluation_id = models.CharField(max_length=100, unique=True)
     query_metrics = models.ForeignKey(QueryMetrics, on_delete=models.CASCADE, null=True, blank=True)
     
     # Texto de la consulta y respuesta evaluada
-    query_text = models.TextField()
-    response_text = models.TextField()
-    retrieved_contexts = models.TextField(help_text="JSON con contextos recuperados")
+    query_text = models.TextField(blank=True, default='')
+    response_text = models.TextField(blank=True, default='')
+    retrieved_contexts = models.TextField(blank=True, default='', help_text="JSON con contextos recuperados")
     
-    # Métricas RAGAS
-    precision_at_k = models.FloatField(help_text="Precision@k score (0-1)")
-    recall_at_k = models.FloatField(help_text="Recall@k score (0-1)")
-    faithfulness_score = models.FloatField(help_text="Faithfulness score (0-1)")
-    answer_relevancy = models.FloatField(help_text="Answer relevancy score (0-1)")
+    # Métricas de precisión (calculadas con sistema personalizado)
+    precision_at_k = models.FloatField(default=0.0, help_text="Precision@k score (0-1)")
+    recall_at_k = models.FloatField(default=0.0, help_text="Recall@k score (0-1)")
+    faithfulness_score = models.FloatField(default=0.0, help_text="Faithfulness score (0-1)")
+    answer_relevancy = models.FloatField(default=0.0, help_text="Answer relevancy score (0-1)")
     context_precision = models.FloatField(null=True, blank=True)
     context_recall = models.FloatField(null=True, blank=True)
     
     # Tasa de alucinación (inversa de faithfulness)
-    hallucination_rate = models.FloatField(help_text="Tasa de alucinación (0-1)")
+    hallucination_rate = models.FloatField(default=0.0, help_text="Tasa de alucinación (0-1)")
+    
+    # Word Error Rate (cuando hay ground truth disponible)
+    wer_score = models.FloatField(null=True, blank=True, help_text="Word Error Rate - menor es mejor")
     
     # Metadata
     k_value = models.IntegerField(default=5, help_text="Valor de K usado en la evaluación")
@@ -316,5 +319,5 @@ class RAGASMetrics(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"RAGASMetrics({self.evaluation_id[:8]}... - F:{self.faithfulness_score:.2f})"
+        return f"PrecisionMetrics({self.evaluation_id[:8]}... - F:{self.faithfulness_score:.2f}, P@k:{self.precision_at_k:.2f})"
 

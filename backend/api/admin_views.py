@@ -490,9 +490,45 @@ def get_embedding_progress(request):
     try:
         progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'embedding_progress.json')
         if os.path.exists(progress_file):
-            with open(progress_file, 'r') as f:
-                progress = json.load(f)
-            return Response(progress)
+            try:
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                    content = f.read().strip()
+                    if not content:
+                        # Archivo vacío, es normal al inicio
+                        return Response({
+                            "status": "idle",
+                            "total": 0,
+                            "current": 0,
+                            "current_file": "",
+                            "processed": 0,
+                            "errors": 0,
+                            "logs": []
+                        })
+                    progress = json.loads(content)
+                return Response(progress)
+            except json.JSONDecodeError as e:
+                # Archivo corrupto o mal formado
+                logger.warning(f"Archivo de progreso mal formado: {e}")
+                return Response({
+                    "status": "idle",
+                    "total": 0,
+                    "current": 0,
+                    "current_file": "",
+                    "processed": 0,
+                    "errors": 0,
+                    "logs": []
+                })
+            except Exception as e:
+                logger.error(f"Error leyendo archivo de progreso: {e}")
+                return Response({
+                    "status": "idle",
+                    "total": 0,
+                    "current": 0,
+                    "current_file": "",
+                    "processed": 0,
+                    "errors": 0,
+                    "logs": []
+                })
         else:
             return Response({
                 "status": "idle",
@@ -504,9 +540,19 @@ def get_embedding_progress(request):
                 "logs": []
             })
     except Exception as e:
+        logger.error(f"Error general en get_embedding_progress: {e}", exc_info=True)
         return Response(
-            {"error": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                "status": "error",
+                "error": str(e),
+                "total": 0,
+                "current": 0,
+                "current_file": "",
+                "processed": 0,
+                "errors": 0,
+                "logs": []
+            },
+            status=status.HTTP_200_OK  # Cambiado a 200 para evitar errores en frontend
         )
 
 @api_view(['POST'])
@@ -1143,42 +1189,41 @@ def get_system_metrics(request):
     """
     Obtener métricas REALES del sistema RAG para análisis de tesis
     
-    Métricas de Rendimiento (de base de datos):
-    - Tiempo de respuesta promedio (Total Latency)
-    - Velocidad de procesamiento (Time to First Token)
-    - Tiempo de resolución de consultas complejas (Run-time Efficiency)
-    
-    Métricas de Precisión (RAGAS):
-    - Precision@k
-    - Recall@k
-    - Tasa de alucinación (Hallucination Rate)
-    - Fidelidad (Faithfulness)
+    3 MÉTRICAS FINALES:
+    1. Latencia Total: Tiempo de respuesta promedio (segundos)
+    2. Reducción de Tiempo: Velocidad de procesamiento (tokens/segundo)
+    3. Calidad de Respuesta: Score RAGAS compuesto (0-1)
+       - Faithfulness: Fidelidad al contexto
+       - Answer Relevancy: Relevancia de la respuesta
+       - Context Precision: Precisión de recuperación
     """
     try:
         # Importar función de métricas agregadas
         from .metrics_tracker import get_aggregated_metrics
         
-        # Obtener métricas reales de la base de datos
+        # Obtener métricas reales de la base de datos (SOLO 3 MÉTRICAS)
         metrics_data = get_aggregated_metrics()
         
-        # Agregar metadata
+        # Estructura simplificada con las 3 métricas
         response_data = {
-            "performance": metrics_data["performance"],
-            "precision": metrics_data["precision"],
+            "latenciaTotal": metrics_data.get("tiempoRespuesta", 0),  # Tiempo promedio en segundos
+            "reduccionTiempo": metrics_data.get("velocidadProcesamiento", 0),  # Tokens/segundo
+            "calidadRespuesta": metrics_data.get("calidadRespuesta", 0),  # Score RAGAS 0-1
+            "totalQueries": metrics_data.get("totalQueries", 0),
             "metadata": {
                 "lastUpdated": datetime.now().isoformat(),
-                "dataSource": "real_database_and_ragas",
-                "kValue": 5,
-                "isRealData": True
+                "dataSource": "real_database_ragas_gemini",
+                "isRealData": True,
+                "description": "3 métricas finales: Latencia Total, Reducción de Tiempo, Calidad de Respuesta (RAGAS con Gemini)"
             }
         }
         
-        logger.info(f"📊 Métricas obtenidas: {metrics_data['performance']['totalQueries']} consultas registradas")
+        logger.info(f"📊 Métricas obtenidas: {metrics_data.get('totalQueries', 0)} consultas registradas")
         
         return Response({
             "success": True,
             "metrics": response_data,
-            "message": f"Métricas reales obtenidas: {metrics_data['performance']['totalQueries']} consultas"
+            "message": f"Métricas reales obtenidas: {metrics_data.get('totalQueries', 0)} consultas"
         })
         
     except Exception as e:
@@ -1187,3 +1232,298 @@ def get_system_metrics(request):
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def get_query_list(request):
+    """
+    Obtener lista de consultas individuales con sus métricas
+    
+    Query params:
+    - page: número de página (default: 1)
+    - page_size: consultas por página (default: 20)
+    - complex_only: filtrar solo consultas complejas (default: false)
+    """
+    try:
+        from .models import QueryMetrics, RAGASMetrics
+        from django.core.paginator import Paginator
+        
+        # Parámetros de paginación
+        page = int(request.GET.get('page', 1))
+        page_size = int(request.GET.get('page_size', 20))
+        complex_only = request.GET.get('complex_only', 'false').lower() == 'true'
+        
+        # Consultar base de datos
+        queries = QueryMetrics.objects.all().order_by('-created_at')
+        
+        # Filtrar consultas complejas si se solicita
+        if complex_only:
+            queries = queries.filter(is_complex_query=True)
+        
+        # Paginar
+        paginator = Paginator(queries, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Construir lista de consultas con métricas
+        queries_list = []
+        for query_metric in page_obj:
+            # Buscar métricas de precisión asociadas
+            precision_metrics = None
+            try:
+                ragas_metric = RAGASMetrics.objects.filter(query_metrics=query_metric).first()
+                if ragas_metric:
+                    precision_metrics = {
+                        'precision_at_k': ragas_metric.precision_at_k,
+                        'recall_at_k': ragas_metric.recall_at_k,
+                        'faithfulness': ragas_metric.faithfulness_score,
+                        'hallucination_rate': ragas_metric.hallucination_rate,
+                        'answer_relevancy': ragas_metric.answer_relevancy,
+                        'wer': ragas_metric.wer_score
+                    }
+            except:
+                pass
+            
+            queries_list.append({
+                'query_id': query_metric.query_id,
+                'query_text': query_metric.query_text[:200] if query_metric.query_text else '',
+                'timestamp': query_metric.created_at.isoformat(),
+                'is_complex': query_metric.is_complex_query or False,
+                'complexity_score': query_metric.query_complexity_score or 0.0,
+                'performance': {
+                    'total_latency': query_metric.total_latency or 0.0,
+                    'time_to_first_token': query_metric.time_to_first_token or 0.0,
+                    'retrieval_time': query_metric.retrieval_time or 0.0,
+                    'generation_time': query_metric.generation_time or 0.0,
+                    'documents_retrieved': query_metric.documents_retrieved or 0
+                },
+                'precision': precision_metrics
+            })
+        
+        return Response({
+            'success': True,
+            'queries': queries_list,
+            'pagination': {
+                'page': page,
+                'page_size': page_size,
+                'total_queries': paginator.count,
+                'total_pages': paginator.num_pages,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous()
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo lista de consultas: {e}", exc_info=True)
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def get_query_detail(request, query_id):
+    """
+    Obtener detalles completos de una consulta específica incluyendo
+    cómo se calculó cada métrica
+    """
+    try:
+        from .models import QueryMetrics, RAGASMetrics
+        
+        # Buscar query_metrics
+        try:
+            query_metric = QueryMetrics.objects.get(query_id=query_id)
+        except QueryMetrics.DoesNotExist:
+            return Response(
+                {"error": "Consulta no encontrada"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Buscar métricas de precisión
+        ragas_metric = RAGASMetrics.objects.filter(query_metrics=query_metric).first()
+        
+        # SOLO 4 MÉTRICAS PRINCIPALES
+        response_data = {
+            'query_id': query_metric.query_id,
+            'query_text': query_metric.query_text or '',
+            'timestamp': query_metric.created_at.isoformat(),
+            'top_k_used': query_metric.top_k or 5,
+            
+            # MÉTRICA 1: TIEMPO DE RESPUESTA
+            'tiempo_respuesta': {
+                'valor': query_metric.total_latency or 0.0,
+                'unidad': 'segundos',
+                'metodo': 'time.time() de Python',
+                'formula': 'end_time - start_time',
+                'calculo_detallado': {
+                    'descripcion': 'Se toma el timestamp al inicio de la consulta y al final de la respuesta completa',
+                    'codigo_usado': 'start_time = time.time(); ... ; end_time = time.time(); response_time = end_time - start_time',
+                    'valor_final': f'{query_metric.total_latency:.4f} segundos'
+                }
+            }
+        }
+        
+        # Calcular velocidad de procesamiento si tenemos respuesta
+        if ragas_metric and ragas_metric.response_text:
+            tokens_generados = len(ragas_metric.response_text.split())
+            velocidad = tokens_generados / query_metric.total_latency if query_metric.total_latency > 0 else 0
+            
+            # MÉTRICA 2: VELOCIDAD DE PROCESAMIENTO
+            response_data['velocidad_procesamiento'] = {
+                'valor': velocidad,
+                'unidad': 'tokens/segundo',
+                'metodo': 'len(respuesta.split()) / tiempo_total',
+                'formula': 'tokens_generados / tiempo_respuesta',
+                'calculo_detallado': {
+                    'descripcion': 'Se cuenta el número de tokens (palabras) en la respuesta y se divide por el tiempo total',
+                    'tokens_generados': tokens_generados,
+                    'tiempo_total': query_metric.total_latency,
+                    'operacion': f'{tokens_generados} tokens / {query_metric.total_latency:.4f} segundos = {velocidad:.2f} tokens/s',
+                    'valor_final': f'{velocidad:.2f} tokens/segundo'
+                }
+            }
+        
+        # Agregar Precision y Recall si existen
+        if ragas_metric:
+            k_value = query_metric.top_k or 5
+            docs_relevantes = int(ragas_metric.precision_at_k * k_value)
+            contextos_usados = int(ragas_metric.recall_at_k * k_value)
+            
+            # MÉTRICA 3: ÍNDICE DE PRECISIÓN
+            response_data['precision'] = {
+                'valor': ragas_metric.precision_at_k,
+                'porcentaje': f"{ragas_metric.precision_at_k * 100:.2f}%",
+                'unidad': 'proporción (0-1)',
+                'metodo': 'Jaccard Similarity',
+                'formula': 'documentos_relevantes / k',
+                'threshold': '0.08 (8% de overlap mínimo)',
+                'calculo_detallado': {
+                    'descripcion': 'Se calcula Jaccard Similarity entre palabras de la respuesta y cada documento. Si similarity > 0.20, el documento es relevante.',
+                    'k_value': k_value,
+                    'documentos_relevantes': docs_relevantes,
+                    'documentos_irrelevantes': k_value - docs_relevantes,
+                    'operacion': f'{docs_relevantes} documentos relevantes / {k_value} documentos totales = {ragas_metric.precision_at_k:.4f}',
+                    'valor_final': f'{ragas_metric.precision_at_k:.4f} ({ragas_metric.precision_at_k * 100:.2f}%)',
+                    'interpretacion': f'De {k_value} documentos recuperados, {docs_relevantes} fueron realmente útiles para responder'
+                }
+            }
+            
+            # MÉTRICA 4: ÍNDICE DE EXHAUSTIVIDAD
+            response_data['recall'] = {
+                'valor': ragas_metric.recall_at_k,
+                'porcentaje': f"{ragas_metric.recall_at_k * 100:.2f}%",
+                'unidad': 'proporción (0-1)',
+                'metodo': 'Detección de n-gramas',
+                'formula': 'contextos_usados / k',
+                'ngram_size': '3 palabras',
+                'calculo_detallado': {
+                    'descripcion': 'Se extraen frases de 3 palabras (n-gramas) de cada documento. Si al menos 1 frase aparece en la respuesta, el contexto fue usado.',
+                    'k_value': k_value,
+                    'contextos_usados': contextos_usados,
+                    'contextos_no_usados': k_value - contextos_usados,
+                    'operacion': f'{contextos_usados} contextos usados / {k_value} contextos totales = {ragas_metric.recall_at_k:.4f}',
+                    'valor_final': f'{ragas_metric.recall_at_k:.4f} ({ragas_metric.recall_at_k * 100:.2f}%)',
+                    'interpretacion': f'La respuesta utilizó información de {contextos_usados} de {k_value} documentos recuperados'
+                }
+            }
+            
+
+        
+        return Response({
+            'success': True,
+            'query': response_data
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error obteniendo detalle de consulta: {e}", exc_info=True)
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# Funciones auxiliares para explicaciones
+def _explain_complexity(query_metric):
+    score = query_metric.query_complexity_score
+    length = len(query_metric.query_text)
+    
+    factors = []
+    if length > 100:
+        factors.append(f"Longitud alta ({length} caracteres)")
+    if '?' in query_metric.query_text and query_metric.query_text.count('?') > 1:
+        factors.append("Múltiples preguntas")
+    
+    complex_keywords = ['comparar', 'diferencia', 'analizar', 'explicar detalladamente', 'por qué', 'cómo funciona']
+    found_keywords = [kw for kw in complex_keywords if kw in query_metric.query_text.lower()]
+    if found_keywords:
+        factors.append(f"Palabras clave complejas: {', '.join(found_keywords)}")
+    
+    if query_metric.is_complex_query:
+        return f"Consulta compleja (score: {score:.2f}). Factores: {'; '.join(factors) if factors else 'Múltiples criterios'}"
+    else:
+        return f"Consulta simple (score: {score:.2f})"
+
+
+def _explain_faithfulness(score):
+    if score >= 0.9:
+        return "Excelente - Respuesta fuertemente respaldada por contexto"
+    elif score >= 0.7:
+        return "Bueno - Mayor parte de la respuesta tiene soporte en contexto"
+    elif score >= 0.5:
+        return "Regular - Algunos datos pueden no estar respaldados"
+    else:
+        return "Bajo - Respuesta contiene mucha información sin respaldo"
+
+
+def _explain_hallucination(rate):
+    if rate <= 0.1:
+        return "Excelente - Casi sin información inventada"
+    elif rate <= 0.3:
+        return "Aceptable - Poca información inventada"
+    elif rate <= 0.5:
+        return "Preocupante - Cantidad considerable de información inventada"
+    else:
+        return "Crítico - Alta tasa de información sin respaldo"
+
+
+def _get_hallucination_severity(rate):
+    if rate <= 0.1:
+        return "low"
+    elif rate <= 0.3:
+        return "medium"
+    else:
+        return "high"
+
+
+def _explain_relevancy(score):
+    if score >= 0.8:
+        return "Muy relevante - Respuesta aborda completamente la pregunta"
+    elif score >= 0.6:
+        return "Relevante - Respuesta relacionada con la pregunta"
+    elif score >= 0.4:
+        return "Parcialmente relevante - Algunos aspectos de la pregunta cubiertos"
+    else:
+        return "Poco relevante - Respuesta no aborda bien la pregunta"
+
+
+def _explain_wer(wer):
+    if wer == 0:
+        return "Perfecto - Texto idéntico a referencia"
+    elif wer < 0.3:
+        return "Buena calidad - Pocas diferencias con referencia"
+    elif wer < 0.5:
+        return "Calidad aceptable - Algunas diferencias notables"
+    else:
+        return "Baja calidad - Muchas diferencias con referencia"
+
+
+def _get_wer_quality(wer):
+    if wer < 0.3:
+        return "good"
+    elif wer < 0.5:
+        return "fair"
+    else:
+        return "poor"

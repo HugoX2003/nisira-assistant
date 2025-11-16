@@ -125,7 +125,7 @@ def process_document(file_path: str):
     pipeline = RAGPipeline()
     return pipeline.process_document(file_path)
 
-def query_rag(question: str, top_k: int = 5):
+def query_rag(question: str, top_k: int = 8):
     """Realizar consulta RAG"""
     if not RAG_MODULES_AVAILABLE:
         raise ImportError("Módulos RAG no disponibles")

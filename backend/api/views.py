@@ -107,6 +107,49 @@ except ImportError as e:
     logger.warning(f"⚠️ Sistema RAG no disponible: {e}")
 
 
+def calculate_adaptive_top_k(question: str) -> int:
+    """
+    Calcula dinámicamente el número de documentos a recuperar basado en:
+    - Longitud de la consulta
+    - Complejidad detectada (palabras clave)
+    - Número de preguntas
+    
+    Rangos:
+    - Consultas simples (< 50 chars): 3-5 docs
+    - Consultas medias (50-150 chars): 5-8 docs
+    - Consultas complejas (> 150 chars): 8-12 docs
+    - Con múltiples preguntas: +2 docs por cada "?"
+    """
+    # Base según longitud
+    length = len(question)
+    
+    if length < 50:
+        base_k = 3
+    elif length < 100:
+        base_k = 5
+    elif length < 150:
+        base_k = 7
+    else:
+        base_k = 9
+    
+    # Bonus por múltiples preguntas
+    question_marks = question.count('?')
+    if question_marks > 1:
+        base_k += min((question_marks - 1) * 2, 4)  # Máximo +4 por preguntas múltiples
+    
+    # Bonus por palabras clave complejas
+    complex_keywords = ['comparar', 'diferencia', 'analizar', 'explicar detalladamente', 
+                       'por qué', 'cómo funciona', 'implementar', 'relacionan']
+    keyword_count = sum(1 for kw in complex_keywords if kw in question.lower())
+    if keyword_count > 0:
+        base_k += min(keyword_count, 3)  # Máximo +3 por keywords
+    
+    # Limitar a rango razonable
+    top_k = max(3, min(base_k, 15))
+    
+    return top_k
+
+
 def process_rating_event(event: RatingFeedbackEvent) -> RatingFeedbackEvent:
     """Procesa un evento de calificación y maneja reintentos básicos."""
     event.attempts += 1
@@ -1009,7 +1052,7 @@ def rag_sync_documents(request):
 @permission_classes([AllowAny])
 def rag_query(request):
     """
-    Realizar consulta RAG
+    Realizar consulta RAG con recuperación adaptativa de documentos
     """
     if not RAG_MODULES_AVAILABLE:
         return Response({
@@ -1024,8 +1067,16 @@ def rag_query(request):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        top_k = request.data.get('top_k', 5)
+        # Sistema adaptativo: calcular top_k basado en complejidad de consulta
+        if 'top_k' in request.data:
+            top_k = request.data.get('top_k')
+        else:
+            # Calcular top_k dinámico
+            top_k = calculate_adaptive_top_k(question)
+        
         include_generation = request.data.get('include_generation', True)
+        
+        logger.info(f"📊 Consulta con top_k adaptativo: {top_k} (longitud: {len(question)} chars)")
         
         pipeline = RAGPipeline()
         result = pipeline.query(
@@ -1127,17 +1178,21 @@ def rag_enhanced_chat(request):
             # ✨ INICIAR MEDICIÓN DE RECUPERACIÓN
             tracker.start_retrieval()
             
+            # Calcular top_k dinámico basado en complejidad
+            adaptive_top_k = calculate_adaptive_top_k(content)
+            logger.info(f"📊 RAG Chat - top_k adaptativo: {adaptive_top_k}")
+            
             # Usar RAG para generar respuesta
             pipeline = RAGPipeline()
             rag_result = pipeline.query(
                 question=content,
-                top_k=5,
+                top_k=adaptive_top_k,
                 include_generation=True
             )
             
             # ✨ FINALIZAR MEDICIÓN DE RECUPERACIÓN
             sources_count = len(rag_result.get('sources', []))
-            tracker.end_retrieval(num_documents=sources_count, k=5)
+            tracker.end_retrieval(num_documents=sources_count, k=adaptive_top_k)
             
             # ✨ INICIAR MEDICIÓN DE GENERACIÓN
             tracker.start_generation()

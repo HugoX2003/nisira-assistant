@@ -549,6 +549,41 @@
   font-size: 0.8125rem;
 }
 
+/* Metrics View Toggle */
+.metrics-view-toggle {
+  display: flex;
+  gap: 0;
+  background: #2d3748;
+  border-radius: 8px;
+  padding: 0.25rem;
+  border: 1px solid #4a5568;
+}
+
+.toggle-btn {
+  padding: 0.5rem 1.25rem;
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.toggle-btn:hover {
+  color: #e4e6eb;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.toggle-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 1.25rem;

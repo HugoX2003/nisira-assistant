@@ -158,10 +158,39 @@ export async function getEmbeddingProgress() {
 
 /**
  * Obtener métricas del sistema para la tesis
- * Incluye métricas de rendimiento y precisión (RAGAS)
+ * Incluye métricas de rendimiento y precisión (Sistema Personalizado)
  */
 export async function getSystemMetrics() {
   return fetchWithAuth(`${API_BASE_URL}/admin/metrics/`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Obtener lista de consultas individuales con sus métricas
+ * @param {number} page - Número de página
+ * @param {number} pageSize - Consultas por página
+ * @param {boolean} complexOnly - Solo consultas complejas
+ */
+export async function getQueryList(page = 1, pageSize = 20, complexOnly = false) {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    page_size: pageSize.toString(),
+    complex_only: complexOnly.toString()
+  });
+  
+  return fetchWithAuth(`${API_BASE_URL}/admin/metrics/queries/?${params}`, {
+    method: 'GET',
+  });
+}
+
+/**
+ * Obtener detalles completos de una consulta específica
+ * Incluye explicación de cómo se calculó cada métrica
+ * @param {string} queryId - ID de la consulta
+ */
+export async function getQueryDetail(queryId) {
+  return fetchWithAuth(`${API_BASE_URL}/admin/metrics/queries/${queryId}/`, {
     method: 'GET',
   });
 }

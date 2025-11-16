@@ -138,7 +138,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 # BASE DE DATOS
 # ============================================================================
 if os.environ.get('DATABASE_URL'):
-    # Producción (Railway)
+    # Producción (Railway/Heroku - PostgreSQL)
     import dj_database_url
     DATABASES = {
         'default': dj_database_url.config(
@@ -147,8 +147,24 @@ if os.environ.get('DATABASE_URL'):
             conn_health_checks=True,
         )
     }
+elif os.environ.get('DB_ENGINE') == 'mysql':
+    # Desarrollo local - MySQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.environ.get('DB_NAME', 'rag_asistente'),
+            'USER': os.environ.get('DB_USER', 'root'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '3306'),
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
 else:
-    # Desarrollo local (SQLite para testing)
+    # Fallback - SQLite para testing
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',

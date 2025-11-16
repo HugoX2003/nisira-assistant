@@ -14,7 +14,7 @@ from datetime import datetime
 from django.utils import timezone
 
 from .models import QueryMetrics, RAGASMetrics
-from .ragas_evaluator import get_ragas_evaluator
+from .custom_evaluator import get_custom_evaluator
 
 logger = logging.getLogger(__name__)
 
@@ -34,12 +34,12 @@ class MetricsTracker:
         self.generation_end = None
         self.query_text = None
         self.documents_retrieved = 0
-        self.top_k = 5
+        self.top_k = None  # Se establecerá dinámicamente según la consulta
         
-        # Para evaluación RAGAS
+        # Para evaluación personalizada
         self.answer = None
         self.contexts = []
-        self.ragas_evaluator = get_ragas_evaluator()
+        self.custom_evaluator = get_custom_evaluator()
         
     def start_query(self, query_text: str, user=None, conversation=None):
         """Iniciar tracking de una nueva consulta"""
@@ -84,7 +84,7 @@ class MetricsTracker:
     
     def set_answer_and_contexts(self, answer: str, contexts: List[str]):
         """
-        Guardar respuesta y contextos para evaluación RAGAS
+        Guardar respuesta y contextos para evaluación de métricas
         
         Args:
             answer: La respuesta generada por el sistema
@@ -92,7 +92,7 @@ class MetricsTracker:
         """
         self.answer = answer
         self.contexts = contexts
-        logger.debug(f"📝 Guardado para RAGAS: respuesta ({len(answer)} chars) y {len(contexts)} contextos")
+        logger.debug(f"📝 Guardado para evaluación: respuesta ({len(answer)} chars) y {len(contexts)} contextos")
     
     def is_complex_query(self, query_text: str) -> tuple:
         """
@@ -192,35 +192,82 @@ class MetricsTracker:
             
             logger.info(f"✅ Métricas de rendimiento guardadas: {self.query_id[:8]} - {total_latency:.3f}s")
             
-            # Evaluar con RAGAS si tenemos respuesta y contextos
-            if self.answer and self.contexts and self.ragas_evaluator.is_available():
+            # TIMESTAMPS DETALLADOS
+            start_timestamp = datetime.fromtimestamp(self.start_time).isoformat()
+            end_timestamp = datetime.fromtimestamp(end_time).isoformat()
+            
+            logger.info(f"\n" + "="*80)
+            logger.info("⏱️  TIEMPOS DE RESPUESTA Y PROCESAMIENTO")
+            logger.info("="*80)
+            logger.info(f"Timestamp inicio: {start_timestamp}")
+            logger.info(f"Timestamp fin: {end_timestamp}")
+            logger.info(f"Tiempo transcurrido: {total_latency:.4f} segundos")
+            logger.info(f"\nCálculo:")
+            logger.info(f"  start_time = {self.start_time}")
+            logger.info(f"  end_time = {end_time}")
+            logger.info(f"  response_time = end_time - start_time")
+            logger.info(f"  response_time = {end_time} - {self.start_time}")
+            logger.info(f"  response_time = {total_latency:.4f}s")
+            
+            # Evaluar CALIDAD DE RESPUESTA con RAGAS si tenemos respuesta y contextos
+            if self.answer and self.contexts:
                 try:
-                    logger.info(f"🔍 Evaluando con RAGAS...")
-                    ragas_scores = self.ragas_evaluator.evaluate_single(
+                    # VELOCIDAD DE PROCESAMIENTO (tokens/segundo)
+                    tokens_generados = len(self.answer.split())  # Aproximación: palabras como tokens
+                    velocidad_procesamiento = tokens_generados / total_latency if total_latency > 0 else 0
+                    
+                    logger.info(f"\n🚀 VELOCIDAD DE PROCESAMIENTO:")
+                    logger.info(f"Tokens generados: {tokens_generados}")
+                    logger.info(f"Tiempo total: {total_latency:.4f}s")
+                    logger.info(f"Velocidad = tokens / tiempo")
+                    logger.info(f"Velocidad = {tokens_generados} / {total_latency:.4f}")
+                    logger.info(f"Velocidad = {velocidad_procesamiento:.2f} tokens/segundo")
+                    logger.info("="*80 + "\n")
+                    
+                    # Importar y usar el evaluador RAGAS
+                    from .ragas_evaluator import RAGASEvaluator
+                    
+                    logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
+                    ragas_evaluator = RAGASEvaluator()
+                    ragas_scores = ragas_evaluator.evaluate_response(
                         question=self.query_text or "",
                         answer=self.answer,
-                        contexts=self.contexts
+                        contexts=self.contexts,
+                        ground_truth=None  # Opcional
                     )
                     
-                    # Guardar métricas RAGAS
-                    ragas_metrics = RAGASMetrics.objects.create(
-                        evaluation_id=str(uuid.uuid4()),
-                        query_metrics=metrics,
-                        precision_at_k=ragas_scores.get('context_precision', 0.0),
-                        recall_at_k=ragas_scores.get('context_recall', 0.0) or 0.0,
-                        faithfulness_score=ragas_scores.get('faithfulness', 0.0),
-                        answer_relevancy=ragas_scores.get('answer_relevancy', 0.0),
-                        # hallucination_rate se calcula automáticamente en el modelo
-                    )
+                    calidad_respuesta = ragas_scores.get('calidad_respuesta', 0.0)
+                    faithfulness = ragas_scores.get('faithfulness', 0.0)
+                    answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
+                    context_precision = ragas_scores.get('context_precision', 0.0)
                     
-                    logger.info(f"✅ Métricas RAGAS guardadas: Faithfulness={ragas_metrics.faithfulness_score:.2f}, "
-                              f"Precision@k={ragas_metrics.precision_at_k:.2f}")
+                    # Preparar datos para guardar MÉTRICAS RAGAS
+                    metrics_data = {
+                        'evaluation_id': str(uuid.uuid4()),
+                        'query_metrics': metrics,
+                        'query_text': self.query_text or "",
+                        'response_text': self.answer[:500],
+                        'retrieved_contexts': str(self.contexts[:3]) if self.contexts else "",
+                        'precision_at_k': context_precision,  # Context Precision de RAGAS
+                        'recall_at_k': 0.0,  # No usado
+                        'faithfulness_score': faithfulness,
+                        'answer_relevancy': answer_relevancy,
+                        'wer_score': calidad_respuesta,  # Reusamos este campo para calidad_respuesta
+                        'k_value': self.top_k or 5
+                    }
+                    
+                    # Guardar métricas
+                    ragas_metrics = RAGASMetrics.objects.create(**metrics_data)
+                    
+                    logger.info(f"\n💾 RESUMEN DE MÉTRICAS GUARDADAS:")
+                    logger.info(f"   ⏱️  Tiempo de respuesta: {total_latency:.4f}s")
+                    logger.info(f"   🚀 Velocidad de procesamiento: {velocidad_procesamiento:.2f} tokens/s")
+                    logger.info(f"   🎯 Precision@{self.top_k}: {ragas_metrics.precision_at_k:.4f}")
+                    logger.info(f"   🎯 Recall@{self.top_k}: {ragas_metrics.recall_at_k:.4f}\n")
                     
                 except Exception as e:
-                    logger.error(f"❌ Error evaluando con RAGAS: {e}")
-            else:
-                if not self.ragas_evaluator.is_available():
-                    logger.warning("⚠️ RAGAS no disponible - instala con: pip install ragas datasets")
+                    logger.error(f"❌ Error evaluando métricas personalizadas: {e}", exc_info=True)
+            
             return metrics
             
         except Exception as e:
@@ -249,12 +296,17 @@ def get_aggregated_metrics() -> Dict[str, Any]:
     """
     Obtener métricas agregadas de todas las consultas
     
+    3 MÉTRICAS FINALES:
+    1. Latencia Total: Tiempo de respuesta promedio (segundos)
+    2. Reducción de Tiempo: Velocidad de procesamiento (tokens/segundo)
+    3. Calidad de Respuesta: Score RAGAS promedio (0-1)
+    
     Returns:
-        Dict con promedios y estadísticas
+        Dict con promedios de las 3 métricas
     """
     try:
         # Importar aquí para evitar circular imports
-        from django.db.models import Avg, Count, Q
+        from django.db.models import Avg, Count
         
         # Métricas generales
         all_queries = QueryMetrics.objects.all()
@@ -262,81 +314,55 @@ def get_aggregated_metrics() -> Dict[str, Any]:
         
         if total_queries == 0:
             return {
-                "performance": {
-                    "avgResponseTime": 0,
-                    "timeToFirstToken": 0,
-                    "complexQueryTime": 0,
-                    "totalQueries": 0
-                },
-                "precision": {
-                    "precisionAtK": 0,
-                    "recallAtK": 0,
-                    "hallucinationRate": 0,
-                    "faithfulness": 0
-                }
+                "tiempoRespuesta": 0,
+                "velocidadProcesamiento": 0,
+                "calidadRespuesta": 0,
+                "totalQueries": 0
             }
         
-        # Promedios de rendimiento
+        # 1. LATENCIA TOTAL: Promedio de tiempo de respuesta
         avg_metrics = all_queries.aggregate(
-            avg_latency=Avg('total_latency'),
-            avg_ttft=Avg('time_to_first_token'),
+            avg_latency=Avg('total_latency')
         )
+        latencia_total = avg_metrics['avg_latency'] or 0
         
-        # Promedio de consultas complejas
-        complex_queries = all_queries.filter(is_complex_query=True)
-        complex_avg = complex_queries.aggregate(avg_latency=Avg('total_latency'))
-        
-        # Métricas RAGAS
+        # 2. REDUCCIÓN DE TIEMPO: Velocidad de procesamiento (tokens/segundo)
+        # 3. CALIDAD DE RESPUESTA: Score RAGAS promedio
         ragas_metrics = RAGASMetrics.objects.all()
         ragas_count = ragas_metrics.count()
         
+        velocidad_procesamiento = 0
+        calidad_respuesta = 0
+        
         if ragas_count > 0:
-            ragas_avg = ragas_metrics.aggregate(
-                avg_precision=Avg('precision_at_k'),
-                avg_recall=Avg('recall_at_k'),
-                avg_faithfulness=Avg('faithfulness_score'),
-                avg_hallucination=Avg('hallucination_rate')
-            )
+            # Calcular velocidad de procesamiento
+            for ragas in ragas_metrics:
+                if ragas.query_metrics:
+                    tokens = len(ragas.response_text.split()) if ragas.response_text else 0
+                    time_taken = ragas.query_metrics.total_latency
+                    if time_taken > 0:
+                        velocidad_procesamiento += tokens / time_taken
+            velocidad_procesamiento = velocidad_procesamiento / ragas_count if ragas_count > 0 else 0
             
-            precision = ragas_avg['avg_precision'] or 0
-            recall = ragas_avg['avg_recall'] or 0
-            faithfulness = ragas_avg['avg_faithfulness'] or 0
-            hallucination = ragas_avg['avg_hallucination'] or 0
-        else:
-            # Valores por defecto si no hay datos RAGAS
-            precision = 0.85
-            recall = 0.78
-            faithfulness = 0.92
-            hallucination = 0.08
+            # Calcular calidad de respuesta (reusamos el campo wer_score para calidad_respuesta)
+            ragas_avg = ragas_metrics.aggregate(
+                avg_calidad=Avg('wer_score')  # Este campo ahora guarda calidad_respuesta
+            )
+            calidad_respuesta = ragas_avg['avg_calidad'] or 0
         
         return {
-            "performance": {
-                "avgResponseTime": round(avg_metrics['avg_latency'] or 0, 2),
-                "timeToFirstToken": round(avg_metrics['avg_ttft'] or 0, 2),
-                "complexQueryTime": round(complex_avg['avg_latency'] or 0, 2),
-                "totalQueries": total_queries
-            },
-            "precision": {
-                "precisionAtK": round(precision, 2),
-                "recallAtK": round(recall, 2),
-                "hallucinationRate": round(hallucination, 2),
-                "faithfulness": round(faithfulness, 2)
-            }
+            "tiempoRespuesta": round(latencia_total, 4),  # Segundos
+            "velocidadProcesamiento": round(velocidad_procesamiento, 2),  # Tokens/segundo
+            "calidadRespuesta": round(calidad_respuesta, 4),  # Score 0-1
+            "totalQueries": total_queries
         }
         
     except Exception as e:
         logger.error(f"❌ Error obteniendo métricas agregadas: {e}")
         return {
-            "performance": {
-                "avgResponseTime": 0,
-                "timeToFirstToken": 0,
-                "complexQueryTime": 0,
-                "totalQueries": 0
-            },
-            "precision": {
-                "precisionAtK": 0,
-                "recallAtK": 0,
-                "hallucinationRate": 0,
-                "faithfulness": 0
-            }
+            "tiempoRespuesta": 0,
+            "velocidadProcesamiento": 0,
+            "precision": 0,
+            "recall": 0,
+            "totalQueries": 0
         }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/AdminPanel.css';
+import QueryMetrics from './QueryMetrics';
 import {
   getDriveFiles,
   uploadDriveFile,
@@ -54,22 +55,15 @@ function AdminPanel({ onLogout, user }) {
   const [pipelineStatus, setPipelineStatus] = useState(null);
   const [pipelineLoading, setPipelineLoading] = useState(false);
   
-  // Estados para Métricas (nuevo)
+  // Estados para Métricas - SOLO 3 MÉTRICAS FINALES
   const [metrics, setMetrics] = useState({
-    performance: {
-      avgResponseTime: 0,
-      timeToFirstToken: 0,
-      complexQueryTime: 0,
-      totalQueries: 0
-    },
-    precision: {
-      precisionAtK: 0,
-      recallAtK: 0,
-      hallucinationRate: 0,
-      faithfulness: 0
-    }
+    latenciaTotal: 0,         // Tiempo de respuesta promedio (segundos)
+    reduccionTiempo: 0,       // Velocidad de procesamiento (tokens/segundo)
+    calidadRespuesta: 0,      // Score RAGAS compuesto (0-1)
+    totalQueries: 0
   });
   const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsView, setMetricsView] = useState('summary'); // 'summary' o 'detailed'
   
   // Estados de notificaciones
   const [notification, setNotification] = useState(null);
@@ -798,180 +792,123 @@ function AdminPanel({ onLogout, user }) {
           <div className="tab-content">
             <div className="section-header">
               <h2>📊 Métricas del Sistema RAG</h2>
-              <button 
-                onClick={loadMetrics} 
-                className="btn-secondary"
-                disabled={metricsLoading}
-              >
-                {metricsLoading ? 'Actualizando...' : '🔄 Actualizar'}
-              </button>
+              <div style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
+                <div className="metrics-view-toggle">
+                  <button 
+                    className={`toggle-btn ${metricsView === 'summary' ? 'active' : ''}`}
+                    onClick={() => setMetricsView('summary')}
+                  >
+                    📈 Resumen
+                  </button>
+                  <button 
+                    className={`toggle-btn ${metricsView === 'detailed' ? 'active' : ''}`}
+                    onClick={() => setMetricsView('detailed')}
+                  >
+                    🔍 Detalle por Consulta
+                  </button>
+                </div>
+                {metricsView === 'summary' && (
+                  <button 
+                    onClick={loadMetrics} 
+                    className="btn-secondary"
+                    disabled={metricsLoading}
+                  >
+                    {metricsLoading ? 'Actualizando...' : '🔄 Actualizar'}
+                  </button>
+                )}
+              </div>
             </div>
 
-            {metricsLoading ? (
+            {metricsView === 'detailed' ? (
+              <QueryMetrics showNotification={showNotification} />
+            ) : metricsLoading ? (
               <div className="loading">
                 <div className="spinner"></div>
                 <p>Cargando métricas...</p>
               </div>
             ) : (
               <div className="metrics-container">
-                {/* Sección: Métricas de Rendimiento */}
+                {/* SOLO 3 MÉTRICAS FINALES */}
                 <div className="metrics-section">
-                  <h3 className="metrics-section-title">⏱️ Métricas de Rendimiento</h3>
+                  <h3 className="metrics-section-title">📊 MÉTRICAS DEL SISTEMA (3 Métricas Finales con RAGAS)</h3>
                   <p className="metrics-section-subtitle">
-                    Instrumento: <strong>Logs del Programa</strong>
+                    Consultas analizadas: <strong>{metrics.totalQueries}</strong> | Evaluadas con RAGAS + Gemini API
                   </p>
                   
-                  <div className="metrics-grid">
-                    <div className="metric-card">
-                      <div className="metric-icon">🕐</div>
-                      <div className="metric-content">
-                        <h4>Tiempo de Respuesta Promedio</h4>
-                        <p className="metric-description">
-                          <strong>Técnica:</strong> Latencia Total (Total Latency)
-                          <br/>
-                          <strong>Indicador:</strong> Tiempo de respuesta
-                          <br/>
-                          <strong>Instrumento:</strong> Registro del Sistema / API Timing
-                        </p>
-                        <div className="metric-value">{metrics.performance.avgResponseTime.toFixed(2)}s</div>
-                        <div className="metric-label">Promedio de {metrics.performance.totalQueries} consultas</div>
-                      </div>
-                    </div>
-
-                    <div className="metric-card">
-                      <div className="metric-icon">⚡</div>
-                      <div className="metric-content">
-                        <h4>Velocidad de Procesamiento</h4>
-                        <p className="metric-description">
-                          <strong>Técnica:</strong> Time to First Token
-                          <br/>
-                          <strong>Indicador:</strong> Velocidad de procesamiento
-                          <br/>
-                          <strong>Instrumento:</strong> Logs del programa
-                        </p>
-                        <div className="metric-value">{metrics.performance.timeToFirstToken.toFixed(2)}s</div>
-                        <div className="metric-label">Tiempo hasta el primer token</div>
-                      </div>
-                    </div>
-
-                    <div className="metric-card">
-                      <div className="metric-icon">🔍</div>
-                      <div className="metric-content">
-                        <h4>Tiempo de Consultas Complejas</h4>
-                        <p className="metric-description">
-                          <strong>Técnica:</strong> Run-time Efficiency
-                          <br/>
-                          <strong>Indicador:</strong> Tiempo de resolución de consultas complejas
-                          <br/>
-                          <strong>Instrumento:</strong> Logs del programa
-                        </p>
-                        <div className="metric-value">{metrics.performance.complexQueryTime.toFixed(2)}s</div>
-                        <div className="metric-label">Análisis de eficiencia en tiempo de ejecución</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sección: Métricas de Precisión */}
-                <div className="metrics-section">
-                  <h3 className="metrics-section-title">🎯 Métricas de Precisión y Exactitud</h3>
-                  <p className="metrics-section-subtitle">
-                    Instrumento: <strong>RAGAS (Retrieval Augmented Generation Assessment)</strong>
-                  </p>
-                  
-                  <div className="metrics-grid">
+                  <div className="metrics-grid" style={{gridTemplateColumns: 'repeat(3, 1fr)'}}>
+                    {/* MÉTRICA 1: LATENCIA TOTAL */}
                     <div className="metric-card precision-metric">
-                      <div className="metric-icon">🎯</div>
+                      <div className="metric-icon">⏱️</div>
                       <div className="metric-content">
-                        <h4>Precision@k</h4>
+                        <h4>Latencia Total</h4>
                         <p className="metric-description">
-                          <strong>Técnica:</strong> Precision@k (P@k)
+                          <strong>Cálculo:</strong> end_time - start_time
                           <br/>
-                          <strong>Indicador:</strong> Índice de precisión
+                          <strong>Método:</strong> time.time() en Python
                           <br/>
-                          <strong>Instrumento:</strong> RAGAS
+                          <strong>Unidad:</strong> Segundos (s)
                         </p>
-                        <div className="metric-value">{(metrics.precision.precisionAtK * 100).toFixed(1)}%</div>
+                        <div className="metric-value">{metrics.latenciaTotal.toFixed(4)}s</div>
                         <div className="metric-progress">
                           <div 
                             className="metric-progress-bar" 
-                            style={{width: `${metrics.precision.precisionAtK * 100}%`}}
+                            style={{width: `${Math.min((metrics.latenciaTotal / 10) * 100, 100)}%`}}
                           ></div>
                         </div>
-                        <div className="metric-label">Relevancia de documentos recuperados</div>
+                        <div className="metric-label">Tiempo promedio de respuesta completa</div>
                       </div>
                     </div>
 
+                    {/* MÉTRICA 2: REDUCCIÓN DE TIEMPO */}
                     <div className="metric-card precision-metric">
-                      <div className="metric-icon">📋</div>
+                      <div className="metric-icon">🚀</div>
                       <div className="metric-content">
-                        <h4>Recall@k</h4>
+                        <h4>Reducción de Tiempo</h4>
                         <p className="metric-description">
-                          <strong>Técnica:</strong> Recall@k (R@k)
+                          <strong>Cálculo:</strong> tokens_generados / tiempo_total
                           <br/>
-                          <strong>Indicador:</strong> Índice de exhaustividad
+                          <strong>Método:</strong> len(respuesta.split()) / tiempo
                           <br/>
-                          <strong>Instrumento:</strong> RAGAS
+                          <strong>Unidad:</strong> Tokens por segundo
                         </p>
-                        <div className="metric-value">{(metrics.precision.recallAtK * 100).toFixed(1)}%</div>
+                        <div className="metric-value">{metrics.reduccionTiempo.toFixed(2)} tokens/s</div>
                         <div className="metric-progress">
                           <div 
                             className="metric-progress-bar recall" 
-                            style={{width: `${metrics.precision.recallAtK * 100}%`}}
+                            style={{width: `${Math.min((metrics.reduccionTiempo / 50) * 100, 100)}%`}}
                           ></div>
                         </div>
-                        <div className="metric-label">Cobertura de documentos relevantes</div>
+                        <div className="metric-label">Velocidad de procesamiento</div>
                       </div>
                     </div>
 
+                    {/* MÉTRICA 3: CALIDAD DE RESPUESTA (RAGAS) */}
                     <div className="metric-card precision-metric">
                       <div className="metric-icon">✨</div>
                       <div className="metric-content">
-                        <h4>Fidelidad (Faithfulness)</h4>
+                        <h4>Calidad de Respuesta</h4>
                         <p className="metric-description">
-                          <strong>Técnica:</strong> Faithfulness Score
+                          <strong>Cálculo:</strong> Score RAGAS compuesto
                           <br/>
-                          <strong>Indicador:</strong> Tasa de alucinación inversa
+                          <strong>Método:</strong> Faithfulness (40%) + Answer Relevancy (40%) + Context Precision (20%)
                           <br/>
-                          <strong>Instrumento:</strong> RAGAS
+                          <strong>Unidad:</strong> Score 0-1
                         </p>
-                        <div className="metric-value">{(metrics.precision.faithfulness * 100).toFixed(1)}%</div>
+                        <div className="metric-value">{(metrics.calidadRespuesta * 100).toFixed(2)}%</div>
                         <div className="metric-progress">
                           <div 
-                            className="metric-progress-bar faithfulness" 
-                            style={{width: `${metrics.precision.faithfulness * 100}%`}}
+                            className="metric-progress-bar" 
+                            style={{width: `${metrics.calidadRespuesta * 100}%`}}
                           ></div>
                         </div>
-                        <div className="metric-label">Fidelidad a los documentos fuente</div>
-                      </div>
-                    </div>
-
-                    <div className="metric-card precision-metric alert">
-                      <div className="metric-icon">⚠️</div>
-                      <div className="metric-content">
-                        <h4>Tasa de Alucinación</h4>
-                        <p className="metric-description">
-                          <strong>Técnica:</strong> Hallucination Rate
-                          <br/>
-                          <strong>Indicador:</strong> Tasa de falsos positivos
-                          <br/>
-                          <strong>Instrumento:</strong> RAGAS
-                        </p>
-                        <div className="metric-value">{(metrics.precision.hallucinationRate * 100).toFixed(1)}%</div>
-                        <div className="metric-progress">
-                          <div 
-                            className="metric-progress-bar error" 
-                            style={{width: `${metrics.precision.hallucinationRate * 100}%`}}
-                          ></div>
-                        </div>
-                        <div className="metric-label">Información no respaldada por fuentes</div>
+                        <div className="metric-label">Evaluación RAGAS con Gemini API</div>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Indicador de datos reales */}
-                {metrics.performance.totalQueries > 0 && (
+                {metrics.totalQueries > 0 && (
                   <div style={{
                     background: 'linear-gradient(135deg, #064e3b 0%, #065f46 100%)',
                     border: '2px solid #10b981',
@@ -981,10 +918,10 @@ function AdminPanel({ onLogout, user }) {
                     textAlign: 'center'
                   }}>
                     <p style={{margin: 0, color: '#6ee7b7', fontSize: '0.9rem', fontWeight: 600}}>
-                      ✅ <strong>DATOS REALES</strong> - Estas métricas se calculan automáticamente desde la base de datos
+                      ✅ <strong>DATOS REALES CON RAGAS</strong> - 3 métricas evaluadas con RAGAS + Gemini API
                       <br/>
                       <span style={{fontSize: '0.85rem', color: '#a7f3d0'}}>
-                        {metrics.performance.totalQueries} consultas registradas en el sistema
+                        {metrics.totalQueries} consultas analizadas | Evaluación de calidad con IA
                       </span>
                     </p>
                   </div>

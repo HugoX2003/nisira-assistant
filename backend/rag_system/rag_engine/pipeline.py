@@ -357,7 +357,7 @@ class RAGPipeline:
     def query(
         self,
         question: str,
-        top_k: int = 5,
+        top_k: int = 8,  # Cambiado de 5 a 8 como nuevo default razonable
         include_generation: bool = True,
         collect_metrics: bool = False
     ) -> Dict[str, Any]:
