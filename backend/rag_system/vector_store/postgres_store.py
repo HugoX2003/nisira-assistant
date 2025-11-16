@@ -33,6 +33,7 @@ class PostgresVectorStore:
         self.database_url = database_url or os.getenv('DATABASE_URL')
         self.conn = None
         self.embedding_dim = 768  # Dimensión de embeddings de Google
+        self.use_vector_type = False  # Rastrear si pgvector está disponible
         
         if not PSYCOPG2_AVAILABLE:
             logger.error("❌ psycopg2 no disponible")
@@ -59,16 +60,22 @@ class PostgresVectorStore:
         try:
             with self.conn.cursor() as cur:
                 # Habilitar extensión pgvector (si está disponible)
-                # Si no está, usamos JSONB para almacenar los vectores
+                use_vector = False
                 try:
                     cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                    self.conn.commit()
                     use_vector = True
-                except Exception:
-                    logger.warning("⚠️ pgvector no disponible, usando JSONB para vectores")
+                    self.use_vector_type = True
+                    logger.info("✅ Extensión pgvector habilitada")
+                except Exception as e:
+                    logger.warning(f"⚠️ pgvector no disponible, usando JSONB para vectores: {e}")
+                    self.conn.rollback()
                     use_vector = False
+                    self.use_vector_type = False
                 
                 # Crear tabla
                 if use_vector:
+                    # Con pgvector
                     cur.execute(f"""
                         CREATE TABLE IF NOT EXISTS rag_embeddings (
                             id UUID PRIMARY KEY,
@@ -78,12 +85,40 @@ class PostgresVectorStore:
                             created_at TIMESTAMP DEFAULT NOW(),
                             updated_at TIMESTAMP DEFAULT NOW()
                         );
-                        
-                        CREATE INDEX IF NOT EXISTS idx_embedding_vector 
-                        ON rag_embeddings USING ivfflat (embedding_vector vector_cosine_ops)
-                        WITH (lists = 100);
                     """)
+                    self.conn.commit()
+                    logger.info("✅ Tabla rag_embeddings creada con tipo vector")
+                    
+                    # Crear índice IVFFlat (solo si hay suficientes datos)
+                    try:
+                        # Verificar si ya existe el índice
+                        cur.execute("""
+                            SELECT COUNT(*) FROM pg_indexes 
+                            WHERE tablename = 'rag_embeddings' 
+                            AND indexname = 'idx_embedding_vector'
+                        """)
+                        if cur.fetchone()[0] == 0:
+                            # Crear índice solo si hay más de 1000 filas (recomendación pgvector)
+                            cur.execute("SELECT COUNT(*) FROM rag_embeddings")
+                            row_count = cur.fetchone()[0]
+                            
+                            if row_count > 1000:
+                                logger.info(f"📊 Creando índice IVFFlat para {row_count} embeddings...")
+                                cur.execute(f"""
+                                    CREATE INDEX idx_embedding_vector 
+                                    ON rag_embeddings 
+                                    USING ivfflat (embedding_vector vector_cosine_ops)
+                                    WITH (lists = 100);
+                                """)
+                                self.conn.commit()
+                                logger.info("✅ Índice IVFFlat creado")
+                            else:
+                                logger.info(f"ℹ️  Solo {row_count} embeddings, índice IVFFlat se creará después de 1000+")
+                    except Exception as idx_error:
+                        logger.warning(f"⚠️ No se pudo crear índice IVFFlat: {idx_error}")
+                        self.conn.rollback()
                 else:
+                    # Sin pgvector, usar JSONB
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS rag_embeddings (
                             id UUID PRIMARY KEY,
@@ -93,12 +128,22 @@ class PostgresVectorStore:
                             created_at TIMESTAMP DEFAULT NOW(),
                             updated_at TIMESTAMP DEFAULT NOW()
                         );
-                        
-                        CREATE INDEX IF NOT EXISTS idx_metadata 
-                        ON rag_embeddings USING gin(metadata);
                     """)
+                    self.conn.commit()
+                    logger.info("✅ Tabla rag_embeddings creada con tipo JSONB")
+                    
+                    # Índice para metadata
+                    try:
+                        cur.execute("""
+                            CREATE INDEX IF NOT EXISTS idx_metadata 
+                            ON rag_embeddings USING gin(metadata);
+                        """)
+                        self.conn.commit()
+                        logger.info("✅ Índice GIN para metadata creado")
+                    except Exception as idx_error:
+                        logger.warning(f"⚠️ Error creando índice metadata: {idx_error}")
+                        self.conn.rollback()
                 
-                self.conn.commit()
                 logger.info("✅ Tabla rag_embeddings lista")
                 
         except Exception as e:
@@ -151,13 +196,17 @@ class PostgresVectorStore:
                     metadata['doc_id'] = doc_id
                     metadata['added_at'] = now.isoformat()
                     
-                    # Convertir embedding a formato JSON
-                    embedding_json = json.dumps(embedding)
+                    if self.use_vector_type:
+                        # Usar formato de array para pgvector: [0.1, 0.2, ...]
+                        embedding_str = '[' + ','.join(str(x) for x in embedding) + ']'
+                    else:
+                        # Convertir embedding a formato JSON para JSONB
+                        embedding_str = json.dumps(embedding)
                     
                     values.append((
                         doc_id,
                         chunk_text,
-                        embedding_json,
+                        embedding_str,
                         Json(metadata),
                         now,
                         now
@@ -168,20 +217,35 @@ class PostgresVectorStore:
                     return True
                 
                 logger.info(f"🔵 Preparados {len(values)} valores para insertar en PostgreSQL")
-                logger.info(f"🔵 Muestra del primer valor: id={values[0][0][:8]}..., texto_len={len(values[0][1])}, metadata_keys={list(values[0][3].keys()) if hasattr(values[0][3], 'keys') else 'N/A'}")
+                logger.info(f"🔵 Usando tipo: {'vector' if self.use_vector_type else 'JSONB'}")
+                logger.info(f"🔵 Muestra del primer valor: id={values[0][0][:8]}..., texto_len={len(values[0][1])}")
                 
-                # Inserción batch
+                # Inserción batch con el tipo correcto
                 logger.info("🔵 Ejecutando INSERT batch en PostgreSQL...")
-                execute_values(
-                    cur,
-                    """
-                    INSERT INTO rag_embeddings 
-                    (id, chunk_text, embedding_vector, metadata, created_at, updated_at)
-                    VALUES %s
-                    """,
-                    values,
-                    template="(%s, %s, %s::jsonb, %s, %s, %s)"
-                )
+                if self.use_vector_type:
+                    # Con pgvector
+                    execute_values(
+                        cur,
+                        """
+                        INSERT INTO rag_embeddings 
+                        (id, chunk_text, embedding_vector, metadata, created_at, updated_at)
+                        VALUES %s
+                        """,
+                        values,
+                        template="(%s, %s, %s::vector, %s, %s, %s)"
+                    )
+                else:
+                    # Con JSONB
+                    execute_values(
+                        cur,
+                        """
+                        INSERT INTO rag_embeddings 
+                        (id, chunk_text, embedding_vector, metadata, created_at, updated_at)
+                        VALUES %s
+                        """,
+                        values,
+                        template="(%s, %s, %s::jsonb, %s, %s, %s)"
+                    )
                 
                 logger.info("🔵 INSERT completado, ejecutando COMMIT...")
                 self.conn.commit()
@@ -220,60 +284,94 @@ class PostgresVectorStore:
         
         try:
             with self.conn.cursor() as cur:
-                # Convertir query embedding a JSON
-                query_vector = json.dumps(query_embedding)
-                
-                # Búsqueda por similitud coseno
-                # Calculamos la similitud manualmente con JSONB
-                cur.execute("""
-                    WITH query_vec AS (
-                        SELECT %s::jsonb as vec
-                    )
-                    SELECT 
-                        id,
-                        chunk_text,
-                        embedding_vector,
-                        metadata,
-                        (
-                            SELECT 1 - (
-                                SUM((ev.value::float * qv.value::float)) / 
-                                (
-                                    SQRT(SUM(POW(ev.value::float, 2))) * 
-                                    SQRT(SUM(POW(qv.value::float, 2)))
+                if self.use_vector_type:
+                    # Búsqueda con pgvector (mucho más eficiente)
+                    query_vector_str = '[' + ','.join(str(x) for x in query_embedding) + ']'
+                    
+                    cur.execute("""
+                        SELECT 
+                            id,
+                            chunk_text,
+                            metadata,
+                            1 - (embedding_vector <=> %s::vector) as similarity
+                        FROM rag_embeddings
+                        ORDER BY embedding_vector <=> %s::vector
+                        LIMIT %s;
+                    """, (query_vector_str, query_vector_str, n_results * 2))
+                    
+                    results = []
+                    for row in cur.fetchall():
+                        doc_id, chunk_text, metadata, similarity = row
+                        
+                        # Filtrar por threshold
+                        if similarity < similarity_threshold:
+                            continue
+                        
+                        results.append({
+                            'id': str(doc_id),
+                            'document': chunk_text,
+                            'content': chunk_text,
+                            'metadata': metadata,
+                            'similarity_score': float(similarity),
+                            'distance': float(1 - similarity),
+                            'rank': len(results) + 1
+                        })
+                        
+                        if len(results) >= n_results:
+                            break
+                else:
+                    # Búsqueda manual con JSONB (menos eficiente pero funciona)
+                    query_vector = json.dumps(query_embedding)
+                    
+                    cur.execute("""
+                        WITH query_vec AS (
+                            SELECT %s::jsonb as vec
+                        )
+                        SELECT 
+                            id,
+                            chunk_text,
+                            embedding_vector,
+                            metadata,
+                            (
+                                SELECT 1 - (
+                                    SUM((ev.value::float * qv.value::float)) / 
+                                    (
+                                        SQRT(SUM(POW(ev.value::float, 2))) * 
+                                        SQRT(SUM(POW(qv.value::float, 2)))
+                                    )
                                 )
-                            )
-                            FROM jsonb_array_elements_text(embedding_vector) WITH ORDINALITY ev(value, idx)
-                            JOIN jsonb_array_elements_text((SELECT vec FROM query_vec)) WITH ORDINALITY qv(value, idx2)
-                                ON ev.idx = qv.idx2
-                        ) as distance
-                    FROM rag_embeddings
-                    ORDER BY distance ASC
-                    LIMIT %s * 2;
-                """, (query_vector, n_results))
-                
-                results = []
-                for row in cur.fetchall():
-                    doc_id, chunk_text, embedding_json, metadata, distance = row
+                                FROM jsonb_array_elements_text(embedding_vector) WITH ORDINALITY ev(value, idx)
+                                JOIN jsonb_array_elements_text((SELECT vec FROM query_vec)) WITH ORDINALITY qv(value, idx2)
+                                    ON ev.idx = qv.idx2
+                            ) as distance
+                        FROM rag_embeddings
+                        ORDER BY distance ASC
+                        LIMIT %s * 2;
+                    """, (query_vector, n_results))
                     
-                    # Convertir distancia a score de similitud
-                    similarity_score = max(0, 1 - distance) if distance else 0
-                    
-                    # Filtrar por threshold
-                    if similarity_score < similarity_threshold:
-                        continue
-                    
-                    results.append({
-                        'id': str(doc_id),
-                        'document': chunk_text,
-                        'content': chunk_text,
-                        'metadata': metadata,
-                        'similarity_score': similarity_score,
-                        'distance': distance,
-                        'rank': len(results) + 1
-                    })
-                    
-                    if len(results) >= n_results:
-                        break
+                    results = []
+                    for row in cur.fetchall():
+                        doc_id, chunk_text, embedding_json, metadata, distance = row
+                        
+                        # Convertir distancia a score de similitud
+                        similarity_score = max(0, 1 - distance) if distance else 0
+                        
+                        # Filtrar por threshold
+                        if similarity_score < similarity_threshold:
+                            continue
+                        
+                        results.append({
+                            'id': str(doc_id),
+                            'document': chunk_text,
+                            'content': chunk_text,
+                            'metadata': metadata,
+                            'similarity_score': similarity_score,
+                            'distance': distance,
+                            'rank': len(results) + 1
+                        })
+                        
+                        if len(results) >= n_results:
+                            break
                 
                 logger.info(f"🔍 Búsqueda completada: {len(results)} resultados")
                 return results
