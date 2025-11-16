@@ -55,10 +55,22 @@ class RAGPipeline:
         
         # Elegir backend de vector store (PostgreSQL por defecto en producción)
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
-        if vector_backend == 'postgres':
-            self.vector_store = PostgresVectorStore(VECTOR_STORE_CONFIG.get('database_url'))
-            logger.info("✅ Usando PostgreSQL como vector store")
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
+        
+        logger.info(f"🔍 Vector store backend configurado: {vector_backend}")
+        logger.info(f"🔍 DATABASE_URL presente: {bool(database_url)}")
+        
+        if vector_backend == 'postgres' and database_url:
+            try:
+                self.vector_store = PostgresVectorStore(database_url)
+                logger.info("✅ Usando PostgreSQL como vector store")
+            except Exception as e:
+                logger.error(f"❌ Error al inicializar PostgreSQL: {e}")
+                logger.warning("⚠️ Fallback a ChromaDB")
+                self.vector_store = ChromaManager()
         else:
+            if vector_backend == 'postgres' and not database_url:
+                logger.warning("⚠️ PostgreSQL configurado pero DATABASE_URL no disponible, usando ChromaDB")
             self.vector_store = ChromaManager()
             logger.info("✅ Usando ChromaDB como vector store")
         
