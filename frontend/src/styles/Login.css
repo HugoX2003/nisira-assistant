@@ -609,10 +609,44 @@
 
 /* Mensaje de error mejorado para login */
 .login .error-message {
-  background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(220,38,38,0.12));
-  border: 1px solid rgba(239,68,68,0.4);
-  box-shadow: 0 4px 12px rgba(239,68,68,0.15);
-  animation: errorShake 0.5s ease-out;
+  background: linear-gradient(135deg, rgba(239,68,68,0.15), rgba(220,38,38,0.15));
+  border: 1px solid rgba(239,68,68,0.5);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  color: #fca5a5;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(239,68,68,0.2);
+  animation: errorShake 0.5s ease-out, fadeIn 0.3s ease-out;
+}
+
+.login .success-message {
+  background: linear-gradient(135deg, rgba(34,197,94,0.15), rgba(22,163,74,0.15));
+  border: 1px solid rgba(34,197,94,0.5);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  color: #86efac;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(34,197,94,0.2);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes errorShake {

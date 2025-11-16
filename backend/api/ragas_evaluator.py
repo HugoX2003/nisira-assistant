@@ -17,6 +17,10 @@ import logging
 import os
 from typing import List, Dict, Any
 from datasets import Dataset
+
+# Silenciar el warning de git antes de importar RAGAS
+os.environ.setdefault('GIT_PYTHON_REFRESH', 'quiet')
+
 from ragas import evaluate
 from ragas.metrics import (
     faithfulness,

@@ -70,7 +70,19 @@ export default function Register({ onRegister, onBackToLogin }) {
       }, 2000);
     } catch (err) {
       // Manejar errores del servidor
-      const errorMessage = err.response?.data?.error || "Error al crear la cuenta";
+      console.error("Error de registro:", err.response?.data);
+      
+      // Extraer el mensaje de error del backend
+      let errorMessage = "Error al crear la cuenta";
+      
+      if (err.response?.data?.error) {
+        errorMessage = err.response.data.error;
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -224,6 +236,24 @@ export default function Register({ onRegister, onBackToLogin }) {
             />
           </div>
 
+          {/* Mostrar mensajes de error / éxito */}
+          {error && (
+            <div className="error-message" role="alert" aria-live="polite">
+              <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: '8px' }}>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/>
+              </svg>
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="success-message" role="status" aria-live="polite">
+              <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: '8px' }}>
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/>
+              </svg>
+              {success}
+            </div>
+          )}
+
           {/* Botón de registro */}
           <button type="submit" disabled={loading} className="btn-primary gpt-btn register-btn">
             {loading ? (
@@ -253,10 +283,6 @@ export default function Register({ onRegister, onBackToLogin }) {
             <span className="btn-icon">←</span>
             <span>¿Ya tienes cuenta? Inicia sesión</span>
           </button>
-
-          {/* Mostrar mensajes de error / éxito */}
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
         </form>
       </div>
     </div>

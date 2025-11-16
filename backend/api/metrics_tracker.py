@@ -224,22 +224,30 @@ class MetricsTracker:
                     logger.info(f"Velocidad = {velocidad_procesamiento:.2f} tokens/segundo")
                     logger.info("="*80 + "\n")
                     
-                    # Importar y usar el evaluador RAGAS
-                    from .ragas_evaluator import RAGASEvaluator
-                    
-                    logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
-                    ragas_evaluator = RAGASEvaluator()
-                    ragas_scores = ragas_evaluator.evaluate_response(
-                        question=self.query_text or "",
-                        answer=self.answer,
-                        contexts=self.contexts,
-                        ground_truth=None  # Opcional
-                    )
-                    
-                    calidad_respuesta = ragas_scores.get('calidad_respuesta', 0.0)
-                    faithfulness = ragas_scores.get('faithfulness', 0.0)
-                    answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
-                    context_precision = ragas_scores.get('context_precision', 0.0)
+                    # Importar y usar el evaluador RAGAS (si está disponible)
+                    try:
+                        from .ragas_evaluator import RAGASEvaluator
+                        
+                        logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
+                        ragas_evaluator = RAGASEvaluator()
+                        ragas_scores = ragas_evaluator.evaluate_response(
+                            question=self.query_text or "",
+                            answer=self.answer,
+                            contexts=self.contexts,
+                            ground_truth=None  # Opcional
+                        )
+                        
+                        calidad_respuesta = ragas_scores.get('calidad_respuesta', 0.0)
+                        faithfulness = ragas_scores.get('faithfulness', 0.0)
+                        answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
+                        context_precision = ragas_scores.get('context_precision', 0.0)
+                    except ImportError as e:
+                        logger.warning(f"⚠️ RAGAS no disponible (requiere git): {e}")
+                        # Usar valores por defecto si RAGAS no está disponible
+                        calidad_respuesta = 0.0
+                        faithfulness = 0.0
+                        answer_relevancy = 0.0
+                        context_precision = 0.0
                     
                     # Preparar datos para guardar MÉTRICAS RAGAS
                     metrics_data = {
