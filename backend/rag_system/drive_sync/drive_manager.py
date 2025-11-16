@@ -222,16 +222,29 @@ class GoogleDriveManager:
             file_modified_time: Fecha de modificación del archivo en Drive
         
         Returns:
-            ID del archivo guardado (UUID para PostgreSQL, path para filesystem) o None si falló
+            ID del archivo guardado (UUID para PostgreSQL, path para filesystem)
+            o None si falló
+            o "TOO_LARGE" si el archivo excede el límite de tamaño
         """
         if not self.service:
             logger.error("Servicio de Google Drive no inicializado")
             return None
         
+        # Límite de tamaño para PostgreSQL (50MB para evitar OOM kills)
+        MAX_FILE_SIZE_POSTGRES = 50 * 1024 * 1024  # 50MB
+        
         try:
             # Obtener metadatos del archivo
-            file_metadata = self.service.files().get(fileId=file_id).execute()
+            file_metadata = self.service.files().get(fileId=file_id, fields='id,name,mimeType,size').execute()
             mime_type = file_metadata.get('mimeType', '')
+            file_size = int(file_metadata.get('size', 0))
+            
+            # Verificar tamaño si vamos a usar PostgreSQL
+            if self.use_postgres and file_size > MAX_FILE_SIZE_POSTGRES:
+                logger.warning(f"⚠️ Archivo muy grande ({file_size / 1024 / 1024:.1f}MB): {file_name}")
+                logger.warning(f"   Límite para PostgreSQL: {MAX_FILE_SIZE_POSTGRES / 1024 / 1024}MB")
+                logger.warning(f"   Saltando archivo para evitar crash del servidor")
+                return "TOO_LARGE"
             
             # Descargar a memoria
             if 'google-apps' in mime_type:
@@ -246,13 +259,21 @@ class GoogleDriveManager:
                 # Archivo normal
                 request = self.service.files().get_media(fileId=file_id)
             
-            # Descargar contenido a memoria
+            # Descargar contenido a memoria con límite
             file_content = io.BytesIO()
             downloader = MediaIoBaseDownload(file_content, request)
             done = False
+            downloaded_size = 0
+            
             while done is False:
                 status, done = downloader.next_chunk()
                 if status:
+                    downloaded_size = int(status.resumable_progress)
+                    
+                    # Verificar tamaño durante descarga
+                    if self.use_postgres and downloaded_size > MAX_FILE_SIZE_POSTGRES:
+                        logger.warning(f"⚠️ Descarga excedió límite: {file_name} ({downloaded_size / 1024 / 1024:.1f}MB)")
+                        return "TOO_LARGE"
                     logger.debug(f"Descarga {int(status.progress() * 100)}% - {file_name}")
             
             # Obtener bytes
@@ -260,7 +281,7 @@ class GoogleDriveManager:
             
             # Guardar según configuración
             if self.use_postgres:
-                # Guardar en PostgreSQL
+                # Guardar en PostgreSQL con manejo de errores
                 modified_time = None
                 if file_modified_time:
                     try:
@@ -270,24 +291,40 @@ class GoogleDriveManager:
                     except:
                         pass
                 
-                saved_id = self.file_store.save_file(
-                    file_name=file_name,
-                    file_content=file_bytes,
-                    mime_type=mime_type,
-                    drive_file_id=file_id,
-                    drive_modified_time=modified_time,
-                    metadata={
-                        'source': 'google_drive',
-                        'original_mime': file_metadata.get('mimeType', ''),
-                        'size': len(file_bytes)
-                    }
-                )
+                logger.info(f"💾 Guardando en PostgreSQL: {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
                 
-                if saved_id:
-                    logger.info(f"💾 Archivo guardado en PostgreSQL: {file_name} (ID: {saved_id})")
-                    return saved_id
-                else:
-                    logger.error(f"❌ Error guardando en PostgreSQL: {file_name}")
+                try:
+                    saved_id = self.file_store.save_file(
+                        file_name=file_name,
+                        file_content=file_bytes,
+                        mime_type=mime_type,
+                        drive_file_id=file_id,
+                        drive_modified_time=modified_time,
+                        metadata={
+                            'source': 'google_drive',
+                            'original_mime': file_metadata.get('mimeType', ''),
+                            'size': len(file_bytes)
+                        }
+                    )
+                    
+                    if saved_id:
+                        logger.info(f"✅ Guardado en PostgreSQL: {file_name} (ID: {saved_id})")
+                        return saved_id
+                    else:
+                        logger.error(f"❌ Error guardando en PostgreSQL: {file_name}")
+                        return None
+                        
+                except Exception as e:
+                    # Detectar errores de OOM o memoria
+                    error_msg = str(e).lower()
+                    if 'memory' in error_msg or 'oom' in error_msg or 'out of memory' in error_msg:
+                        logger.error(f"❌ Error de memoria al guardar {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
+                        logger.error(f"   Archivo muy grande para PostgreSQL, considere reducir MAX_FILE_SIZE_POSTGRES")
+                    elif 'connection' in error_msg or 'closed' in error_msg:
+                        logger.error(f"❌ Conexión PostgreSQL perdida al guardar {file_name}")
+                        logger.error(f"   Posible crash del servidor - revisar logs de PostgreSQL")
+                    else:
+                        logger.error(f"❌ Error inesperado al guardar {file_name}: {e}")
                     return None
             else:
                 # Guardar en filesystem (fallback)
@@ -359,6 +396,7 @@ class GoogleDriveManager:
             
             downloaded_files = []
             skipped_files = []
+            too_large_files = []  # Archivos omitidos por tamaño
             errors = []
             
             for file_info in files:
@@ -409,7 +447,12 @@ class GoogleDriveManager:
                 
                 if should_download:
                     downloaded_id = self.download_file(file_id, file_name, modified_time)
-                    if downloaded_id:
+                    
+                    if downloaded_id == "TOO_LARGE":
+                        # Archivo omitido por tamaño
+                        too_large_files.append(file_name)
+                    elif downloaded_id:
+                        # Descargado exitosamente
                         downloaded_files.append({
                             "name": file_name,
                             "id": file_id,
@@ -418,6 +461,7 @@ class GoogleDriveManager:
                             "storage": "postgres" if self.use_postgres else "filesystem"
                         })
                     else:
+                        # Error al descargar
                         errors.append(f"Error descargando {file_name}")
             
             result = {
@@ -425,16 +469,28 @@ class GoogleDriveManager:
                 "files_processed": len(files),
                 "downloaded": len(downloaded_files),
                 "skipped": len(skipped_files),
+                "too_large": len(too_large_files),
                 "errors": len(errors),
                 "storage_type": "PostgreSQL" if self.use_postgres else "Filesystem",
                 "downloaded_files": downloaded_files,
-                "skipped_files": skipped_files
+                "skipped_files": skipped_files,
+                "too_large_files": too_large_files
             }
             
             if errors:
                 result["error_details"] = errors
             
-            logger.info(f"✅ Sincronización completada: {len(downloaded_files)} descargados, {len(skipped_files)} omitidos")
+            # Log resumen con detalles
+            logger.info(f"✅ Sincronización completada:")
+            logger.info(f"   📥 {len(downloaded_files)} descargados")
+            logger.info(f"   ⏭️  {len(skipped_files)} omitidos (ya existían)")
+            if too_large_files:
+                logger.warning(f"   ⚠️  {len(too_large_files)} muy grandes (>50MB)")
+                logger.warning(f"   Archivos grandes omitidos: {', '.join(too_large_files[:5])}")
+                if len(too_large_files) > 5:
+                    logger.warning(f"   ... y {len(too_large_files) - 5} más")
+            if errors:
+                logger.error(f"   ❌ {len(errors)} errores")
             
             return result
             
