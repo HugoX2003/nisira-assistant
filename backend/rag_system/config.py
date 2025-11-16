@@ -125,6 +125,12 @@ CHROMA_CONFIG = {
     "embedding_dimension": 768,     # Para all-mpnet-base-v2 (MÁXIMA CALIDAD - 768 dimensiones)
 }
 
+# ===== VECTOR STORE CONFIGURACIÓN =====
+VECTOR_STORE_CONFIG = {
+    'backend': os.getenv('VECTOR_STORE_BACKEND', 'postgres'),  # 'postgres' o 'chroma'
+    'database_url': os.getenv('DATABASE_URL'),
+}
+
 # ===== RAG ENGINE CONFIGURACIÓN =====
 RAG_CONFIG = {
     "retrieval": {

@@ -29,12 +29,13 @@ try:
 except ImportError:
     LANGCHAIN_GOOGLE_AVAILABLE = False
 
-from ..config import RAG_CONFIG, API_CONFIG
+from ..config import RAG_CONFIG, API_CONFIG, VECTOR_STORE_CONFIG
 from ..drive_sync.drive_manager import GoogleDriveManager
 from ..document_processing.pdf_processor import PDFProcessor
 from ..document_processing.text_processor import TextProcessor
 from ..embeddings.embedding_manager import EmbeddingManager
 from ..vector_store.chroma_manager import ChromaManager
+from ..vector_store.postgres_store import PostgresVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +52,18 @@ class RAGPipeline:
         self.pdf_processor = PDFProcessor()
         self.text_processor = TextProcessor()
         self.embedding_manager = EmbeddingManager()
-        self.chroma_manager = ChromaManager()
+        
+        # Elegir backend de vector store (PostgreSQL por defecto en producción)
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        if vector_backend == 'postgres':
+            self.vector_store = PostgresVectorStore(VECTOR_STORE_CONFIG.get('database_url'))
+            logger.info("✅ Usando PostgreSQL como vector store")
+        else:
+            self.vector_store = ChromaManager()
+            logger.info("✅ Usando ChromaDB como vector store")
+        
+        # Alias para compatibilidad
+        self.chroma_manager = self.vector_store
         
         # Configurar LLM para generación
         self.llm = None

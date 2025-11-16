@@ -281,12 +281,64 @@ def upload_to_drive(request):
             
             logger.warning(f"⚠️ Drive no autenticado. Archivo guardado solo localmente: {file_name}")
             
+            # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
+            try:
+                logger.info(f"🔄 Iniciando procesamiento automático del archivo: {file_name}")
+                
+                from rag_system.rag_engine.pipeline import RAGPipeline
+                pipeline = RAGPipeline()
+                
+                # Procesar el documento
+                process_result = pipeline.process_document(final_path)
+                
+                if process_result['success']:
+                    chunks = process_result['chunks']
+                    logger.info(f"📄 Documento procesado: {len(chunks)} chunks generados")
+                    
+                    # Generar embeddings
+                    chunk_texts = [chunk['text'] for chunk in chunks]
+                    embeddings = pipeline.embedding_manager.create_embeddings_batch(chunk_texts)
+                    
+                    # Filtrar chunks válidos
+                    valid_chunks = []
+                    valid_embeddings = []
+                    for chunk, embedding in zip(chunks, embeddings):
+                        if embedding is not None:
+                            valid_chunks.append(chunk)
+                            valid_embeddings.append(embedding)
+                    
+                    logger.info(f"🧮 Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
+                    
+                    # Almacenar en ChromaDB
+                    if valid_chunks:
+                        storage_success = pipeline.chroma_manager.add_documents(
+                            valid_chunks,
+                            valid_embeddings
+                        )
+                        
+                        if storage_success:
+                            logger.info(f"✅ Archivo procesado y embeddings almacenados: {file_name}")
+                            return Response({
+                                "success": True,
+                                "message": f"Archivo '{file_name}' guardado localmente y procesado exitosamente",
+                                "file_name": file_name,
+                                "file_path": final_path,
+                                "drive_uploaded": False,
+                                "processed": True,
+                                "chunks_created": len(valid_chunks),
+                                "embeddings_generated": len(valid_embeddings)
+                            })
+                    
+            except Exception as e:
+                logger.error(f"❌ Error en procesamiento automático: {e}")
+            
             return Response({
                 "success": True,
                 "message": f"Archivo '{file_name}' guardado localmente (Drive no disponible)",
                 "file_name": file_name,
                 "file_path": final_path,
-                "drive_uploaded": False
+                "drive_uploaded": False,
+                "processed": False
             })
         
         # Subir a Drive
@@ -306,13 +358,74 @@ def upload_to_drive(request):
             
             logger.info(f"✅ Archivo subido a Drive y guardado localmente: {file_name}")
             
+            # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
+            try:
+                logger.info(f"🔄 Iniciando procesamiento automático del archivo: {file_name}")
+                
+                from rag_system.rag_engine.pipeline import RAGPipeline
+                pipeline = RAGPipeline()
+                
+                # Procesar el documento
+                process_result = pipeline.process_document(final_path)
+                
+                if process_result['success']:
+                    chunks = process_result['chunks']
+                    logger.info(f"📄 Documento procesado: {len(chunks)} chunks generados")
+                    
+                    # Generar embeddings
+                    chunk_texts = [chunk['text'] for chunk in chunks]
+                    embeddings = pipeline.embedding_manager.create_embeddings_batch(chunk_texts)
+                    
+                    # Filtrar chunks válidos
+                    valid_chunks = []
+                    valid_embeddings = []
+                    for chunk, embedding in zip(chunks, embeddings):
+                        if embedding is not None:
+                            valid_chunks.append(chunk)
+                            valid_embeddings.append(embedding)
+                    
+                    logger.info(f"🧮 Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
+                    
+                    # Almacenar en ChromaDB
+                    if valid_chunks:
+                        storage_success = pipeline.chroma_manager.add_documents(
+                            valid_chunks,
+                            valid_embeddings
+                        )
+                        
+                        if storage_success:
+                            logger.info(f"✅ Archivo procesado y embeddings almacenados: {file_name}")
+                            return Response({
+                                "success": True,
+                                "message": f"Archivo '{file_name}' subido, sincronizado y procesado exitosamente",
+                                "file_name": file_name,
+                                "file_id": result.get('id'),
+                                "file_path": final_path,
+                                "drive_uploaded": True,
+                                "processed": True,
+                                "chunks_created": len(valid_chunks),
+                                "embeddings_generated": len(valid_embeddings)
+                            })
+                        else:
+                            logger.warning(f"⚠️ Archivo subido pero falló el almacenamiento de embeddings")
+                    else:
+                        logger.warning(f"⚠️ No se generaron chunks válidos para el archivo")
+                else:
+                    logger.error(f"❌ Error procesando documento: {process_result.get('error', 'Unknown')}")
+                    
+            except Exception as e:
+                logger.error(f"❌ Error en procesamiento automático: {e}")
+                # Continuar y retornar éxito de upload aunque falle el procesamiento
+            
             return Response({
                 "success": True,
                 "message": f"Archivo '{file_name}' subido correctamente a Drive",
                 "file_name": file_name,
                 "file_id": result.get('id'),
                 "file_path": final_path,
-                "drive_uploaded": True
+                "drive_uploaded": True,
+                "processed": False,
+                "warning": "Archivo subido pero no se pudo procesar automáticamente"
             })
         else:
             # Si falla la subida a Drive, guardar solo localmente

@@ -1319,35 +1319,81 @@ def rag_system_status(request):
 @permission_classes([AllowAny])
 def register_user(request):
     """
-    Registrar un nuevo usuario
+    Registrar un nuevo usuario con validaciones estrictas
     """
     try:
         username = request.data.get('username', '').strip()
         email = request.data.get('email', '').strip()
         password = request.data.get('password', '').strip()
         
-        # Validaciones básicas
+        # Validación de username vacío
         if not username:
             return Response(
                 {'error': 'El nombre de usuario es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Validar longitud de username (3-20 caracteres)
+        if len(username) < 3:
+            return Response(
+                {'error': 'El nombre de usuario debe tener al menos 3 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if len(username) > 20:
+            return Response(
+                {'error': 'El nombre de usuario no puede tener más de 20 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar caracteres en username (solo letras, números y guion bajo)
+        import re
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            return Response(
+                {'error': 'El nombre de usuario solo puede contener letras, números y guion bajo (_)'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que empiece con letra
+        if not username[0].isalpha():
+            return Response(
+                {'error': 'El nombre de usuario debe comenzar con una letra'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
+        # Validación de email vacío
         if not email:
             return Response(
                 {'error': 'El email es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Validar formato de email
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return Response(
+                {'error': 'El formato del email no es válido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
+        # Validación de contraseña vacía
         if not password:
             return Response(
                 {'error': 'La contraseña es requerida'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
+        # Validar longitud mínima de contraseña
         if len(password) < 6:
             return Response(
                 {'error': 'La contraseña debe tener al menos 6 caracteres'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que contenga al menos una letra y un número
+        if not re.search(r'[a-zA-Z]', password) or not re.search(r'[0-9]', password):
+            return Response(
+                {'error': 'La contraseña debe contener al menos una letra y un número'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         

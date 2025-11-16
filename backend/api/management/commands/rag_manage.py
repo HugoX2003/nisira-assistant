@@ -226,10 +226,52 @@ class Command(BaseCommand):
             raise CommandError(f"Error obteniendo estado: {e}")
     
     def _handle_init(self, options):
-        """Inicializar sistema RAG"""
+        """Inicializar sistema RAG - CARGA EMBEDDINGS EXISTENTES"""
         self.stdout.write("🚀 Inicializando sistema RAG...")
         
         try:
+            # PRIMERO: Verificar si ya existen embeddings persistentes
+            pipeline = RAGPipeline()
+            chroma_stats = pipeline.chroma_manager.get_collection_stats()
+            
+            existing_docs = chroma_stats.get('total_documents', 0)
+            
+            if existing_docs > 0:
+                self.stdout.write(f"✅ Embeddings persistentes detectados: {existing_docs} documentos")
+                self.stdout.write("📊 Cargando embeddings desde ChromaDB...")
+                
+                # Los embeddings YA ESTÁN CARGADOS en ChromaDB (persistente por defecto)
+                # Solo verificar que todo esté listo
+                result = initialize_rag_system()
+                
+                if result['success']:
+                    self.stdout.write(f"✅ Sistema RAG listo con {existing_docs} documentos indexados")
+                    self.stdout.write("💡 No es necesario regenerar embeddings (ya existen)")
+                    
+                    components = result.get('components', {})
+                    self.stdout.write("\\n🧩 Componentes:")
+                    for component, status in components.items():
+                        icon = '✅' if status else '❌'
+                        self.stdout.write(f"  {icon} {component}")
+                    
+                    return
+            
+            # SEGUNDO: Si NO hay embeddings, sincronizar desde Drive
+            self.stdout.write("⚠️  No se detectaron embeddings persistentes")
+            self.stdout.write("🔄 Sincronizando documentos desde Google Drive...")
+            
+            sync_result = pipeline.sync_and_process_documents(force_reprocess=False)
+            
+            if sync_result['success']:
+                processing = sync_result.get('processing_summary', {})
+                self.stdout.write(f"✅ Sincronización completada:")
+                self.stdout.write(f"  📥 Documentos procesados: {processing.get('successful', 0)}")
+                self.stdout.write(f"  📝 Chunks generados: {processing.get('valid_chunks', 0)}")
+                self.stdout.write(f"  💾 Embeddings almacenados en ChromaDB (persistentes)")
+            else:
+                self.stdout.write(f"⚠️  Error en sincronización: {sync_result.get('error', 'Unknown')}")
+            
+            # TERCERO: Verificar estado final
             result = initialize_rag_system()
             
             if options['format'] == 'json':
@@ -237,7 +279,7 @@ class Command(BaseCommand):
                 return
             
             if result['success']:
-                self.stdout.write("✅ Sistema RAG inicializado correctamente")
+                self.stdout.write("\\n✅ Sistema RAG inicializado correctamente")
                 
                 components = result.get('components', {})
                 for component, status in components.items():
