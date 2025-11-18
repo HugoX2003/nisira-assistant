@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { register } from "../services/api";
+import ErrorModal from "./ErrorModal";
 import "../styles/Login.css";
 
 /**
@@ -236,15 +237,7 @@ export default function Register({ onRegister, onBackToLogin }) {
             />
           </div>
 
-          {/* Mostrar mensajes de error / éxito */}
-          {error && (
-            <div className="error-message" role="alert" aria-live="polite">
-              <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: '8px' }}>
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor"/>
-              </svg>
-              {error}
-            </div>
-          )}
+          {/* Mostrar mensajes de éxito (mantenemos el estilo anterior) */}
           {success && (
             <div className="success-message" role="status" aria-live="polite">
               <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: '8px' }}>
@@ -285,6 +278,15 @@ export default function Register({ onRegister, onBackToLogin }) {
           </button>
         </form>
       </div>
+
+      {/* Modal de error (muestra errores en modal prominente) */}
+      {error && (
+        <ErrorModal 
+          message={error} 
+          onClose={() => setError('')} 
+          type="error"
+        />
+      )}
     </div>
   );
 }

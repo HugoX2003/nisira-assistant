@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { login, tokenManager } from "../services/api";
+import ErrorModal from "./ErrorModal";
 import "../styles/Login.css";
 
 /**
@@ -186,11 +187,17 @@ export default function Login({ onLogin, onShowRegister }) {
             <span className="btn-icon">✨</span>
             <span>¿No tienes cuenta? Regístrate</span>
           </button>
-
-          {/* Mostrar mensajes de error */}
-          {error && <div className="error-message">{error}</div>}
         </form>
       </div>
+
+      {/* Modal de error (muestra errores en modal prominente) */}
+      {error && (
+        <ErrorModal 
+          message={error} 
+          onClose={() => setError('')} 
+          type="error"
+        />
+      )}
     </div>
   );
 }

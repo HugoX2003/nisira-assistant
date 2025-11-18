@@ -12,7 +12,8 @@ import {
   clearEmbeddings,
   getEmbeddingProgress,
   getSystemMetrics,
-  getPipelineStatus
+  getPipelineStatus,
+  getRatingMetrics
 } from '../services/adminApi';
 
 /**
@@ -65,6 +66,10 @@ function AdminPanel({ onLogout, user }) {
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsView, setMetricsView] = useState('summary'); // 'summary' o 'detailed'
   
+  // Estados para Rating Metrics
+  const [ratingMetrics, setRatingMetrics] = useState(null);
+  const [ratingMetricsLoading, setRatingMetricsLoading] = useState(false);
+  
   // Estados de notificaciones
   const [notification, setNotification] = useState(null);
 
@@ -85,6 +90,9 @@ function AdminPanel({ onLogout, user }) {
         break;
       case 'metrics':
         loadMetrics();
+        break;
+      case 'ratings':
+        loadRatingMetrics();
         break;
       case 'pipeline':
         loadPipelineStatus();
@@ -431,6 +439,25 @@ function AdminPanel({ onLogout, user }) {
     }
   };
 
+  // Cargar métricas de ratings
+  const loadRatingMetrics = async () => {
+    setRatingMetricsLoading(true);
+    try {
+      const response = await getRatingMetrics();
+      if (response.success) {
+        setRatingMetrics(response);
+        showNotification('✅ Métricas de ratings cargadas', 'success');
+      } else {
+        showNotification('Error cargando métricas de ratings', 'error');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      showNotification('❌ Error obteniendo métricas de ratings', 'error');
+    } finally {
+      setRatingMetricsLoading(false);
+    }
+  };
+
   // ==========================================
   // RENDERIZADO
   // ==========================================
@@ -481,6 +508,12 @@ function AdminPanel({ onLogout, user }) {
           onClick={() => setActiveTab('metrics')}
         >
           📊 Métricas
+        </button>
+        <button
+          className={`tab ${activeTab === 'ratings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ratings')}
+        >
+          ⭐ Calificaciones
         </button>
         <button
           className={`tab ${activeTab === 'pipeline' ? 'active' : ''}`}
@@ -733,6 +766,201 @@ function AdminPanel({ onLogout, user }) {
               </div>
             ) : (
               <p className="empty-state">No hay información disponible</p>
+            )}
+          </div>
+        )}
+
+        {/* TAB: Calificaciones de Usuarios */}
+        {activeTab === 'ratings' && (
+          <div className="tab-content">
+            <div className="section-header">
+              <h2>⭐ Métricas de Calificaciones</h2>
+              <button 
+                onClick={loadRatingMetrics} 
+                className="btn-secondary"
+                disabled={ratingMetricsLoading}
+              >
+                {ratingMetricsLoading ? 'Actualizando...' : '🔄 Actualizar'}
+              </button>
+            </div>
+
+            {ratingMetricsLoading ? (
+              <div className="loading">
+                <div className="spinner"></div>
+                <p>Cargando métricas de calificaciones...</p>
+              </div>
+            ) : !ratingMetrics ? (
+              <p className="empty-state">No hay métricas de calificaciones disponibles</p>
+            ) : ratingMetrics.total_ratings === 0 ? (
+              <div className="empty-state">
+                <p>📊 Aún no hay calificaciones de usuarios</p>
+                <p style={{fontSize: '0.9rem', color: '#666', marginTop: '0.5rem'}}>
+                  Las calificaciones aparecerán aquí cuando los usuarios califiquen las respuestas del bot
+                </p>
+              </div>
+            ) : (
+              <div className="ratings-metrics-container">
+                {/* Distribución General */}
+                <div className="ratings-overview">
+                  <div className="stats-card">
+                    <h3>📊 Resumen General</h3>
+                    <div className="stats-grid">
+                      <div className="stat-item">
+                        <div className="stat-label">Total de Calificaciones</div>
+                        <div className="stat-value">{ratingMetrics.total_ratings}</div>
+                      </div>
+                      <div className="stat-item">
+                        <div className="stat-label">👍 Likes</div>
+                        <div className="stat-value likes">{ratingMetrics.distribution.likes}</div>
+                        <div className="stat-percentage">{ratingMetrics.distribution.like_percentage}%</div>
+                      </div>
+                      <div className="stat-item">
+                        <div className="stat-label">👎 Dislikes</div>
+                        <div className="stat-value dislikes">{ratingMetrics.distribution.dislikes}</div>
+                        <div className="stat-percentage">{ratingMetrics.distribution.dislike_percentage}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Gráfico de distribución */}
+                  <div className="stats-card">
+                    <h3>📈 Distribución Like/Dislike</h3>
+                    <div className="distribution-bar">
+                      <div 
+                        className="distribution-segment likes" 
+                        style={{width: `${ratingMetrics.distribution.like_percentage}%`}}
+                      >
+                        {ratingMetrics.distribution.like_percentage > 10 && `${ratingMetrics.distribution.like_percentage}%`}
+                      </div>
+                      <div 
+                        className="distribution-segment dislikes" 
+                        style={{width: `${ratingMetrics.distribution.dislike_percentage}%`}}
+                      >
+                        {ratingMetrics.distribution.dislike_percentage > 10 && `${ratingMetrics.distribution.dislike_percentage}%`}
+                      </div>
+                    </div>
+                    <div className="distribution-legend">
+                      <span>👍 Likes: {ratingMetrics.distribution.likes}</span>
+                      <span>👎 Dislikes: {ratingMetrics.distribution.dislikes}</span>
+                    </div>
+                  </div>
+
+                  {/* Estadísticas por período */}
+                  <div className="stats-card">
+                    <h3>📅 Actividad Reciente</h3>
+                    <div className="stats-grid">
+                      <div className="stat-item">
+                        <div className="stat-label">Última Semana</div>
+                        <div className="stat-value">{ratingMetrics.period_stats.last_week}</div>
+                      </div>
+                      <div className="stat-item">
+                        <div className="stat-label">Último Mes</div>
+                        <div className="stat-value">{ratingMetrics.period_stats.last_month}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Problemas Más Comunes */}
+                {ratingMetrics.top_issues && ratingMetrics.top_issues.length > 0 && (
+                  <div className="ratings-section">
+                    <h3>🚨 Problemas Más Reportados</h3>
+                    <div className="issues-list">
+                      {ratingMetrics.top_issues.map((issue, index) => (
+                        <div key={index} className="issue-item">
+                          <div className="issue-rank">#{index + 1}</div>
+                          <div className="issue-content">
+                            <div className="issue-label">{issue.label}</div>
+                            <div className="issue-tag">{issue.tag}</div>
+                          </div>
+                          <div className="issue-count">{issue.count} veces</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mensajes Más Votados - Positivos */}
+                {ratingMetrics.top_liked_messages && ratingMetrics.top_liked_messages.length > 0 && (
+                  <div className="ratings-section">
+                    <h3>👍 Mensajes Más Gustados</h3>
+                    <div className="messages-list">
+                      {ratingMetrics.top_liked_messages.map((msg, index) => (
+                        <div key={index} className="message-item liked">
+                          <div className="message-rank">#{index + 1}</div>
+                          <div className="message-content">
+                            <p>{msg.text}</p>
+                          </div>
+                          <div className="message-votes">
+                            <span className="vote-count likes">👍 {msg.likes}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mensajes Más Votados - Negativos */}
+                {ratingMetrics.top_disliked_messages && ratingMetrics.top_disliked_messages.length > 0 && (
+                  <div className="ratings-section">
+                    <h3>👎 Mensajes Menos Gustados</h3>
+                    <div className="messages-list">
+                      {ratingMetrics.top_disliked_messages.map((msg, index) => (
+                        <div key={index} className="message-item disliked">
+                          <div className="message-rank">#{index + 1}</div>
+                          <div className="message-content">
+                            <p>{msg.text}</p>
+                          </div>
+                          <div className="message-votes">
+                            <span className="vote-count dislikes">👎 {msg.dislikes}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Calificaciones Recientes */}
+                {ratingMetrics.recent_ratings && ratingMetrics.recent_ratings.length > 0 && (
+                  <div className="ratings-section">
+                    <h3>🕐 Calificaciones Recientes</h3>
+                    <div className="recent-ratings-list">
+                      {ratingMetrics.recent_ratings.map((rating) => (
+                        <div key={rating.id} className={`recent-rating ${rating.value}`}>
+                          <div className="rating-header">
+                            <span className="rating-icon">
+                              {rating.value === 'like' ? '👍' : '👎'}
+                            </span>
+                            <span className="rating-user">{rating.username}</span>
+                            <span className="rating-date">
+                              {new Date(rating.created_at).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          <div className="rating-message">
+                            <strong>Mensaje:</strong> {rating.message_preview}
+                          </div>
+                          {rating.issue_tag !== 'none' && (
+                            <div className="rating-issue">
+                              <strong>Problema:</strong> {rating.issue_tag_label}
+                            </div>
+                          )}
+                          {rating.comment && (
+                            <div className="rating-comment">
+                              <strong>Comentario:</strong> {rating.comment}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}

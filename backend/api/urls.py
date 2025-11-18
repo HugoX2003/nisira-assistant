@@ -51,6 +51,9 @@ from .admin_views import (
     delete_document_embeddings
 )
 
+# Importar métricas de ratings
+from .rating_metrics import get_rating_metrics
+
 # URLs de la API
 urlpatterns = [
     # Vista de inicio/bienvenida
@@ -113,5 +116,6 @@ urlpatterns = [
     path("admin/metrics/", get_system_metrics, name="admin_get_metrics"),
     path("admin/metrics/queries/", get_query_list, name="admin_get_query_list"),
     path("admin/metrics/queries/<str:query_id>/", get_query_detail, name="admin_get_query_detail"),
+    path("admin/metrics/ratings/", get_rating_metrics, name="admin_rating_metrics"),
     path("admin/pipeline/status/", get_pipeline_status, name="admin_pipeline_status"),
 ]

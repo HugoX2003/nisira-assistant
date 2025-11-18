@@ -203,3 +203,17 @@ export async function getPipelineStatus() {
     method: 'GET',
   });
 }
+
+// ==========================================
+// RATING METRICS
+// ==========================================
+
+/**
+ * Obtener métricas de calificaciones de usuarios
+ * Incluye distribución de likes/dislikes, tags de problemas, mensajes más votados
+ */
+export async function getRatingMetrics() {
+  return fetchWithAuth(`${API_BASE_URL}/admin/metrics/ratings/`, {
+    method: 'GET',
+  });
+}

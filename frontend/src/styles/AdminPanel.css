@@ -245,7 +245,6 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 
 .files-header {
@@ -1341,5 +1340,365 @@
   
   .metric-icon {
     margin: 0 auto;
+  }
+}
+
+/* ==========================================
+   RATING METRICS - Calificaciones
+   ========================================== */
+
+.ratings-metrics-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.ratings-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.stats-card {
+  background: #242830;
+  border: 1px solid #2f3542;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.stats-card h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+  color: #e4e6eb;
+  font-weight: 600;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #e4e6eb;
+}
+
+.stat-value.likes {
+  color: #10b981;
+}
+
+.stat-value.dislikes {
+  color: #ef4444;
+}
+
+.stat-percentage {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+/* Barra de distribución */
+.distribution-bar {
+  display: flex;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #1a1d23;
+  margin: 1rem 0;
+}
+
+.distribution-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.distribution-segment.likes {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+}
+
+.distribution-segment.dislikes {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.distribution-legend {
+  display: flex;
+  justify-content: space-around;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+/* Secciones de ratings */
+.ratings-section {
+  background: #242830;
+  border: 1px solid #2f3542;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.ratings-section h3 {
+  margin: 0 0 1.5rem 0;
+  font-size: 1.1rem;
+  color: #e4e6eb;
+  font-weight: 600;
+}
+
+/* Lista de problemas */
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.issue-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #1a1d23;
+  border: 1px solid #2f3542;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.issue-item:hover {
+  border-color: #ef4444;
+  transform: translateX(5px);
+}
+
+.issue-rank {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ef4444;
+  min-width: 40px;
+  text-align: center;
+}
+
+.issue-content {
+  flex: 1;
+}
+
+.issue-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e4e6eb;
+  margin-bottom: 0.25rem;
+}
+
+.issue-tag {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.issue-count {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #64748b;
+  background: #1a1d23;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+}
+
+/* Lista de mensajes */
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.message-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem;
+  background: #1a1d23;
+  border: 1px solid #2f3542;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.message-item.liked {
+  border-left: 4px solid #10b981;
+}
+
+.message-item.disliked {
+  border-left: 4px solid #ef4444;
+}
+
+.message-item:hover {
+  background: #242830;
+  transform: scale(1.01);
+}
+
+.message-rank {
+  font-size: 1.5rem;
+  font-weight: 700;
+  min-width: 40px;
+  text-align: center;
+}
+
+.message-item.liked .message-rank {
+  color: #10b981;
+}
+
+.message-item.disliked .message-rank {
+  color: #ef4444;
+}
+
+.message-content {
+  flex: 1;
+}
+
+.message-content p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #d1d5db;
+  line-height: 1.6;
+}
+
+.message-votes {
+  display: flex;
+  align-items: center;
+}
+
+.vote-count {
+  font-size: 1.2rem;
+  font-weight: 700;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  background: #242830;
+}
+
+.vote-count.likes {
+  color: #10b981;
+}
+
+.vote-count.dislikes {
+  color: #ef4444;
+}
+
+/* Calificaciones recientes */
+.recent-ratings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.recent-rating {
+  padding: 1.5rem;
+  background: #1a1d23;
+  border: 1px solid #2f3542;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.recent-rating.like {
+  border-left: 4px solid #10b981;
+}
+
+.recent-rating.dislike {
+  border-left: 4px solid #ef4444;
+}
+
+.recent-rating:hover {
+  background: #242830;
+}
+
+.rating-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #2f3542;
+}
+
+.rating-icon {
+  font-size: 1.5rem;
+}
+
+.rating-user {
+  font-weight: 600;
+  color: #e4e6eb;
+  flex: 1;
+}
+
+.rating-date {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.rating-message,
+.rating-issue,
+.rating-comment {
+  margin-bottom: 0.75rem;
+  font-size: 0.9rem;
+  color: #d1d5db;
+  line-height: 1.6;
+}
+
+.rating-message strong,
+.rating-issue strong,
+.rating-comment strong {
+  color: #94a3b8;
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.rating-issue {
+  color: #ef4444;
+}
+
+.rating-comment {
+  background: #242830;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border-left: 3px solid #3b82f6;
+}
+
+/* Responsive para ratings */
+@media (max-width: 768px) {
+  .ratings-overview {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .issue-item,
+  .message-item {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .issue-rank,
+  .message-rank {
+    margin: 0 auto;
+  }
+  
+  .rating-header {
+    flex-direction: column;
+    text-align: center;
   }
 }

@@ -1,0 +1,147 @@
+/* ==========================================
+   ERROR MODAL - Mensajes de error prominentes
+   ========================================== */
+
+.error-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.error-modal {
+  background: #1a1d23;
+  border: 2px solid #ef4444;
+  border-radius: 16px;
+  padding: 2.5rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease;
+  text-align: center;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.error-modal-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: bounce 0.5s ease;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.error-modal-icon.error {
+  filter: drop-shadow(0 0 20px rgba(239, 68, 68, 0.6));
+}
+
+.error-modal-icon.warning {
+  filter: drop-shadow(0 0 20px rgba(251, 191, 36, 0.6));
+}
+
+.error-modal-icon.info {
+  filter: drop-shadow(0 0 20px rgba(59, 130, 246, 0.6));
+}
+
+.error-modal-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ef4444;
+  margin: 0 0 1rem 0;
+}
+
+.error-modal-message {
+  font-size: 1.1rem;
+  color: #e4e6eb;
+  line-height: 1.6;
+  margin: 0 0 2rem 0;
+  background: #242830;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border-left: 4px solid #ef4444;
+  text-align: left;
+}
+
+.error-modal-close {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border: none;
+  padding: 1rem 2.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.error-modal-close:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+.error-modal-close:active {
+  transform: translateY(0);
+}
+
+/* Variantes para diferentes tipos */
+.error-modal-title.warning {
+  color: #fbbf24;
+}
+
+.error-modal-title.info {
+  color: #3b82f6;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .error-modal {
+    padding: 2rem;
+    max-width: 95%;
+  }
+
+  .error-modal-icon {
+    font-size: 3rem;
+  }
+
+  .error-modal-title {
+    font-size: 1.5rem;
+  }
+
+  .error-modal-message {
+    font-size: 1rem;
+    padding: 1rem;
+  }
+}
