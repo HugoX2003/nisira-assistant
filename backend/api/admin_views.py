@@ -518,7 +518,31 @@ def sync_drive_documents(request):
     
     try:
         drive_manager = GoogleDriveManager()
+        
+        # Inicializar archivo de progreso
+        progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
+        os.makedirs(os.path.dirname(progress_file), exist_ok=True)
+        
+        # Estado inicial
+        with open(progress_file, 'w') as f:
+            json.dump({
+                'status': 'starting',
+                'message': 'Iniciando sincronización...',
+                'progress': 0,
+                'current': 0,
+                'total': 0
+            }, f)
+        
         result = drive_manager.sync_documents()
+        
+        # Estado final
+        with open(progress_file, 'w') as f:
+            json.dump({
+                'status': 'completed',
+                'message': f"Sincronización completa: {result.get('downloaded', 0)} archivos descargados",
+                'progress': 100,
+                'downloaded': result.get('downloaded', 0)
+            }, f)
         
         return Response({
             "success": result.get('success', False),
@@ -527,6 +551,47 @@ def sync_drive_documents(request):
         
     except Exception as e:
         logger.error(f"Error sincronizando documentos: {e}")
+        
+        # Guardar estado de error
+        try:
+            progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
+            with open(progress_file, 'w') as f:
+                json.dump({
+                    'status': 'error',
+                    'message': str(e),
+                    'progress': 0
+                }, f)
+        except:
+            pass
+        
+        return Response(
+            {"error": str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def get_sync_progress(request):
+    """
+    Obtener progreso de sincronización de Drive
+    """
+    try:
+        progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
+        
+        if os.path.exists(progress_file):
+            with open(progress_file, 'r') as f:
+                progress_data = json.load(f)
+                return Response(progress_data)
+        else:
+            return Response({
+                'status': 'idle',
+                'message': 'No hay sincronización en progreso',
+                'progress': 0
+            })
+    except Exception as e:
+        logger.error(f"Error obteniendo progreso de sincronización: {e}")
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

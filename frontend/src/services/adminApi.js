@@ -105,6 +105,15 @@ export async function syncDriveDocuments() {
   });
 }
 
+/**
+ * Obtener progreso de sincronización de Drive
+ */
+export async function getSyncProgress() {
+  return fetchWithAuth(`${API_BASE_URL}/admin/drive/sync/progress/`, {
+    method: 'GET',
+  });
+}
+
 // ==========================================
 // EMBEDDINGS
 // ==========================================

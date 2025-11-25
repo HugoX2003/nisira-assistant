@@ -1702,3 +1702,158 @@
     text-align: center;
   }
 }
+
+/* ==========================================
+   SYNC PROGRESS BAR - Progreso de sincronización
+   ========================================== */
+
+.sync-progress-container {
+  background: #242830;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sync-progress-container.completed {
+  border-color: #10b981;
+  background: linear-gradient(135deg, #242830, #1a3a2e);
+}
+
+.sync-progress-container.error {
+  border-color: #ef4444;
+  background: linear-gradient(135deg, #242830, #3a1a1a);
+}
+
+.sync-progress-container.syncing {
+  border-color: #fbbf24;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.6);
+  }
+}
+
+.sync-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sync-status-icon {
+  font-size: 1.5rem;
+  animation: spin 2s linear infinite;
+}
+
+.sync-progress-container.completed .sync-status-icon,
+.sync-progress-container.error .sync-status-icon {
+  animation: none;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sync-message {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e4e6eb;
+}
+
+.sync-counter {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  background: #1a1d23;
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+}
+
+.sync-progress-bar {
+  height: 30px;
+  background: #1a1d23;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.sync-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: width 0.5s ease;
+  position: relative;
+}
+
+.sync-progress-container.completed .sync-progress-fill {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.sync-progress-container.error .sync-progress-fill {
+  background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.sync-progress-container.syncing .sync-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Responsive para sync progress */
+@media (max-width: 768px) {
+  .sync-progress-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .sync-counter {
+    margin-top: 0.5rem;
+  }
+}

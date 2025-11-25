@@ -1,6 +1,6 @@
 # administración y revisión de los historiales de chat nativo de django admin
 from django.contrib import admin
-from .models import Conversation, Message
+from .models import Conversation, Message, UploadedDocument
 
 # Configuración de la vista para el modelo Conversation en el admin
 @admin.register(Conversation)
@@ -19,4 +19,12 @@ class MessageAdmin(admin.ModelAdmin):
     list_filter = ("sender",)
     # Permite buscar por texto del mensaje
     search_fields = ("text",)
+
+# Configuración para el modelo UploadedDocument
+@admin.register(UploadedDocument)
+class UploadedDocumentAdmin(admin.ModelAdmin):
+    list_display = ("file_name", "uploaded_by", "file_size", "processed", "drive_uploaded", "uploaded_at")
+    list_filter = ("processed", "drive_uploaded", "file_type")
+    search_fields = ("file_name", "uploaded_by__username")
+    readonly_fields = ("uploaded_at", "processed_at")
 

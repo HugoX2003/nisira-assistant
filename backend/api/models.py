@@ -321,3 +321,43 @@ class RAGASMetrics(models.Model):
     def __str__(self):
         return f"PrecisionMetrics({self.evaluation_id[:8]}... - F:{self.faithfulness_score:.2f}, P@k:{self.precision_at_k:.2f})"
 
+
+# Modelo para tracking de archivos subidos
+class UploadedDocument(models.Model):
+    """
+    Modelo para registrar archivos subidos al sistema
+    """
+    # Usuario que subió el archivo
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Información del archivo
+    file_name = models.CharField(max_length=255)
+    file_path = models.CharField(max_length=500, help_text="Ruta local del archivo")
+    file_size = models.BigIntegerField(help_text="Tamaño en bytes")
+    file_type = models.CharField(max_length=50, help_text="Extensión del archivo")
+    
+    # Google Drive
+    drive_file_id = models.CharField(max_length=255, null=True, blank=True, help_text="ID del archivo en Google Drive")
+    drive_uploaded = models.BooleanField(default=False, help_text="¿Se subió a Drive?")
+    
+    # Estado de procesamiento
+    processed = models.BooleanField(default=False, help_text="¿Se procesó para embeddings?")
+    chunks_created = models.IntegerField(default=0, help_text="Cantidad de chunks generados")
+    embeddings_generated = models.IntegerField(default=0, help_text="Cantidad de embeddings generados")
+    
+    # Timestamps
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+        indexes = [
+            models.Index(fields=['file_name']),
+            models.Index(fields=['uploaded_at']),
+            models.Index(fields=['drive_file_id']),
+        ]
+    
+    def __str__(self):
+        status = "✅ Procesado" if self.processed else "⏳ Pendiente"
+        return f"{self.file_name} ({status})"
+

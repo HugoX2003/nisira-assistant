@@ -6,6 +6,7 @@ import {
   uploadDriveFile,
   deleteDriveFile,
   syncDriveDocuments,
+  getSyncProgress,
   getEmbeddingsStatus,
   generateEmbeddings,
   verifyEmbeddings,
@@ -28,6 +29,8 @@ function AdminPanel({ onLogout, user }) {
   const [driveFiles, setDriveFiles] = useState([]);
   const [driveLoading, setDriveLoading] = useState(false);
   const [uploadFile, setUploadFile] = useState(null);
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Estados para paginación y búsqueda
   const [currentPage, setCurrentPage] = useState(1);
@@ -183,23 +186,77 @@ function AdminPanel({ onLogout, user }) {
 
   const handleSyncDrive = async () => {
     setDriveLoading(true);
+    setIsSyncing(true);
+    setSyncProgress({ status: 'starting', message: 'Iniciando sincronización...', progress: 0 });
+    
     try {
+      // Iniciar sincronización
       const response = await syncDriveDocuments();
+      
       if (response.success) {
-        showNotification(
-          `Sincronización completa: ${response.data.downloaded || 0} descargados`,
-          'success'
-        );
-        setCurrentPage(1); // Reset a primera página
-        loadDriveFiles();
+        // Polling para obtener progreso
+        const pollInterval = setInterval(async () => {
+          try {
+            const progressResponse = await getSyncProgress();
+            
+            if (progressResponse.status === 'completed') {
+              clearInterval(pollInterval);
+              setSyncProgress({
+                status: 'completed',
+                message: `✅ Sincronización completa: ${progressResponse.downloaded || 0} archivos descargados`,
+                progress: 100,
+                downloaded: progressResponse.downloaded
+              });
+              setIsSyncing(false);
+              setDriveLoading(false);
+              showNotification(
+                `Sincronización completa: ${progressResponse.downloaded || 0} archivos descargados`,
+                'success'
+              );
+              setCurrentPage(1);
+              loadDriveFiles();
+            } else if (progressResponse.status === 'error') {
+              clearInterval(pollInterval);
+              setSyncProgress({ status: 'error', message: progressResponse.message || 'Error en sincronización', progress: 0 });
+              setIsSyncing(false);
+              setDriveLoading(false);
+              showNotification('Error en sincronización', 'error');
+            } else {
+              // En progreso
+              setSyncProgress({
+                status: 'syncing',
+                message: progressResponse.message || 'Sincronizando archivos...',
+                progress: progressResponse.progress || 0,
+                current: progressResponse.current,
+                total: progressResponse.total
+              });
+            }
+          } catch (pollError) {
+            console.error('Error polling progress:', pollError);
+          }
+        }, 1000); // Polling cada segundo
+        
+        // Timeout de seguridad (5 minutos)
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (isSyncing) {
+            setIsSyncing(false);
+            setDriveLoading(false);
+            showNotification('Timeout en sincronización', 'warning');
+          }
+        }, 300000);
       } else {
+        setSyncProgress({ status: 'error', message: 'Error iniciando sincronización', progress: 0 });
+        setIsSyncing(false);
+        setDriveLoading(false);
         showNotification('Error en sincronización', 'error');
       }
     } catch (error) {
       console.error('Error:', error);
-      showNotification('Error sincronizando', 'error');
-    } finally {
+      setSyncProgress({ status: 'error', message: error.message || 'Error sincronizando', progress: 0 });
+      setIsSyncing(false);
       setDriveLoading(false);
+      showNotification('Error sincronizando', 'error');
     }
   };
   
@@ -533,11 +590,39 @@ function AdminPanel({ onLogout, user }) {
               <button 
                 onClick={handleSyncDrive} 
                 className="btn-primary"
-                disabled={driveLoading}
+                disabled={driveLoading || isSyncing}
               >
-                {driveLoading ? 'Sincronizando...' : '🔄 Sincronizar'}
+                {isSyncing ? '🔄 Sincronizando...' : '🔄 Sincronizar'}
               </button>
             </div>
+
+            {/* Barra de progreso de sincronización */}
+            {syncProgress && (
+              <div className={`sync-progress-container ${syncProgress.status}`}>
+                <div className="sync-progress-header">
+                  <span className="sync-status-icon">
+                    {syncProgress.status === 'starting' && '⏳'}
+                    {syncProgress.status === 'syncing' && '🔄'}
+                    {syncProgress.status === 'completed' && '✅'}
+                    {syncProgress.status === 'error' && '❌'}
+                  </span>
+                  <span className="sync-message">{syncProgress.message}</span>
+                  {syncProgress.current && syncProgress.total && (
+                    <span className="sync-counter">
+                      {syncProgress.current}/{syncProgress.total}
+                    </span>
+                  )}
+                </div>
+                <div className="sync-progress-bar">
+                  <div 
+                    className="sync-progress-fill"
+                    style={{ width: `${syncProgress.progress}%` }}
+                  >
+                    {syncProgress.progress > 10 && `${syncProgress.progress}%`}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Formulario de subida */}
             <div className="upload-section">
