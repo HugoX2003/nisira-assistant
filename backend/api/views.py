@@ -258,20 +258,75 @@ def custom_login(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def serve_document(request, filename: str):
-    """Servir documentos almacenados en el directorio configurado."""
-    base_path = getattr(settings, 'DOCUMENTS_ROOT', os.path.join(settings.BASE_DIR, 'data', 'documents'))
-    file_path = os.path.join(base_path, filename)
+    """Servir documentos almacenados en BD (PostgreSQL) o directorio (filesystem)."""
+    from .models import UploadedDocument
+    
+    # Primero buscar en la base de datos
+    try:
+        uploaded_doc = UploadedDocument.objects.get(file_name=filename)
+        file_path = uploaded_doc.file_path
+        
+        # Verificar si está en PostgreSQL o filesystem
+        if file_path.startswith('postgres://'):
+            # Archivo en PostgreSQL - obtener desde PostgresFileStore
+            file_uuid = file_path.replace('postgres://', '')
+            
+            try:
+                from rag_system.storage.postgres_file_store import PostgresFileStore
+                file_store = PostgresFileStore()
+                
+                file_data = file_store.get_file(file_uuid)
+                
+                if not file_data:
+                    raise Http404('Documento no encontrado en PostgreSQL')
+                
+                content_type = file_data.get('mime_type', 'application/octet-stream')
+                file_content = file_data.get('content')
+                
+                response = HttpResponse(file_content, content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+                
+            except Exception as e:
+                logger.error(f"Error obteniendo archivo de PostgreSQL {file_uuid}: {str(e)}")
+                raise Http404('Error al obtener documento de PostgreSQL')
+        else:
+            # Archivo en filesystem - verificar que existe
+            if not os.path.exists(file_path):
+                logger.warning(f"Archivo en BD pero no en disco: {file_path}")
+                raise Http404('Documento no encontrado en el sistema de archivos')
+            
+            content_type, _ = mimetypes.guess_type(file_path)
+            content_type = content_type or 'application/octet-stream'
+            
+            try:
+                with open(file_path, 'rb') as file_handle:
+                    response = HttpResponse(file_handle.read(), content_type=content_type)
+                    response['Content-Disposition'] = f'inline; filename="{filename}"'
+                    return response
+            except Exception as e:
+                logger.error(f"Error leyendo archivo {file_path}: {str(e)}")
+                raise Http404('Error al leer el documento')
+            
+    except UploadedDocument.DoesNotExist:
+        # Fallback: buscar en el directorio legacy
+        base_path = getattr(settings, 'DOCUMENTS_ROOT', os.path.join(settings.BASE_DIR, 'data', 'documents'))
+        file_path = os.path.join(base_path, filename)
+        
+        if not os.path.exists(file_path):
+            raise Http404('Documento no encontrado')
 
-    if not os.path.exists(file_path):
-        raise Http404('Documento no encontrado')
+        content_type, _ = mimetypes.guess_type(file_path)
+        content_type = content_type or 'application/octet-stream'
 
-    content_type, _ = mimetypes.guess_type(file_path)
-    content_type = content_type or 'application/octet-stream'
-
-    with open(file_path, 'rb') as file_handle:
-        response = HttpResponse(file_handle.read(), content_type=content_type)
-        response['Content-Disposition'] = f'inline; filename="{filename}"'
-        return response
+        try:
+            with open(file_path, 'rb') as file_handle:
+                response = HttpResponse(file_handle.read(), content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+        except Exception as e:
+            logger.error(f"Error leyendo archivo legacy {file_path}: {str(e)}")
+            raise Http404('Error al leer el documento')
 
 
 @api_view(['GET'])

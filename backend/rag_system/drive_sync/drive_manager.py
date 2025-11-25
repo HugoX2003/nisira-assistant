@@ -30,6 +30,28 @@ from ..storage.postgres_file_store import PostgresFileStore
 
 logger = logging.getLogger(__name__)
 
+def _register_uploaded_document(file_name: str, file_path: str, file_size: int, file_type: str, drive_file_id: str):
+    """Registrar archivo en el modelo UploadedDocument (solo si Django está disponible)"""
+    try:
+        from api.models import UploadedDocument
+        from django.utils import timezone as django_timezone
+        
+        # Crear o actualizar registro
+        UploadedDocument.objects.update_or_create(
+            drive_file_id=drive_file_id,
+            defaults={
+                'file_name': file_name,
+                'file_path': file_path,
+                'file_size': file_size,
+                'file_type': file_type,
+                'drive_uploaded': True,
+                'uploaded_at': django_timezone.now(),
+            }
+        )
+        logger.info(f"✅ Registrado en UploadedDocument: {file_name}")
+    except Exception as e:
+        logger.warning(f"No se pudo registrar en UploadedDocument: {e}")
+
 class GoogleDriveManager:
     """
     Gestor de Google Drive para sincronización de documentos
@@ -309,6 +331,16 @@ class GoogleDriveManager:
                     
                     if saved_id:
                         logger.info(f"✅ Guardado en PostgreSQL: {file_name} (ID: {saved_id})")
+                        
+                        # Registrar en UploadedDocument para el endpoint serve_document
+                        _register_uploaded_document(
+                            file_name=file_name,
+                            file_path=f"postgres://{saved_id}",  # Path especial para PostgreSQL
+                            file_size=len(file_bytes),
+                            file_type=mime_type,
+                            drive_file_id=file_id
+                        )
+                        
                         return saved_id
                     else:
                         logger.error(f"❌ Error guardando en PostgreSQL: {file_name}")
@@ -333,6 +365,16 @@ class GoogleDriveManager:
                     f.write(file_bytes)
                 
                 logger.info(f"📁 Archivo guardado en filesystem: {local_path}")
+                
+                # Registrar en UploadedDocument
+                _register_uploaded_document(
+                    file_name=file_name,
+                    file_path=local_path,
+                    file_size=len(file_bytes),
+                    file_type=mime_type,
+                    drive_file_id=file_id
+                )
+                
                 return local_path
             
         except HttpError as e:
