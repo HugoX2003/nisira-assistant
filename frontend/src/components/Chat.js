@@ -252,8 +252,11 @@ const SourcesDropdown = React.memo(({ sources }) => {
   const handleSourceClick = async (source) => {
     try {
       if (source.file_name) {
-        // Construir URL del documento
-        const API_BASE = process.env.REACT_APP_API_BASE || process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+        // Construir URL del documento usando la misma lógica que adminApi.js
+        const rawBaseUrl = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8000';
+        const trimmedBaseUrl = rawBaseUrl.replace(/\/+$/, '');
+        const API_BASE_URL = trimmedBaseUrl.endsWith('/api') ? trimmedBaseUrl : `${trimmedBaseUrl}/api`;
+        
         const token = localStorage.getItem('token');
         
         if (!token) {
@@ -262,7 +265,8 @@ const SourcesDropdown = React.memo(({ sources }) => {
         }
         
         // Abrir documento en nueva ventana
-        const documentUrl = `${API_BASE}/api/documents/${encodeURIComponent(source.file_name)}/`;
+        const documentUrl = `${API_BASE_URL}/documents/${encodeURIComponent(source.file_name)}/`;
+        console.log('📄 Abriendo documento:', documentUrl);
         const newWindow = window.open('', '_blank');
         
         // Crear iframe con autenticación
@@ -286,16 +290,18 @@ const SourcesDropdown = React.memo(({ sources }) => {
                   }
                 })
                 .then(response => {
+                  console.log('Response status:', response.status);
                   if (response.ok) {
                     return response.blob();
                   }
-                  throw new Error('Error al cargar el documento');
+                  throw new Error('Error al cargar el documento (HTTP ' + response.status + ')');
                 })
                 .then(blob => {
                   const url = URL.createObjectURL(blob);
                   document.body.innerHTML = '<iframe src="' + url + '"></iframe>';
                 })
                 .catch(error => {
+                  console.error('Error:', error);
                   document.body.innerHTML = '<div class="error">Error: ' + error.message + '</div>';
                 });
               </script>
