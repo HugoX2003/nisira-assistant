@@ -309,11 +309,28 @@ def serve_document(request, filename: str):
                 raise Http404('Error al leer el documento')
             
     except UploadedDocument.DoesNotExist:
+        # Intentar buscar directamente en PostgreSQL (para archivos sincronizados antes del fix)
+        try:
+            from rag_system.storage.postgres_file_store import PostgresFileStore
+            file_store = PostgresFileStore()
+            file_data = file_store.get_file(file_name=filename)
+            
+            if file_data:
+                logger.info(f"✅ Documento encontrado directamente en PostgreSQL: {filename}")
+                content_type = file_data.get('mime_type', 'application/octet-stream')
+                
+                response = HttpResponse(file_data['file_content'], content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{filename}"'
+                return response
+        except Exception as e:
+            logger.warning(f"No se encontró en PostgreSQL directo: {e}")
+
         # Fallback: buscar en el directorio legacy
         base_path = getattr(settings, 'DOCUMENTS_ROOT', os.path.join(settings.BASE_DIR, 'data', 'documents'))
         file_path = os.path.join(base_path, filename)
         
         if not os.path.exists(file_path):
+            logger.error(f"Documento no encontrado en ninguna parte: {filename}")
             raise Http404('Documento no encontrado')
 
         content_type, _ = mimetypes.guess_type(file_path)
