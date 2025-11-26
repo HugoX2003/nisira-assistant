@@ -269,7 +269,7 @@
   font-size: 1.1rem;
 }
 
-.btn-close {
+.modal-close {
   background: #ef4444;
   color: white;
   border: none;
@@ -286,7 +286,7 @@
   flex-shrink: 0;
 }
 
-.btn-close:hover {
+.modal-close:hover {
   background: #dc2626;
   transform: scale(1.1);
 }
