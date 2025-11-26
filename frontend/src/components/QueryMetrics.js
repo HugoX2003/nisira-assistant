@@ -209,8 +209,8 @@ function QueryMetrics({ showNotification }) {
 
           {/* Detalle de consulta seleccionada */}
           {selectedQuery && queryDetail && (
-            <div className="query-detail-modal">
-              <div className="query-detail-content">
+            <div className="query-detail-modal" onClick={() => {setSelectedQuery(null); setQueryDetail(null);}}>
+              <div className="query-detail-content" onClick={(e) => e.stopPropagation()}>
                 <div className="query-detail-header">
                   <h3>🔍 Detalle de Consulta</h3>
                   <button onClick={() => {setSelectedQuery(null); setQueryDetail(null);}} className="btn-close">

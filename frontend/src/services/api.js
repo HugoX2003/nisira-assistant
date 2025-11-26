@@ -161,9 +161,16 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const url = (originalRequest?.url || '').toString();
+    
+    // NO intentar refresh para endpoints de autenticación
+    const isAuthEndpoint = url.includes('/api/auth/login') || 
+                           url.includes('/api/auth/register') ||
+                           url.includes('/api/auth/refresh') ||
+                           url.includes('/api/auth/token');
 
-    // Si es error 401 y no hemos intentado renovar el token
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Si es error 401 y no hemos intentado renovar el token Y no es un endpoint de auth
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       try {
@@ -171,11 +178,8 @@ api.interceptors.response.use(
         // Reintentar la petición original
         return api(originalRequest);
       } catch (refreshError) {
-        // Si el refresh falla, redirigir al login
+        // Si el refresh falla, limpiar tokens (pero NO redirigir automáticamente)
         tokenManager.clearTokens();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
         return Promise.reject(refreshError);
       }
     }
@@ -233,7 +237,7 @@ function handleApiError(error, operation = 'operación') {
 
 export async function login(username, password) {
   try {
-  const response = await api.post('/api/auth/login/', { username, password });
+    const response = await api.post('/api/auth/login/', { username, password });
     const { access, refresh, user } = response.data;
     
     tokenManager.setTokens(access, refresh);
@@ -248,7 +252,8 @@ export async function login(username, password) {
       user
     };
   } catch (error) {
-    handleApiError(error, 'login');
+    // Propagar el error original para que Login.js pueda acceder a response.data.error
+    throw error;
   }
 }
 
@@ -287,7 +292,9 @@ export async function register(username, email, password) {
       data: response.data
     };
   } catch (error) {
-    handleApiError(error, 'registro');
+    // Propagar el error original para que Register.js pueda acceder a response.data
+    console.error('Error en registro:', error);
+    throw error;
   }
 }
 

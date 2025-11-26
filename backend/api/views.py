@@ -216,18 +216,47 @@ def custom_login(request):
         username = request.data.get('username')
         password = request.data.get('password')
         
-        if not username or not password:
+        # Validaciones específicas con mensajes claros
+        if not username and not password:
             return Response(
-                {'error': 'Username and password are required'},
+                {'error': 'Por favor ingresa tu usuario y contraseña'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Autenticar usuario
+        if not username:
+            return Response(
+                {'error': 'Por favor ingresa tu nombre de usuario'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not password:
+            return Response(
+                {'error': 'Por favor ingresa tu contraseña'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Verificar si el usuario existe
+        try:
+            existing_user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'El usuario no existe. Verifica tu nombre de usuario o regístrate'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Autenticar usuario (verifica contraseña)
         user = authenticate(username=username, password=password)
         if not user:
             return Response(
-                {'error': 'Invalid credentials'},
+                {'error': 'Contraseña incorrecta. Intenta nuevamente'},
                 status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        # Verificar si el usuario está activo
+        if not user.is_active:
+            return Response(
+                {'error': 'Tu cuenta está desactivada. Contacta al administrador'},
+                status=status.HTTP_403_FORBIDDEN
             )
         
         # Generar tokens JWT

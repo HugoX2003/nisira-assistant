@@ -1,7 +1,18 @@
 # Generated migration for pgvector embeddings storage
 
-from django.db import migrations, models
-import django.contrib.postgres.fields
+from django.db import migrations, models, connection
+
+
+def create_vector_extension(apps, schema_editor):
+    """Solo crear extensión vector si es PostgreSQL"""
+    if connection.vendor == 'postgresql':
+        schema_editor.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+
+
+def drop_vector_extension(apps, schema_editor):
+    """Solo eliminar extensión vector si es PostgreSQL"""
+    if connection.vendor == 'postgresql':
+        schema_editor.execute('DROP EXTENSION IF EXISTS vector;')
 
 
 class Migration(migrations.Migration):
@@ -11,11 +22,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Habilitar extensión pgvector (opcional, funciona sin ella)
-        migrations.RunSQL(
-            sql='CREATE EXTENSION IF NOT EXISTS vector;',
-            reverse_sql='DROP EXTENSION IF EXISTS vector;'
-        ),
+        # Habilitar extensión pgvector solo en PostgreSQL
+        migrations.RunPython(create_vector_extension, drop_vector_extension),
         
         # Crear tabla para embeddings
         migrations.CreateModel(
