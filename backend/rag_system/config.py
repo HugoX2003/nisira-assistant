@@ -37,6 +37,18 @@ if _credentials_json_env and not _credentials_file_path.exists():
     except Exception as e:
         logging.warning(f"No se pudo crear credentials.json desde env var: {e}")
 
+# Configuración de Token (OAuth2 User Credentials)
+_token_json_env = os.getenv("GOOGLE_TOKEN_JSON")
+_token_file_path = DATA_DIR / "token.json"
+
+if _token_json_env and not _token_file_path.exists():
+    try:
+        _token_data = json.loads(_token_json_env)
+        _token_file_path.write_text(json.dumps(_token_data, indent=2))
+        logging.info("✅ token.json creado desde variable de entorno")
+    except Exception as e:
+        logging.warning(f"No se pudo crear token.json desde env var: {e}")
+
 GOOGLE_DRIVE_CONFIG = {
     "credentials_file": _credentials_file_path,
     "credentials_path": str(_credentials_file_path),  # Ruta completa para compatibilidad

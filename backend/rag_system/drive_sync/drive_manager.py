@@ -104,21 +104,52 @@ class GoogleDriveManager:
             with open(credentials_path, 'r', encoding='utf-8') as f:
                 cred_data = json.load(f)
             
-            # Verificar tipo de credenciales
+            # 1. Intentar usar Token de Usuario (OAuth2) - PRIORIDAD para evitar problemas de cuota
+            # Las Service Accounts tienen 0 quota, así que preferimos usar el token del usuario si existe
+            if os.path.exists(self.token_path):
+                try:
+                    logger.info(f"🔑 Cargando token de usuario desde: {self.token_path}")
+                    creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
+                    
+                    if creds:
+                        if creds.expired and creds.refresh_token:
+                            logger.info("🔄 Refrescando token de usuario expirado...")
+                            try:
+                                creds.refresh(Request())
+                                # Guardar token refrescado
+                                with open(self.token_path, 'w') as token:
+                                    token.write(creds.to_json())
+                            except Exception as refresh_error:
+                                logger.error(f"Error refrescando token: {refresh_error}")
+                                creds = None
+
+                        if creds and creds.valid:
+                            self.credentials = creds
+                            self.service = build('drive', 'v3', credentials=self.credentials)
+                            logger.info("✅ Servicio inicializado con Token de Usuario (con cuota de almacenamiento)")
+                            return True
+                except Exception as e:
+                    logger.warning(f"⚠️ Error cargando token de usuario: {e}. Intentando con Service Account...")
+
+            # 2. Si no hay token válido, usar Service Account
             if 'type' in cred_data and cred_data['type'] == 'service_account':
-                logger.info("� Usando Service Account credentials")
+                logger.info(" Usando Service Account credentials")
                 creds = service_account.Credentials.from_service_account_file(
                     credentials_path,
                     scopes=GOOGLE_DRIVE_CONFIG['scopes']
                 )
                 logger.info(f"✅ Service Account: {cred_data.get('client_email', 'N/A')}")
+                
+                self.credentials = creds
+                self.service = build('drive', 'v3', credentials=self.credentials)
+                return True
             else:
                 # OAuth credentials (flujo antiguo - deprecated pero mantenido por compatibilidad)
-                logger.info("🔑 Usando OAuth credentials")
+                logger.info("🔑 Usando OAuth credentials (flujo legacy)")
                 
                 creds = None
                 
-                # Intentar cargar token existente
+                # Intentar cargar token existente (si falló arriba o no existía)
                 if os.path.exists(self.token_path):
                     logger.info(f"🔑 Cargando token desde: {self.token_path}")
                     creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
@@ -600,6 +631,23 @@ class GoogleDriveManager:
             return file
             
         except HttpError as e:
+            error_reason = ""
+            try:
+                error_content = json.loads(e.content.decode('utf-8'))
+                error_reason = error_content.get('error', {}).get('errors', [{}])[0].get('reason', '')
+            except:
+                pass
+
+            if e.resp.status == 403 and error_reason == 'storageQuotaExceeded':
+                logger.error("❌ ERROR DE CUOTA DE SERVICE ACCOUNT:")
+                logger.error("   Las Service Accounts tienen 0 bytes de almacenamiento propio.")
+                logger.error("   SOLUCIÓN: Debes compartir una carpeta de tu Google Drive personal con el email del Service Account:")
+                logger.error(f"   📧 Email SA: {self.credentials.service_account_email if hasattr(self.credentials, 'service_account_email') else 'ver credentials.json'}")
+                logger.error("   1. Crea una carpeta en tu Drive")
+                logger.error("   2. Comparte la carpeta con el email del SA (permiso Editor)")
+                logger.error("   3. Copia el ID de la carpeta (parte final de la URL)")
+                logger.error("   4. Configura la variable de entorno GOOGLE_DRIVE_FOLDER_ID con ese ID")
+            
             logger.error(f"❌ Error HTTP subiendo archivo: {e}")
             return None
         except Exception as e:
