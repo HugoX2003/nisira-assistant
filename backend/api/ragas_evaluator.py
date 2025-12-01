@@ -128,10 +128,20 @@ class RAGASEvaluator:
             )
             
             # Extraer scores de RAGAS
-            # result.scores es un DataFrame de pandas
-            scores_df = result.scores
-            faithfulness_score = float(scores_df['faithfulness'].iloc[0]) if 'faithfulness' in scores_df.columns else 0.0
-            relevancy_score = float(scores_df['answer_relevancy'].iloc[0]) if 'answer_relevancy' in scores_df.columns else 0.0
+            # En versiones recientes de RAGAS, result es un dict con los scores
+            # Convertir a dict si no lo es
+            if hasattr(result, 'to_pandas'):
+                # Si result tiene método to_pandas, es un Dataset de ragas
+                result_dict = result.to_pandas().to_dict('records')[0]
+            elif hasattr(result, '__dict__'):
+                # Si tiene __dict__, extraer los scores
+                result_dict = result.__dict__
+            else:
+                # Si ya es un dict
+                result_dict = result if isinstance(result, dict) else {}
+            
+            faithfulness_score = float(result_dict.get('faithfulness', 0.0))
+            relevancy_score = float(result_dict.get('answer_relevancy', 0.0))
             
             # Calcular Context Utilization manualmente
             # Medimos qué proporción de palabras clave del contexto aparecen en la respuesta
