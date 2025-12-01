@@ -1306,8 +1306,8 @@ def delete_document_embeddings(request, file_name):
 @admin_required
 def clear_embeddings(request):
     """
-    Limpiar/eliminar todos los embeddings de ChromaDB
-    ADVERTENCIA: Esta acción eliminará todas las colecciones y embeddings
+    Limpiar/eliminar todos los embeddings
+    ADVERTENCIA: Esta acción eliminará todos los embeddings
     """
     if not RAG_MODULES_AVAILABLE:
         return Response(
@@ -1316,45 +1316,76 @@ def clear_embeddings(request):
         )
     
     try:
-        chroma_manager = ChromaManager()
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        # Obtener todas las colecciones
-        collections = chroma_manager.list_collections()
+        logger.info(f"🗑️ clear_embeddings - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
         
-        if not collections:
+        if vector_backend == 'postgres' and database_url:
+            # Usar PostgreSQL
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            
+            if not vector_store.is_ready():
+                return Response({
+                    "success": False,
+                    "error": "PostgreSQL no está disponible"
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            # Eliminar todos los embeddings
+            deleted_count = vector_store.reset_collection()
+            
+            logger.info(f"✅ {deleted_count} embeddings eliminados de PostgreSQL")
+            
             return Response({
                 "success": True,
-                "message": "No hay embeddings para limpiar",
-                "collections_deleted": 0
+                "message": f"Limpieza completada. {deleted_count} embeddings eliminados.",
+                "embeddings_deleted": deleted_count,
+                "backend": "postgres"
             })
-        
-        deleted_collections = []
-        errors = []
-        
-        # Eliminar cada colección usando el cliente directo
-        for collection_name in collections:
-            try:
-                # Usar el cliente de ChromaDB directamente
-                chroma_manager.client.delete_collection(name=collection_name)
-                deleted_collections.append(collection_name)
-                logger.info(f"✅ Colección '{collection_name}' eliminada")
-            except Exception as e:
-                error_msg = f"Error eliminando '{collection_name}': {str(e)}"
-                errors.append(error_msg)
-                logger.error(f"❌ {error_msg}")
-        
-        response_data = {
-            "success": len(errors) == 0,
-            "message": f"Limpieza completada. {len(deleted_collections)} colecciones eliminadas.",
-            "collections_deleted": len(deleted_collections),
-            "deleted": deleted_collections
-        }
-        
-        if errors:
-            response_data["errors"] = errors
-            response_data["message"] += f" {len(errors)} errores encontrados."
-        
-        return Response(response_data)
+        else:
+            # Fallback a ChromaDB
+            chroma_manager = ChromaManager()
+            
+            # Obtener todas las colecciones
+            collections = chroma_manager.list_collections()
+            
+            if not collections:
+                return Response({
+                    "success": True,
+                    "message": "No hay embeddings para limpiar",
+                    "collections_deleted": 0
+                })
+            
+            deleted_collections = []
+            errors = []
+            
+            # Eliminar cada colección usando el cliente directo
+            for collection_name in collections:
+                try:
+                    # Usar el cliente de ChromaDB directamente
+                    chroma_manager.client.delete_collection(name=collection_name)
+                    deleted_collections.append(collection_name)
+                    logger.info(f"✅ Colección '{collection_name}' eliminada")
+                except Exception as e:
+                    error_msg = f"Error eliminando '{collection_name}': {str(e)}"
+                    errors.append(error_msg)
+                    logger.error(f"❌ {error_msg}")
+            
+            response_data = {
+                "success": len(errors) == 0,
+                "message": f"Limpieza completada. {len(deleted_collections)} colecciones eliminadas.",
+                "collections_deleted": len(deleted_collections),
+                "deleted": deleted_collections,
+                "backend": "chroma"
+            }
+            
+            if errors:
+                response_data["errors"] = errors
+                response_data["message"] += f" {len(errors)} errores encontrados."
+            
+            return Response(response_data)
         
     except Exception as e:
         logger.error(f"Error limpiando embeddings: {e}")
