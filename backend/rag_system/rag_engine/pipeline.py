@@ -401,6 +401,10 @@ class RAGPipeline:
                 "error": "Pregunta vacía"
             }
         
+        # Detectar si el usuario pregunta por los documentos disponibles
+        if self._is_document_list_query(question):
+            return self._handle_document_list_query()
+        
         # Preparar estructura opcional de métricas
         metrics_payload: Dict[str, Any] = {
             "latency_ms": {
@@ -698,6 +702,143 @@ Responde en español de forma natural y completa:"""
             return {
                 "success": False,
                 "error": str(e)
+            }
+    
+    def _is_document_list_query(self, question: str) -> bool:
+        """
+        Detecta si el usuario está preguntando por los documentos disponibles.
+        """
+        question_lower = question.lower()
+        
+        # Patrones que indican pregunta sobre documentos disponibles
+        patterns = [
+            'qué documentos tienes',
+            'que documentos tienes',
+            'cuáles documentos tienes',
+            'cuales documentos tienes',
+            'qué archivos tienes',
+            'que archivos tienes',
+            'lista de documentos',
+            'listar documentos',
+            'mostrar documentos',
+            'ver documentos',
+            'documentos disponibles',
+            'archivos disponibles',
+            'qué información tienes',
+            'que información tienes',
+            'qué tienes almacenado',
+            'que tienes almacenado',
+            'qué has aprendido',
+            'que has aprendido',
+            'sobre qué puedes responder',
+            'sobre que puedes responder',
+            'qué temas conoces',
+            'que temas conoces',
+            'de qué puedes hablar',
+            'de que puedes hablar',
+            'cuántos documentos',
+            'cuantos documentos',
+            'todos los documentos',
+            'todos tus documentos',
+            'documentos almacenados',
+            'archivos almacenados',
+            'base de conocimiento',
+            'tu conocimiento',
+            'qué sabes',
+            'que sabes',
+        ]
+        
+        return any(pattern in question_lower for pattern in patterns)
+    
+    def _handle_document_list_query(self) -> Dict[str, Any]:
+        """
+        Maneja la consulta sobre documentos disponibles y genera una respuesta amigable.
+        """
+        try:
+            # Obtener lista de documentos del vector store
+            docs_info = self.chroma_manager.list_all_documents()
+            
+            if not docs_info.get('success'):
+                return {
+                    "success": False,
+                    "error": docs_info.get('error', 'Error obteniendo documentos')
+                }
+            
+            documents = docs_info.get('documents', [])
+            total_docs = docs_info.get('total_documents', 0)
+            total_chunks = docs_info.get('total_chunks', 0)
+            
+            if total_docs == 0:
+                answer = """📚 **No tengo documentos almacenados actualmente.**
+
+Para que pueda ayudarte, necesitas sincronizar documentos desde Google Drive usando el endpoint de sincronización.
+
+Una vez que tengas documentos, podré responder preguntas sobre su contenido."""
+            else:
+                # Agrupar documentos por extensión/tipo
+                docs_by_type = {}
+                for doc in documents:
+                    ext = doc.get('file_extension', '').lower() or 'otros'
+                    if ext.startswith('.'):
+                        ext = ext[1:]
+                    if ext not in docs_by_type:
+                        docs_by_type[ext] = []
+                    docs_by_type[ext].append(doc)
+                
+                # Construir respuesta amigable
+                answer = f"""📚 **Documentos disponibles en mi base de conocimiento**
+
+Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total_chunks} fragmentos** para búsqueda eficiente.
+
+"""
+                # Listar por tipo
+                for doc_type, docs in sorted(docs_by_type.items()):
+                    type_name = {
+                        'pdf': '📄 Documentos PDF',
+                        'txt': '📝 Archivos de texto',
+                        'md': '📋 Archivos Markdown',
+                        'docx': '📃 Documentos Word',
+                        'otros': '📁 Otros archivos'
+                    }.get(doc_type, f'📁 Archivos .{doc_type}')
+                    
+                    answer += f"### {type_name} ({len(docs)})\n\n"
+                    
+                    for doc in docs[:20]:  # Limitar a 20 por tipo
+                        name = doc.get('name', 'Sin nombre')
+                        chunks = doc.get('chunks', 0)
+                        pages = doc.get('total_pages', 'N/A')
+                        
+                        if pages != 'N/A' and pages > 0:
+                            answer += f"- **{name}** ({pages} páginas, {chunks} fragmentos)\n"
+                        else:
+                            answer += f"- **{name}** ({chunks} fragmentos)\n"
+                    
+                    if len(docs) > 20:
+                        answer += f"- *... y {len(docs) - 20} documentos más*\n"
+                    
+                    answer += "\n"
+                
+                answer += """---
+💡 **¿Cómo puedo ayudarte?** Pregúntame sobre cualquiera de estos temas y buscaré la información relevante en los documentos."""
+            
+            return {
+                "success": True,
+                "question": "Consulta de documentos disponibles",
+                "answer": answer,
+                "relevant_documents": [],
+                "sources": [],
+                "document_list": documents,
+                "stats": {
+                    "total_documents": total_docs,
+                    "total_chunks": total_chunks
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error listando documentos: {e}")
+            return {
+                "success": False,
+                "error": f"Error obteniendo lista de documentos: {str(e)}"
             }
     
     def _filter_by_topic_relevance(self, question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

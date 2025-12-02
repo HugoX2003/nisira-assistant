@@ -472,6 +472,58 @@ class PostgresVectorStore:
             logger.error(f"❌ Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
     
+    def list_all_documents(self) -> Dict[str, Any]:
+        """
+        Listar todos los documentos únicos almacenados.
+        
+        Returns:
+            Diccionario con información de todos los documentos únicos
+        """
+        if not self.is_ready():
+            return {"success": False, "error": "PostgreSQL no está listo"}
+        
+        try:
+            with self.conn.cursor() as cur:
+                # Obtener documentos únicos con estadísticas
+                cur.execute("""
+                    SELECT 
+                        COALESCE(metadata->>'source', metadata->>'file_name', 'Desconocido') as doc_name,
+                        COUNT(*) as chunks,
+                        array_agg(DISTINCT (metadata->>'page')::int) FILTER (WHERE metadata->>'page' IS NOT NULL) as pages,
+                        MAX(metadata->>'file_extension') as file_extension,
+                        MIN(created_at) as processed_date
+                    FROM rag_embeddings
+                    GROUP BY COALESCE(metadata->>'source', metadata->>'file_name', 'Desconocido')
+                    ORDER BY doc_name
+                """)
+                
+                documents_list = []
+                total_chunks = 0
+                
+                for row in cur.fetchall():
+                    pages = [p for p in (row[2] or []) if p is not None]
+                    doc_info = {
+                        'name': row[0],
+                        'chunks': row[1],
+                        'pages': sorted(pages) if pages else [],
+                        'total_pages': len(pages) if pages else 'N/A',
+                        'file_extension': row[3] or '',
+                        'processed_date': row[4].isoformat() if row[4] else ''
+                    }
+                    documents_list.append(doc_info)
+                    total_chunks += row[1]
+                
+                return {
+                    "success": True,
+                    "total_documents": len(documents_list),
+                    "total_chunks": total_chunks,
+                    "documents": documents_list
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Error listando documentos: {e}")
+            return {"success": False, "error": str(e)}
+    
     def check_document_exists(self, file_name: str, file_hash: str = None) -> bool:
         """
         Verificar si un documento ya tiene embeddings
