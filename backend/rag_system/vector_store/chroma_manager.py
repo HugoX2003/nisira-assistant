@@ -421,6 +421,64 @@ class ChromaManager:
             logger.error(f"❌ Error listando colecciones: {e}")
             return []
     
+    def list_all_documents(self) -> Dict[str, Any]:
+        """
+        Listar todos los documentos únicos almacenados en la colección.
+        
+        Returns:
+            Diccionario con información de todos los documentos únicos
+        """
+        if not self.is_ready():
+            return {"success": False, "error": "ChromaDB no está listo"}
+        
+        try:
+            # Obtener todos los datos de la colección
+            all_data = self.collection.get(include=['metadatas'])
+            
+            metadatas = all_data.get('metadatas', [])
+            
+            # Extraer documentos únicos por nombre de archivo
+            unique_documents = {}
+            
+            for metadata in metadatas:
+                source = metadata.get('source', metadata.get('document', metadata.get('file_name', 'Desconocido')))
+                
+                if source not in unique_documents:
+                    unique_documents[source] = {
+                        'name': source,
+                        'chunks': 1,
+                        'pages': set(),
+                        'file_extension': metadata.get('file_extension', ''),
+                        'processed_date': metadata.get('processed_at', metadata.get('created_at', ''))
+                    }
+                else:
+                    unique_documents[source]['chunks'] += 1
+                
+                # Agregar página si existe
+                if 'page' in metadata:
+                    unique_documents[source]['pages'].add(metadata['page'])
+            
+            # Convertir sets a listas para serialización JSON
+            documents_list = []
+            for doc_name, doc_info in unique_documents.items():
+                doc_info['pages'] = sorted(list(doc_info['pages'])) if doc_info['pages'] else []
+                doc_info['total_pages'] = len(doc_info['pages']) if doc_info['pages'] else 'N/A'
+                documents_list.append(doc_info)
+            
+            # Ordenar por nombre
+            documents_list.sort(key=lambda x: x['name'].lower())
+            
+            return {
+                "success": True,
+                "total_documents": len(documents_list),
+                "total_chunks": len(metadatas),
+                "documents": documents_list
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error listando documentos: {e}")
+            return {"success": False, "error": str(e)}
+    
     def get_collection_count(self, collection_name: str = None) -> int:
         """
         Obtener número de documentos en una colección

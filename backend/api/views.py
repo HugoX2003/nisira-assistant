@@ -1476,11 +1476,20 @@ def register_user(request):
             )
         
         # Validar formato de email
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        # Regex mejorado: no permite puntos consecutivos, ni al inicio/final del local part
+        email_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$'
         if not re.match(email_pattern, email):
             logger.warning(f"❌ Registro fallido: formato email inválido ({email})")
             return Response(
                 {'error': 'El formato del email no es válido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validar que no tenga puntos consecutivos
+        if '..' in email:
+            logger.warning(f"❌ Registro fallido: email con puntos consecutivos ({email})")
+            return Response(
+                {'error': 'El email no puede contener puntos consecutivos (..)'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
