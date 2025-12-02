@@ -444,6 +444,9 @@ class RAGPipeline:
             retrieval_end = perf_counter()
             metrics_payload["latency_ms"]["retrieval"] = round((retrieval_end - retrieval_start) * 1000, 3)
             
+            # 2.5 FILTRAR DOCUMENTOS POR RELEVANCIA TEMÁTICA
+            relevant_docs = self._filter_by_topic_relevance(question, relevant_docs)
+            
             if not relevant_docs:
                 metrics_payload["counts"]["retrieved_documents"] = 0
                 metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
@@ -607,47 +610,42 @@ class RAGPipeline:
     
     def _create_rag_prompt(self, question: str, context: str) -> str:
         """Crear prompt para generación RAG con formato Markdown mejorado"""
-        prompt = f"""Eres un asistente académico especializado en análisis de textos y documentos peruanos. Tu trabajo es encontrar y explicar información relevante basándote en los documentos proporcionados.
-
-CONTEXTO DE DOCUMENTOS:
-{context}
+        prompt = f"""Eres un asistente académico amigable y experto. Tu objetivo es dar respuestas completas, naturales y útiles basándote en los documentos disponibles.
 
 PREGUNTA DEL USUARIO: {question}
 
-INSTRUCCIONES:
-1. Analiza profundamente el contenido buscando conceptos e ideas relacionadas
-2. Sé interpretativo: relaciona conceptualmente información aunque no use palabras exactas
-3. Explora conexiones entre diferentes documentos y partes del texto
-4. Cita específicamente las fuentes y documentos consultados
-5. Combina información de múltiples fuentes cuando sea relevante
+DOCUMENTOS DISPONIBLES:
+{context}
 
-FORMATO DE RESPUESTA - USA MARKDOWN ESTRUCTURADO:
+📋 REGLAS DE RELEVANCIA:
+- SOLO usa documentos que traten DIRECTAMENTE el tema preguntado
+- Si preguntan sobre TEMA X, NO uses documentos de TEMA Y aunque parezcan relacionados
+- Si no hay información relevante, dilo honestamente
 
-Explica la información encontrada de manera clara y detallada.
+✍️ ESTILO DE RESPUESTA:
+- Responde de forma NATURAL y CONVERSACIONAL, como un profesor explicando a un estudiante
+- NO seas robótico ni telegráfico - desarrolla las ideas con fluidez
+- Explica los conceptos, no solo los menciones
+- Conecta las ideas entre sí para dar contexto
+- Usa un tono amigable pero profesional
 
-**Conceptos clave:** Usa negrita para términos importantes
+📝 ESTRUCTURA SUGERIDA:
+1. **Introducción breve**: Contextualiza el tema en 1-2 oraciones
+2. **Desarrollo**: Explica los puntos principales de forma clara y conectada
+3. **Citas de apoyo**: Incluye citas textuales relevantes entre comillas con la fuente
+4. **Conclusión o resumen** (opcional): Si aplica, cierra con una síntesis
 
-*Énfasis específico:* Usa cursiva para ideas relevantes  
+💡 EJEMPLO DE BUEN ESTILO:
+En lugar de: "Concepto X. Definición Y. (fuente.pdf)"
+Escribe: "El concepto X es fundamental porque... Según el documento, 'definición textual' (fuente.pdf). Esto significa que en la práctica..."
 
-`Fuentes`: Usa código para nombres de documentos
+🎯 FORMATO:
+- Usa **negritas** para conceptos clave
+- Usa > para citas textuales importantes
+- Organiza con párrafos fluidos, no listas excesivas
+- Al final menciona las fuentes consultadas
 
-Cuando enumeres múltiples puntos, usa listas numeradas con espacio apropiado:
-
-1. **Primera idea importante:** Explicación detallada de la primera idea encontrada en los documentos.
-
-2. **Segunda idea relevante:** Más información específica sobre el segundo punto identificado.
-
-3. **Conexiones encontradas:** Relaciones entre conceptos y su significado en el contexto académico.
-
-> Si hay citas textuales importantes, ponlas en formato de cita
-
-**Fuentes consultadas:**
-- `[nombre del archivo]`: Información específica encontrada
-- `[nombre del archivo]`: Datos relevantes identificados
-
----
-
-Responde de manera académica, bien estructurada y con espaciado apropiado para facilitar la lectura:"""
+Responde en español de forma natural y completa:"""
         
         return prompt
     
@@ -701,6 +699,118 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
                 "success": False,
                 "error": str(e)
             }
+    
+    def _filter_by_topic_relevance(self, question: str, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filtra documentos que no son relevantes al tema específico de la pregunta.
+        Evita mezclar documentos de temas diferentes (ej: ISO 27001 vs ISO 31000).
+        """
+        import re
+        
+        if not docs:
+            return docs
+        
+        question_lower = question.lower()
+        
+        # Extraer identificadores específicos de la pregunta (códigos, números, nombres propios)
+        # Patrones para detectar temas específicos
+        specific_patterns = [
+            r'iso\s*(\d+)',           # ISO 27001, ISO 31000, etc.
+            r'ley\s*[nN°#]?\s*(\d+)', # Ley N° 12345
+            r'decreto\s*(\d+)',       # Decreto 123
+            r'norma\s*(\d+)',         # Norma 123
+            r'ntp\s*(\d+)',           # NTP 123
+            r'cobit\s*(\d*)',         # COBIT 5, COBIT 2019
+            r'itil\s*(\d*)',          # ITIL v3, ITIL 4
+            r'nist\s*([\w\-]+)?',     # NIST, NIST CSF
+            r'pci\s*dss',             # PCI DSS
+            r'gdpr',                  # GDPR
+            r'hipaa',                 # HIPAA
+        ]
+        
+        # Buscar identificadores específicos en la pregunta
+        question_identifiers = set()
+        for pattern in specific_patterns:
+            matches = re.findall(pattern, question_lower)
+            if matches:
+                for match in matches:
+                    if isinstance(match, tuple):
+                        match = match[0]
+                    if match:
+                        # Guardar el patrón completo encontrado
+                        full_match = re.search(pattern, question_lower)
+                        if full_match:
+                            question_identifiers.add(full_match.group(0).strip())
+        
+        # Si no hay identificadores específicos, no filtrar
+        if not question_identifiers:
+            logger.info("🔍 No se detectaron identificadores específicos, sin filtrado temático")
+            return docs
+        
+        logger.info(f"🔍 Identificadores detectados en pregunta: {question_identifiers}")
+        
+        filtered_docs = []
+        excluded_count = 0
+        
+        for doc in docs:
+            metadata = doc.get('metadata', {})
+            source = metadata.get('source', '').lower()
+            content = doc.get('content', doc.get('document', '')).lower()
+            
+            # Buscar identificadores en el documento
+            doc_identifiers = set()
+            for pattern in specific_patterns:
+                # Buscar en nombre del archivo
+                matches_source = re.findall(pattern, source)
+                for match in matches_source:
+                    if isinstance(match, tuple):
+                        match = match[0]
+                    if match:
+                        full_match = re.search(pattern, source)
+                        if full_match:
+                            doc_identifiers.add(full_match.group(0).strip())
+                
+                # Buscar en contenido (primeros 500 chars para eficiencia)
+                matches_content = re.findall(pattern, content[:500])
+                for match in matches_content:
+                    if isinstance(match, tuple):
+                        match = match[0]
+                    if match:
+                        full_match = re.search(pattern, content[:500])
+                        if full_match:
+                            doc_identifiers.add(full_match.group(0).strip())
+            
+            # Verificar si hay coincidencia de identificadores
+            if doc_identifiers:
+                # Si el documento tiene identificadores, deben coincidir con la pregunta
+                common_identifiers = question_identifiers.intersection(doc_identifiers)
+                
+                if common_identifiers:
+                    # Coincidencia directa - documento relevante
+                    filtered_docs.append(doc)
+                    logger.debug(f"✅ Documento relevante: {source} (coincide: {common_identifiers})")
+                else:
+                    # El documento tiene otros identificadores - probablemente no es relevante
+                    # Verificar si es un documento "general" que podría aplicar
+                    is_general_doc = not any(
+                        re.search(pattern, source) 
+                        for pattern in specific_patterns
+                    )
+                    
+                    if is_general_doc:
+                        filtered_docs.append(doc)
+                        logger.debug(f"⚠️ Documento general incluido: {source}")
+                    else:
+                        excluded_count += 1
+                        logger.debug(f"❌ Documento excluido: {source} (tiene: {doc_identifiers}, busca: {question_identifiers})")
+            else:
+                # Documento sin identificadores específicos - incluir con menor prioridad
+                filtered_docs.append(doc)
+        
+        if excluded_count > 0:
+            logger.info(f"🚫 Filtrado temático: {excluded_count} documentos excluidos por no coincidir con el tema")
+        
+        return filtered_docs
     
     def _enhance_citation_query(self, question: str) -> Tuple[bool, str]:
         """
