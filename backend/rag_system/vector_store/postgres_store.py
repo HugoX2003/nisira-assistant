@@ -593,29 +593,194 @@ class PostgresVectorStore:
             self.conn.rollback()
             return 0
 
-    def reset_collection(self) -> bool:
+    def search_lexical(self, query: str, keywords: List[str] = None, 
+                        n_results: int = 10) -> List[Dict[str, Any]]:
+        """
+        Búsqueda léxica (full-text search) para coincidencias exactas de palabras.
+        Complementa la búsqueda semántica para mejorar precisión.
+        
+        Args:
+            query: Consulta original del usuario
+            keywords: Lista de palabras clave (opcional)
+            n_results: Número de resultados a retornar
+        
+        Returns:
+            Lista de documentos con scores léxicos
+        """
+        if not self.is_ready():
+            logger.error("❌ PostgreSQL no está listo para búsqueda léxica")
+            return []
+        
+        try:
+            # Extraer keywords si no se proporcionan
+            if not keywords:
+                import re
+                stopwords = {
+                    'el', 'la', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'que', 
+                    'se', 'con', 'por', 'para', 'como', 'al', 'lo', 'su', 'sus', 'es', 'son',
+                    'o', 'a', 'e', 'sobre', 'qué', 'cual', 'cuál', 'quién', 'cómo', 'dónde',
+                    'the', 'a', 'an', 'is', 'are', 'of', 'to', 'in', 'for', 'on', 'with',
+                    'dice', 'menciona', 'habla', 'trata', 'explica', 'describe', 'documento'
+                }
+                words = re.findall(r'\b\w+\b', query.lower())
+                keywords = [w for w in words if len(w) > 2 and w not in stopwords]
+            
+            if not keywords:
+                logger.warning("⚠️ No se encontraron keywords para búsqueda léxica")
+                return []
+            
+            logger.info(f"🔤 Búsqueda léxica con keywords: {keywords[:10]}")
+            
+            with self.conn.cursor() as cur:
+                # Construir condiciones de búsqueda
+                # Método 1: ILIKE para coincidencias parciales (más flexible)
+                conditions = []
+                params = []
+                
+                for keyword in keywords[:15]:  # Limitar a 15 keywords
+                    conditions.append("chunk_text ILIKE %s")
+                    params.append(f"%{keyword}%")
+                
+                if not conditions:
+                    return []
+                
+                # También buscar la consulta completa (boost alto si coincide)
+                conditions.append("chunk_text ILIKE %s")
+                params.append(f"%{query[:100]}%")  # Limitar longitud
+                
+                # Query con scoring basado en coincidencias
+                query_sql = f"""
+                    WITH keyword_matches AS (
+                        SELECT 
+                            id,
+                            chunk_text,
+                            metadata,
+                            (
+                                {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 1 ELSE 0 END)" for _ in keywords[:15]])}
+                            ) as keyword_count,
+                            CASE WHEN chunk_text ILIKE %s THEN 0.5 ELSE 0 END as exact_phrase_bonus
+                        FROM rag_embeddings
+                        WHERE {' OR '.join(conditions)}
+                    )
+                    SELECT 
+                        id,
+                        chunk_text,
+                        metadata,
+                        keyword_count,
+                        exact_phrase_bonus,
+                        (keyword_count::float / {len(keywords[:15])}) + exact_phrase_bonus as lexical_score
+                    FROM keyword_matches
+                    WHERE keyword_count > 0 OR exact_phrase_bonus > 0
+                    ORDER BY lexical_score DESC, keyword_count DESC
+                    LIMIT %s;
+                """
+                
+                # Parámetros: keywords para CASE, frase exacta para bonus, keywords para WHERE, frase para WHERE, límite
+                all_params = []
+                # Para los CASE statements
+                for keyword in keywords[:15]:
+                    all_params.append(f"%{keyword}%")
+                # Para exact phrase bonus
+                all_params.append(f"%{query[:100]}%")
+                # Para las condiciones WHERE (ya están en params)
+                all_params.extend(params)
+                # Límite
+                all_params.append(n_results * 2)
+                
+                cur.execute(query_sql, all_params)
+                
+                results = []
+                for row in cur.fetchall():
+                    doc_id, chunk_text, metadata, keyword_count, phrase_bonus, lexical_score = row
+                    
+                    results.append({
+                        'id': str(doc_id),
+                        'document': chunk_text,
+                        'content': chunk_text,
+                        'metadata': metadata,
+                        'similarity_score': min(float(lexical_score), 1.0),
+                        'lexical_score': float(lexical_score),
+                        'keyword_matches': int(keyword_count),
+                        'search_type': 'lexical',
+                        'rank': len(results) + 1
+                    })
+                    
+                    if len(results) >= n_results:
+                        break
+                
+                logger.info(f"🔤 Búsqueda léxica completada: {len(results)} resultados")
+                return results
+                
+        except Exception as e:
+            logger.error(f"❌ Error en búsqueda léxica: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
+    def get_all_documents(self, limit: int = 1000) -> List[Dict[str, Any]]:
+        """
+        Obtener todos los documentos (para búsqueda léxica en memoria)
+        
+        Args:
+            limit: Número máximo de documentos
+        
+        Returns:
+            Lista de documentos
+        """
+        if not self.is_ready():
+            return []
+        
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, chunk_text, metadata
+                    FROM rag_embeddings
+                    LIMIT %s;
+                """, (limit,))
+                
+                results = []
+                for row in cur.fetchall():
+                    doc_id, chunk_text, metadata = row
+                    results.append({
+                        'id': str(doc_id),
+                        'document': chunk_text,
+                        'content': chunk_text,
+                        'metadata': metadata
+                    })
+                
+                return results
+                
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo documentos: {e}")
+            return []
+
+    def reset_collection(self) -> int:
         """
         Eliminar todos los embeddings (CUIDADO)
         
         Returns:
-            True si fue exitoso
+            Cantidad de embeddings eliminados
         """
         if not self.is_ready():
-            return False
+            return 0
         
         try:
             with self.conn.cursor() as cur:
+                # Contar antes de eliminar
+                cur.execute("SELECT COUNT(*) FROM rag_embeddings;")
+                count = cur.fetchone()[0]
+                
                 cur.execute("TRUNCATE TABLE rag_embeddings;")
                 self.conn.commit()
                 
-                logger.info("🔄 Tabla rag_embeddings vaciada")
-                return True
+                logger.info(f"🔄 Tabla rag_embeddings vaciada: {count} embeddings eliminados")
+                return count
                 
         except Exception as e:
             logger.error(f"❌ Error vaciando tabla: {e}")
             if self.conn:
                 self.conn.rollback()
-            return False
+            return 0
     
     def close(self):
         """Cerrar conexión"""

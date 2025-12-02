@@ -774,12 +774,50 @@ Responde de manera académica, bien estructurada y con espaciado apropiado para 
         except Exception as e:
             logger.warning(f"Error en búsqueda semántica: {e}")
         
-        # 2. BÚSQUEDA ADICIONAL (DESHABILITADA TEMPORALMENTE)
-        # La búsqueda por texto tiene conflicto de dimensiones
+        # 2. BÚSQUEDA LÉXICA (KEYWORDS) - ACTIVADA
+        # Complementa la semántica encontrando coincidencias exactas de palabras
         try:
-            pass  # Placeholder - búsqueda lexical deshabilitada temporalmente
+            keywords = self._extract_keywords(original_query)
+            if keywords:
+                # Usar búsqueda léxica de PostgreSQL si está disponible
+                if hasattr(self.vector_store, 'search_lexical'):
+                    lexical_docs = self.vector_store.search_lexical(
+                        query=original_query,
+                        keywords=keywords,
+                        n_results=max_results
+                    )
+                    for i, doc in enumerate(lexical_docs):
+                        doc_id = doc.get('id', f"lexical_{len(all_results)}")
+                        if doc_id not in seen_ids:
+                            # Aplicar peso léxico
+                            position_boost = 1.0 - (i * 0.03)
+                            weighted_score = doc.get('similarity_score', 0) * lexical_weight * position_boost
+                            
+                            doc['id'] = doc_id
+                            doc['search_type'] = 'lexical'
+                            doc['weighted_score'] = weighted_score
+                            doc['original_score'] = doc.get('similarity_score', 0)
+                            all_results.append(doc)
+                            seen_ids.add(doc_id)
+                    logger.info(f"📊 Búsqueda léxica: {len(lexical_docs)} documentos (peso: {lexical_weight})")
+                else:
+                    # Fallback a búsqueda léxica en ChromaDB
+                    lexical_docs = self._smart_lexical_search(keywords, original_query, max_results)
+                    for i, doc in enumerate(lexical_docs):
+                        doc_id = doc.get('id', f"lexical_{len(all_results)}")
+                        if doc_id not in seen_ids:
+                            weighted_score = doc.get('similarity_score', 0) * lexical_weight
+                            doc['id'] = doc_id
+                            doc['search_type'] = 'lexical'
+                            doc['weighted_score'] = weighted_score
+                            doc['original_score'] = doc.get('similarity_score', 0)
+                            all_results.append(doc)
+                            seen_ids.add(doc_id)
+                    logger.info(f"📊 Búsqueda léxica (fallback): {len(lexical_docs)} documentos")
         except Exception as e:
             logger.warning(f"Error en búsqueda lexical: {e}")
+            import traceback
+            traceback.print_exc()
         
         # 3. BÚSQUEDA POR METADATOS (nombres de archivos y fuentes)
         try:
