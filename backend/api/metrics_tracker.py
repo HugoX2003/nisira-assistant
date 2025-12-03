@@ -224,26 +224,41 @@ class MetricsTracker:
                     logger.info(f"Velocidad = {velocidad_procesamiento:.2f} tokens/segundo")
                     logger.info("="*80 + "\n")
                     
-                    # Importar y usar el evaluador RAGAS (si está disponible)
-                    try:
-                        from .ragas_evaluator import RAGASEvaluator
-                        
-                        logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
-                        ragas_evaluator = RAGASEvaluator()
-                        ragas_scores = ragas_evaluator.evaluate_response(
-                            question=self.query_text or "",
-                            answer=self.answer,
-                            contexts=self.contexts,
-                            ground_truth=None  # Opcional
-                        )
-                        
-                        calidad_respuesta = ragas_scores.get('calidad_respuesta', 0.0)
-                        faithfulness = ragas_scores.get('faithfulness', 0.0)
-                        answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
-                        context_precision = ragas_scores.get('context_precision', 0.0)
-                    except ImportError as e:
-                        logger.warning(f"⚠️ RAGAS no disponible (requiere git): {e}")
-                        # Usar valores por defecto si RAGAS no está disponible
+                    # Verificar si RAGAS está habilitado (por defecto deshabilitado en producción para ahorrar cuota)
+                    ragas_enabled = os.environ.get('RAGAS_ENABLED', 'false').lower() == 'true'
+                    
+                    # Importar y usar el evaluador RAGAS (si está disponible Y habilitado)
+                    if ragas_enabled:
+                        try:
+                            from .ragas_evaluator import RAGASEvaluator
+                            
+                            logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
+                            ragas_evaluator = RAGASEvaluator()
+                            ragas_scores = ragas_evaluator.evaluate_response(
+                                question=self.query_text or "",
+                                answer=self.answer,
+                                contexts=self.contexts,
+                                ground_truth=None  # Opcional
+                            )
+                            
+                            calidad_respuesta = ragas_scores.get('calidad_respuesta', 0.0)
+                            faithfulness = ragas_scores.get('faithfulness', 0.0)
+                            answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
+                            context_precision = ragas_scores.get('context_precision', 0.0)
+                        except ImportError as e:
+                            logger.warning(f"⚠️ RAGAS no disponible (requiere git): {e}")
+                            calidad_respuesta = 0.0
+                            faithfulness = 0.0
+                            answer_relevancy = 0.0
+                            context_precision = 0.0
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error en RAGAS (posible cuota excedida): {e}")
+                            calidad_respuesta = 0.0
+                            faithfulness = 0.0
+                            answer_relevancy = 0.0
+                            context_precision = 0.0
+                    else:
+                        logger.info("ℹ️ RAGAS deshabilitado (RAGAS_ENABLED=false). Respuestas más rápidas.")
                         calidad_respuesta = 0.0
                         faithfulness = 0.0
                         answer_relevancy = 0.0
