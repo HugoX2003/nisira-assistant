@@ -97,18 +97,20 @@ class TextProcessor:
         if not text:
             return ""
         
-        # Normalizar espacios en blanco
-        text = re.sub(r'\\s+', ' ', text)
+        # Normalizar espacios en blanco (múltiples espacios -> uno solo)
+        text = re.sub(r'[ \t]+', ' ', text)
         
-        # Eliminar caracteres de control excepto saltos de línea
-        text = re.sub(r'[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]', '', text)
+        # Eliminar caracteres de control excepto saltos de línea y tabs
+        text = re.sub(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]', '', text)
         
-        # Normalizar saltos de línea múltiples
-        text = re.sub(r'\\n\\s*\\n\\s*\\n+', '\\n\\n', text)
+        # Normalizar saltos de línea múltiples (más de 2 seguidos -> 2)
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
         
         # Eliminar espacios al inicio y final de líneas
-        lines = [line.strip() for line in text.split('\\n')]
-        text = '\\n'.join(lines)
+        lines = [line.strip() for line in text.split('\n')]
+        text = '\n'.join(lines)
+        
+        return text.strip()
         
         return text.strip()
     
@@ -145,7 +147,7 @@ class TextProcessor:
             
             # Metadatos adicionales
             if self.extract_metadata:
-                lines = text.split('\\n')
+                lines = text.split('\n')
                 metadata.update({
                     'line_count': len(lines),
                     'word_count': len(text.split()),
@@ -225,15 +227,15 @@ class TextProcessor:
             Texto con estructura mejorada
         """
         # Marcar headers con contexto
-        text = re.sub(r'^(#{1,6})\\s+(.+)$', r'\\n\\n=== HEADER \\1 ===\\n\\2\\n', text, flags=re.MULTILINE)
+        text = re.sub(r'^(#{1,6})\s+(.+)$', r'\n\n=== HEADER \1 ===\n\2\n', text, flags=re.MULTILINE)
         
         # Marcar listas
-        text = re.sub(r'^(\\s*[-*+])\\s+(.+)$', r'• \\2', text, flags=re.MULTILINE)
-        text = re.sub(r'^(\\s*\\d+\\.)\\s+(.+)$', r'\\1 \\2', text, flags=re.MULTILINE)
+        text = re.sub(r'^(\s*[-*+])\s+(.+)$', r'• \2', text, flags=re.MULTILINE)
+        text = re.sub(r'^(\s*\d+\.)\s+(.+)$', r'\1 \2', text, flags=re.MULTILINE)
         
         # Marcar código
-        text = re.sub(r'```([^\\n]*)\\n([^`]+)```', r'\\n\\n=== CÓDIGO \\1 ===\\n\\2\\n=== FIN CÓDIGO ===\\n', text)
-        text = re.sub(r'`([^`]+)`', r'<CÓDIGO: \\1>', text)
+        text = re.sub(r'```([^\n]*)\n([^`]+)```', r'\n\n=== CÓDIGO \1 ===\n\2\n=== FIN CÓDIGO ===\n', text)
+        text = re.sub(r'`([^`]+)`', r'<CÓDIGO: \1>', text)
         
         return text
     
@@ -278,14 +280,14 @@ class TextProcessor:
                     if self.preserve_structure and para.style.name.startswith('Heading'):
                         # Marcar headers
                         level = para.style.name.replace('Heading', '').strip()
-                        text_parts.append(f"\\n\\n=== HEADER {level} ===\\n{para.text}\\n")
+                        text_parts.append(f"\n\n=== HEADER {level} ===\n{para.text}\n")
                     else:
                         text_parts.append(para.text)
             
             # Extraer texto de tablas
             for table in doc.tables:
                 if self.preserve_structure:
-                    text_parts.append("\\n\\n=== TABLA ===\\n")
+                    text_parts.append("\n\n=== TABLA ===\n")
                 
                 for row in table.rows:
                     row_texts = []
@@ -297,9 +299,9 @@ class TextProcessor:
                         text_parts.append(" | ".join(row_texts))
                 
                 if self.preserve_structure:
-                    text_parts.append("=== FIN TABLA ===\\n")
+                    text_parts.append("=== FIN TABLA ===\n")
             
-            text = "\\n".join(text_parts)
+            text = "\n".join(text_parts)
             text = self._clean_text(text)
             
             # Metadatos adicionales
