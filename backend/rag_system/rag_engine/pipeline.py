@@ -1042,11 +1042,17 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                         if doc_id not in seen_ids:
                             # Aplicar peso léxico
                             position_boost = 1.0 - (i * 0.03)
-                            weighted_score = doc.get('similarity_score', 0) * lexical_weight * position_boost
+                            base_score = doc.get('similarity_score', 0) * lexical_weight * position_boost
+                            
+                            # BOOST EXTRA si el chunk tiene keywords importantes (autores, etc.)
+                            important_kw_bonus = doc.get('important_keyword_bonus', 0)
+                            if important_kw_bonus > 0:
+                                base_score = min(1.0, base_score + important_kw_bonus * 0.5)
+                                logger.info(f"🔥 Boost por keyword importante en chunk: +{important_kw_bonus * 0.5:.2f}")
                             
                             doc['id'] = doc_id
                             doc['search_type'] = 'lexical'
-                            doc['weighted_score'] = weighted_score
+                            doc['weighted_score'] = base_score
                             doc['original_score'] = doc.get('similarity_score', 0)
                             all_results.append(doc)
                             seen_ids.add(doc_id)

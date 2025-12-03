@@ -700,6 +700,16 @@ class PostgresVectorStore:
                 conditions.append("chunk_text ILIKE %s")
                 params.append(f"%{query[:100]}%")  # Limitar longitud
                 
+                # Identificar palabras clave MUY importantes (sustantivos de la pregunta)
+                # Estas palabras deben tener un boost extra si aparecen en el chunk
+                important_keywords = []
+                question_words = ['quienes', 'quién', 'quien', 'cuales', 'cual', 'donde', 'cuando', 'como', 'que', 'qué']
+                for kw in keywords:
+                    kw_lower = kw.lower()
+                    # Palabras importantes son las que NO son palabras de pregunta
+                    if kw_lower not in question_words and len(kw_lower) > 3:
+                        important_keywords.append(kw_lower)
+                
                 # Query con scoring basado en coincidencias
                 query_sql = f"""
                     WITH keyword_matches AS (
@@ -710,7 +720,11 @@ class PostgresVectorStore:
                             (
                                 {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 1 ELSE 0 END)" for _ in keywords[:15]])}
                             ) as keyword_count,
-                            CASE WHEN chunk_text ILIKE %s THEN 0.5 ELSE 0 END as exact_phrase_bonus
+                            CASE WHEN chunk_text ILIKE %s THEN 0.5 ELSE 0 END as exact_phrase_bonus,
+                            -- BOOST para palabras importantes (autores, despliegue, etc.)
+                            (
+                                {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 0.4 ELSE 0 END)" for _ in important_keywords[:5]]) if important_keywords else '0'}
+                            ) as important_keyword_bonus
                         FROM rag_embeddings
                         WHERE {' OR '.join(conditions)}
                     )
@@ -720,20 +734,24 @@ class PostgresVectorStore:
                         metadata,
                         keyword_count,
                         exact_phrase_bonus,
-                        (keyword_count::float / {len(keywords[:15])}) + exact_phrase_bonus as lexical_score
+                        important_keyword_bonus,
+                        (keyword_count::float / {len(keywords[:15])}) + exact_phrase_bonus + important_keyword_bonus as lexical_score
                     FROM keyword_matches
                     WHERE keyword_count > 0 OR exact_phrase_bonus > 0
-                    ORDER BY lexical_score DESC, keyword_count DESC
+                    ORDER BY lexical_score DESC, important_keyword_bonus DESC, keyword_count DESC
                     LIMIT %s;
                 """
                 
-                # Parámetros: keywords para CASE, frase exacta para bonus, keywords para WHERE, frase para WHERE, límite
+                # Parámetros: keywords para CASE, frase exacta para bonus, important keywords para boost, keywords para WHERE, frase para WHERE, límite
                 all_params = []
-                # Para los CASE statements
+                # Para los CASE statements de keywords
                 for keyword in keywords[:15]:
                     all_params.append(f"%{keyword}%")
                 # Para exact phrase bonus
                 all_params.append(f"%{query[:100]}%")
+                # Para important keyword bonus
+                for imp_kw in important_keywords[:5]:
+                    all_params.append(f"%{imp_kw}%")
                 # Para las condiciones WHERE (ya están en params)
                 all_params.extend(params)
                 # Límite
@@ -743,7 +761,12 @@ class PostgresVectorStore:
                 
                 results = []
                 for row in cur.fetchall():
-                    doc_id, chunk_text, metadata, keyword_count, phrase_bonus, lexical_score = row
+                    doc_id, chunk_text, metadata, keyword_count, phrase_bonus, imp_kw_bonus, lexical_score = row
+                    
+                    # Log chunks con bonus alto
+                    if imp_kw_bonus and imp_kw_bonus > 0:
+                        source = (metadata or {}).get('source', 'unknown')[:40]
+                        logger.info(f"🎯 Chunk con keyword importante: {source} (bonus: +{imp_kw_bonus:.2f})")
                     
                     results.append({
                         'id': str(doc_id),
@@ -753,6 +776,7 @@ class PostgresVectorStore:
                         'similarity_score': min(float(lexical_score), 1.0),
                         'lexical_score': float(lexical_score),
                         'keyword_matches': int(keyword_count),
+                        'important_keyword_bonus': float(imp_kw_bonus) if imp_kw_bonus else 0,
                         'search_type': 'lexical',
                         'rank': len(results) + 1
                     })
