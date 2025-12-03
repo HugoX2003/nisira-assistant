@@ -769,6 +769,105 @@ class PostgresVectorStore:
             traceback.print_exc()
             return []
     
+    def search_by_metadata(self, query: str, keywords: List[str] = None, 
+                          n_results: int = 15) -> List[Dict[str, Any]]:
+        """
+        Búsqueda por coincidencias en metadatos (nombre de archivo, source, etc.)
+        
+        Args:
+            query: Consulta original
+            keywords: Lista de palabras clave para buscar
+            n_results: Número máximo de resultados
+        
+        Returns:
+            Lista de documentos que coinciden con los metadatos
+        """
+        if not self.is_ready():
+            return []
+        
+        results = []
+        
+        try:
+            # Extraer keywords si no se proporcionan
+            if not keywords:
+                import re
+                stopwords = {'el', 'la', 'de', 'que', 'y', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 
+                           'le', 'da', 'su', 'por', 'son', 'con', 'para', 'como', 'las', 'del', 'los',
+                           'una', 'está', 'qué', 'dice', 'sobre', 'quién', 'cómo', 'cuál', 'dónde',
+                           'quienes', 'cual', 'donde', 'cuando', 'segun', 'según'}
+                words = re.findall(r'\b\w+\b', query.lower())
+                keywords = [w for w in words if len(w) > 2 and w not in stopwords]
+            
+            if not keywords:
+                return []
+            
+            with self.conn.cursor() as cur:
+                # Buscar en el campo metadata->>'source' (nombre del archivo)
+                # Usamos ILIKE para búsqueda case-insensitive
+                conditions = []
+                params = []
+                
+                for keyword in keywords:
+                    conditions.append("(metadata->>'source' ILIKE %s OR chunk_text ILIKE %s)")
+                    params.extend([f'%{keyword}%', f'%{keyword}%'])
+                
+                if not conditions:
+                    return []
+                
+                # Construir query SQL con OR entre condiciones
+                sql = f"""
+                    SELECT 
+                        id, 
+                        chunk_text, 
+                        metadata,
+                        (
+                            SELECT COUNT(*) FROM unnest(ARRAY[{','.join(['%s'] * len(keywords))}]) AS kw
+                            WHERE metadata->>'source' ILIKE '%%' || kw || '%%'
+                        ) as source_matches
+                    FROM rag_embeddings
+                    WHERE {' OR '.join(conditions)}
+                    ORDER BY source_matches DESC
+                    LIMIT %s;
+                """
+                
+                # Agregar keywords al inicio para el conteo y al final para el límite
+                all_params = keywords + params + [n_results]
+                
+                cur.execute(sql, all_params)
+                
+                for row in cur.fetchall():
+                    doc_id, chunk_text, metadata, source_matches = row
+                    
+                    # Calcular score basado en coincidencias
+                    score = min(1.0, (source_matches or 0) / max(len(keywords), 1) * 0.9)
+                    
+                    # Boost si el nombre del archivo contiene palabras clave importantes
+                    source_name = (metadata or {}).get('source', '').lower()
+                    keyword_in_source = sum(1 for kw in keywords if kw in source_name)
+                    if keyword_in_source > 0:
+                        score = min(1.0, score + (keyword_in_source / len(keywords)) * 0.6)
+                    
+                    if score > 0:
+                        results.append({
+                            'id': str(doc_id),
+                            'content': chunk_text,
+                            'document': chunk_text,
+                            'metadata': metadata,
+                            'similarity_score': score
+                        })
+                
+                # Ordenar por score
+                results.sort(key=lambda x: x['similarity_score'], reverse=True)
+                
+                logger.info(f"📂 Búsqueda por metadatos completada: {len(results)} resultados")
+                return results[:n_results]
+                
+        except Exception as e:
+            logger.error(f"❌ Error en búsqueda por metadatos: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+    
     def get_all_documents(self, limit: int = 1000) -> List[Dict[str, Any]]:
         """
         Obtener todos los documentos (para búsqueda léxica en memoria)

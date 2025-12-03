@@ -1281,6 +1281,18 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         results = []
         
         try:
+            # Si tenemos PostgreSQL con método search_by_metadata, usarlo
+            if hasattr(self.vector_store, 'search_by_metadata'):
+                keywords = self._extract_keywords(query)
+                postgres_results = self.vector_store.search_by_metadata(query, keywords, top_k)
+                if postgres_results:
+                    return postgres_results
+            
+            # Fallback a ChromaDB si no hay resultados de PostgreSQL o no está disponible
+            if not hasattr(self.chroma_manager, 'collection') or self.chroma_manager.collection is None:
+                logger.warning("⚠️ No hay colección disponible para búsqueda de metadatos")
+                return []
+                
             collection = self.chroma_manager.collection
             all_data = collection.get(include=['documents', 'metadatas'])
             
@@ -1365,7 +1377,11 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
             'política': ['político', 'gobierno', 'estado', 'poder', 'gestión'],
             'regionalización': ['regional', 'descentralización', 'territorio', 'local'],
             'racismo': ['racial', 'discriminación', 'étnico', 'prejuicio'],
-            'violencia': ['violento', 'agresión', 'conflicto', 'guerra']
+            'violencia': ['violento', 'agresión', 'conflicto', 'guerra'],
+            'frontend': ['interfaz', 'ui', 'react', 'vue', 'angular', 'web'],
+            'backend': ['servidor', 'api', 'django', 'flask', 'node'],
+            'despliegue': ['deploy', 'deployment', 'instalación', 'configuración'],
+            'guia': ['guía', 'manual', 'tutorial', 'documentación', 'instrucciones']
         }
         
         try:
@@ -1378,36 +1394,64 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                 if term in expansion_dict:
                     expanded_terms.update(expansion_dict[term])
             
-            # Buscar con términos expandidos
-            collection = self.chroma_manager.collection
-            all_data = collection.get(include=['documents', 'metadatas'])
+            # Si tenemos PostgreSQL, usar get_all_documents
+            if hasattr(self.vector_store, 'get_all_documents'):
+                all_docs = self.vector_store.get_all_documents(limit=500)
+                
+                for doc in all_docs:
+                    doc_content = doc.get('content', '') or doc.get('document', '')
+                    if not doc_content:
+                        continue
+                        
+                    doc_lower = doc_content.lower()
+                    score = 0
+                    
+                    # Calcular relevancia basada en términos expandidos
+                    for term in expanded_terms:
+                        if term in doc_lower:
+                            weight = 0.3 if term in query_terms else 0.1
+                            count = doc_lower.count(term)
+                            score += count * weight
+                    
+                    if score > 0:
+                        results.append({
+                            'id': doc.get('id', ''),
+                            'content': doc_content,
+                            'metadata': doc.get('metadata', {}),
+                            'similarity_score': min(score / len(expanded_terms), 1.0)
+                        })
             
-            documents = all_data.get('documents', [])
-            metadatas = all_data.get('metadatas', [])
-            ids = all_data.get('ids', [])
+            # Fallback a ChromaDB
+            elif hasattr(self.chroma_manager, 'collection') and self.chroma_manager.collection is not None:
+                collection = self.chroma_manager.collection
+                all_data = collection.get(include=['documents', 'metadatas'])
             
-            for i, document in enumerate(documents):
-                if i >= len(ids) or i >= len(metadatas):
-                    continue
+                documents = all_data.get('documents', [])
+                metadatas = all_data.get('metadatas', [])
+                ids = all_data.get('ids', [])
                 
-                doc_lower = document.lower()
-                score = 0
-                
-                # Calcular relevancia basada en términos expandidos
-                for term in expanded_terms:
-                    if term in doc_lower:
-                        # Términos originales tienen más peso
-                        weight = 0.3 if term in query_terms else 0.1
-                        count = doc_lower.count(term)
-                        score += count * weight
-                
-                if score > 0:
-                    results.append({
-                        'id': ids[i],
-                        'content': document,
-                        'metadata': metadatas[i],
-                        'similarity_score': min(score / len(expanded_terms), 1.0)
-                    })
+                for i, document in enumerate(documents):
+                    if i >= len(ids) or i >= len(metadatas):
+                        continue
+                    
+                    doc_lower = document.lower()
+                    score = 0
+                    
+                    # Calcular relevancia basada en términos expandidos
+                    for term in expanded_terms:
+                        if term in doc_lower:
+                            # Términos originales tienen más peso
+                            weight = 0.3 if term in query_terms else 0.1
+                            count = doc_lower.count(term)
+                            score += count * weight
+                    
+                    if score > 0:
+                        results.append({
+                            'id': ids[i],
+                            'content': document,
+                            'metadata': metadatas[i],
+                            'similarity_score': min(score / len(expanded_terms), 1.0)
+                        })
             
             results.sort(key=lambda x: x['similarity_score'], reverse=True)
             
