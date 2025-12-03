@@ -859,14 +859,24 @@ class PostgresVectorStore:
                 for row in cur.fetchall():
                     doc_id, chunk_text, metadata, source_matches = row
                     
-                    # Calcular score basado en coincidencias
-                    score = min(1.0, (source_matches or 0) / max(len(keywords), 1) * 0.9)
+                    # Calcular score basado en coincidencias en el nombre del archivo
+                    source_name = self._normalize_text((metadata or {}).get('source', ''))
                     
-                    # Boost si el nombre del archivo contiene palabras clave importantes
-                    source_name = (metadata or {}).get('source', '').lower()
+                    # Contar cuántas keywords coinciden en el nombre del archivo
                     keyword_in_source = sum(1 for kw in keywords if kw in source_name)
+                    
+                    # Score base alto si hay coincidencias en el nombre
                     if keyword_in_source > 0:
-                        score = min(1.0, score + (keyword_in_source / len(keywords)) * 0.6)
+                        # Score proporcional a cuántas keywords coinciden
+                        score = 0.5 + (keyword_in_source / max(len(keywords), 1)) * 0.5
+                    else:
+                        # Score más bajo si solo coincide en el contenido
+                        score = min(0.4, (source_matches or 0) / max(len(keywords), 1) * 0.4)
+                    
+                    # BOOST ESPECIAL: Si el nombre contiene "despliegue" o "guia/gua"
+                    if 'despliegue' in source_name or 'gua' in source_name:
+                        score = min(1.0, score + 0.3)
+                        logger.info(f"🎯 Boost especial para: {source_name}")
                     
                     if score > 0:
                         results.append({

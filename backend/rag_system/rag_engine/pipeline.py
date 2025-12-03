@@ -1077,10 +1077,31 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                 if doc['id'] not in seen_ids:
                     # Metadata tiene peso fijo alto para coincidencias exactas
                     doc['search_type'] = 'metadata'
-                    doc['weighted_score'] = doc.get('similarity_score', 1.0)  # Score alto para metadata
-                    doc['original_score'] = doc.get('similarity_score', 1.0)
+                    
+                    # BOOST IMPORTANTE: Si el nombre del archivo coincide con términos de la query
+                    source_name = doc.get('metadata', {}).get('source', '').lower()
+                    query_lower = original_query.lower()
+                    
+                    # Calcular coincidencia con nombre de archivo
+                    metadata_boost = 0.0
+                    query_words = [w for w in self._normalize_text(query_lower).split() if len(w) > 3]
+                    for word in query_words:
+                        if word in self._normalize_text(source_name):
+                            metadata_boost += 0.3  # Boost por cada palabra que coincide
+                    
+                    # Score final: combinar score original con boost
+                    base_score = doc.get('similarity_score', 0.5)
+                    final_score = min(1.0, base_score + metadata_boost)
+                    
+                    doc['weighted_score'] = final_score
+                    doc['original_score'] = base_score
+                    doc['metadata_boost'] = metadata_boost
                     all_results.append(doc)
                     seen_ids.add(doc['id'])
+                    
+                    if metadata_boost > 0:
+                        logger.info(f"🎯 Boost por metadata: {source_name[:50]} -> +{metadata_boost:.2f}")
+                        
             logger.info(f"📊 Búsqueda por metadatos: {len(metadata_docs)} documentos")
         except Exception as e:
             logger.warning(f"Error en búsqueda por metadatos: {e}")
