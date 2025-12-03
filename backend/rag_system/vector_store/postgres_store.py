@@ -769,6 +769,14 @@ class PostgresVectorStore:
             traceback.print_exc()
             return []
     
+    def _normalize_text(self, text: str) -> str:
+        """Normalizar texto quitando acentos y caracteres especiales"""
+        import unicodedata
+        # Normalizar y quitar acentos
+        normalized = unicodedata.normalize('NFD', text)
+        without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+        return without_accents.lower()
+    
     def search_by_metadata(self, query: str, keywords: List[str] = None, 
                           n_results: int = 15) -> List[Dict[str, Any]]:
         """
@@ -801,9 +809,22 @@ class PostgresVectorStore:
             if not keywords:
                 return []
             
+            # Normalizar keywords (quitar acentos) y agregar variantes
+            normalized_keywords = set()
+            for kw in keywords:
+                normalized_keywords.add(self._normalize_text(kw))
+                normalized_keywords.add(kw.lower())
+                # Agregar variantes sin acentos comunes
+                if 'guía' in kw or 'guia' in kw:
+                    normalized_keywords.add('gua')
+                    normalized_keywords.add('guia')
+            
+            keywords = list(normalized_keywords)
+            logger.info(f"🔍 Keywords normalizadas para búsqueda en metadatos: {keywords}")
+            
             with self.conn.cursor() as cur:
                 # Buscar en el campo metadata->>'source' (nombre del archivo)
-                # Usamos ILIKE para búsqueda case-insensitive
+                # Usamos ILIKE para búsqueda case-insensitive con coincidencias parciales
                 conditions = []
                 params = []
                 

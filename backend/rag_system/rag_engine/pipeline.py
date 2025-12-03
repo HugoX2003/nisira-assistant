@@ -1115,8 +1115,15 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         
         return diverse_results[:top_k]
     
+    def _normalize_text(self, text: str) -> str:
+        """Normalizar texto quitando acentos"""
+        import unicodedata
+        normalized = unicodedata.normalize('NFD', text)
+        without_accents = ''.join(c for c in normalized if unicodedata.category(c) != 'Mn')
+        return without_accents.lower()
+    
     def _extract_keywords(self, query: str) -> List[str]:
-        """Extraer palabras clave de la consulta"""
+        """Extraer palabras clave de la consulta con normalización de acentos"""
         import re
         
         # Limpiar y extraer palabras
@@ -1125,11 +1132,30 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         # Filtrar stopwords comunes
         stopwords = {'el', 'la', 'de', 'que', 'y', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 
                     'da', 'su', 'por', 'son', 'con', 'para', 'como', 'las', 'del', 'los', 'una', 
-                    'está', 'qué', 'dice', 'sobre', 'quién', 'cómo', 'cuál', 'dónde'}
+                    'está', 'qué', 'dice', 'sobre', 'quién', 'cómo', 'cuál', 'dónde',
+                    'quienes', 'cuales', 'donde', 'cuando', 'segun', 'cuantos'}
         
-        keywords = [word for word in words if len(word) > 2 and word not in stopwords]
+        keywords = []
+        for word in words:
+            if len(word) > 2 and word not in stopwords:
+                keywords.append(word)
+                # Agregar versión sin acentos
+                normalized = self._normalize_text(word)
+                if normalized != word and normalized not in keywords:
+                    keywords.append(normalized)
         
-        return keywords
+        # Agregar variantes para términos comunes mal escritos en archivos
+        expanded_keywords = set(keywords)
+        for kw in keywords:
+            norm_kw = self._normalize_text(kw)
+            # Si busca "guia" o "guía", agregar "gua" para coincidir con "Gua_de_Despliegue"
+            if 'guia' in norm_kw or norm_kw == 'guia':
+                expanded_keywords.add('gua')
+            # Agregar variante de 3 primeras letras para coincidencias parciales
+            if len(norm_kw) >= 4:
+                expanded_keywords.add(norm_kw[:3])
+        
+        return list(expanded_keywords)
     
     def _search_by_filename(self, keywords: List[str], top_k: int) -> List[Dict[str, Any]]:
         """Buscar por coincidencias en nombres de archivos"""
