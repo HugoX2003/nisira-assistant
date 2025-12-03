@@ -1044,11 +1044,14 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                             position_boost = 1.0 - (i * 0.03)
                             base_score = doc.get('similarity_score', 0) * lexical_weight * position_boost
                             
-                            # BOOST EXTRA si el chunk tiene keywords importantes (autores, etc.)
+                            # BOOST MASIVO si el chunk tiene keywords importantes (autores, etc.)
+                            # Esto asegura que chunks con la palabra exacta suban al top
                             important_kw_bonus = doc.get('important_keyword_bonus', 0)
                             if important_kw_bonus > 0:
-                                base_score = min(1.0, base_score + important_kw_bonus * 0.5)
-                                logger.info(f"🔥 Boost por keyword importante en chunk: +{important_kw_bonus * 0.5:.2f}")
+                                # Multiplicador alto para que los chunks con keywords importantes dominen
+                                boost_amount = important_kw_bonus * 0.8
+                                base_score = min(1.0, base_score + boost_amount)
+                                logger.info(f"🔥 Boost por keyword importante en chunk: +{boost_amount:.2f}")
                             
                             doc['id'] = doc_id
                             doc['search_type'] = 'lexical'

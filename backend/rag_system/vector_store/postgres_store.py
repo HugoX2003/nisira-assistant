@@ -701,16 +701,19 @@ class PostgresVectorStore:
                 params.append(f"%{query[:100]}%")  # Limitar longitud
                 
                 # Identificar palabras clave MUY importantes (sustantivos de la pregunta)
-                # Estas palabras deben tener un boost extra si aparecen en el chunk
+                # Estas palabras deben tener un boost MASIVO si aparecen en el chunk
                 important_keywords = []
-                question_words = ['quienes', 'quién', 'quien', 'cuales', 'cual', 'donde', 'cuando', 'como', 'que', 'qué']
+                question_words = ['quienes', 'quién', 'quien', 'cuales', 'cual', 'donde', 'cuando', 'como', 'que', 'qué', 'son', 'fueron', 'está', 'hay']
                 for kw in keywords:
                     kw_lower = kw.lower()
-                    # Palabras importantes son las que NO son palabras de pregunta
+                    # Palabras importantes son las que NO son palabras de pregunta y tienen >3 letras
                     if kw_lower not in question_words and len(kw_lower) > 3:
                         important_keywords.append(kw_lower)
                 
+                logger.info(f"🔑 Keywords importantes para boost: {important_keywords[:5]}")
+                
                 # Query con scoring basado en coincidencias
+                # BOOST MUCHO MÁS ALTO (0.8) para keywords importantes
                 query_sql = f"""
                     WITH keyword_matches AS (
                         SELECT 
@@ -721,9 +724,9 @@ class PostgresVectorStore:
                                 {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 1 ELSE 0 END)" for _ in keywords[:15]])}
                             ) as keyword_count,
                             CASE WHEN chunk_text ILIKE %s THEN 0.5 ELSE 0 END as exact_phrase_bonus,
-                            -- BOOST para palabras importantes (autores, despliegue, etc.)
+                            -- BOOST MASIVO para palabras importantes (autores, despliegue, etc.)
                             (
-                                {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 0.4 ELSE 0 END)" for _ in important_keywords[:5]]) if important_keywords else '0'}
+                                {' + '.join([f"(CASE WHEN chunk_text ILIKE %s THEN 0.8 ELSE 0 END)" for _ in important_keywords[:5]]) if important_keywords else '0'}
                             ) as important_keyword_bonus
                         FROM rag_embeddings
                         WHERE {' OR '.join(conditions)}

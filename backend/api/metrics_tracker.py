@@ -6,6 +6,7 @@ Captura métricas de rendimiento y precisión en tiempo real
 para análisis del sistema RAG.
 """
 
+import os
 import time
 import uuid
 import logging
