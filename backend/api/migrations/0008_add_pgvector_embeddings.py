@@ -4,9 +4,15 @@ from django.db import migrations, models, connection
 
 
 def create_vector_extension(apps, schema_editor):
-    """Solo crear extensión vector si es PostgreSQL"""
+    """Solo crear extensión vector si es PostgreSQL y pgvector está disponible"""
     if connection.vendor == 'postgresql':
-        schema_editor.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+        try:
+            schema_editor.execute('CREATE EXTENSION IF NOT EXISTS vector;')
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                'pgvector extension not available - vector search will use fallback'
+            )
 
 
 def drop_vector_extension(apps, schema_editor):
