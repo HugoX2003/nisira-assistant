@@ -36,7 +36,7 @@ try:
     RAG_MODULES_AVAILABLE = True
 except ImportError as e:
     RAG_MODULES_AVAILABLE = False
-    logger.warning(f"⚠️ Módulos RAG no disponibles: {e}")
+    logger.warning(f"[WARN] Módulos RAG no disponibles: {e}")
 
 
 def is_admin_user(user):
@@ -87,7 +87,7 @@ def calculate_file_hash(file_path: str) -> str:
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
     except Exception as e:
-        logger.error(f"❌ Error calculando hash para {file_path}: {e}")
+        logger.error(f"[ERROR] Error calculando hash para {file_path}: {e}")
         return None
 
 
@@ -124,7 +124,7 @@ def check_file_already_processed(chroma_manager, file_hash: str, file_name: str)
         return bool(results and results['ids'])
         
     except Exception as e:
-        logger.warning(f"⚠️  Error verificando duplicados: {e}")
+        logger.warning(f"[WARN]  Error verificando duplicados: {e}")
         return False
 
 
@@ -229,7 +229,7 @@ def upload_to_drive(request):
     Subir un archivo a Google Drive
     Solo acepta PDFs y archivos de texto
     """
-    logger.info(f"📤 Upload request recibido de usuario: {request.user.username}")
+    logger.info(f"[INFO] Upload request recibido de usuario: {request.user.username}")
     
     if not RAG_MODULES_AVAILABLE:
         return Response(
@@ -240,7 +240,7 @@ def upload_to_drive(request):
     try:
         # Validar archivo
         if 'file' not in request.FILES:
-            logger.error("❌ No se proporcionó archivo en la petición")
+            logger.error("[ERROR] No se proporcionó archivo en la petición")
             return Response(
                 {"error": "No se proporcionó ningún archivo"},
                 status=status.HTTP_400_BAD_REQUEST
@@ -248,7 +248,7 @@ def upload_to_drive(request):
         
         uploaded_file = request.FILES['file']
         file_name = uploaded_file.name
-        logger.info(f"📁 Archivo recibido: {file_name}, tamaño: {uploaded_file.size} bytes")
+        logger.info(f"[DIR] Archivo recibido: {file_name}, tamaño: {uploaded_file.size} bytes")
         
         # Validar tipo de archivo
         allowed_extensions = ['.pdf', '.txt', '.md', '.doc', '.docx']
@@ -279,11 +279,11 @@ def upload_to_drive(request):
             import shutil
             shutil.move(temp_path, final_path)
             
-            logger.warning(f"⚠️ Drive no autenticado. Archivo guardado solo localmente: {file_name}")
+            logger.warning(f"[WARN] Drive no autenticado. Archivo guardado solo localmente: {file_name}")
             
             # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
             try:
-                logger.info(f"🔄 Iniciando procesamiento automático del archivo: {file_name}")
+                logger.info(f"[SYNC] Iniciando procesamiento automático del archivo: {file_name}")
                 
                 from rag_system.rag_engine.pipeline import RAGPipeline
                 pipeline = RAGPipeline()
@@ -293,7 +293,7 @@ def upload_to_drive(request):
                 
                 if process_result['success']:
                     chunks = process_result['chunks']
-                    logger.info(f"📄 Documento procesado: {len(chunks)} chunks generados")
+                    logger.info(f"[INFO] Documento procesado: {len(chunks)} chunks generados")
                     
                     # Generar embeddings
                     chunk_texts = [chunk['text'] for chunk in chunks]
@@ -307,7 +307,7 @@ def upload_to_drive(request):
                             valid_chunks.append(chunk)
                             valid_embeddings.append(embedding)
                     
-                    logger.info(f"🧮 Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
+                    logger.info(f"[INFO] Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
                     
                     # Almacenar en ChromaDB
                     if valid_chunks:
@@ -317,7 +317,7 @@ def upload_to_drive(request):
                         )
                         
                         if storage_success:
-                            logger.info(f"✅ Archivo procesado y embeddings almacenados: {file_name}")
+                            logger.info(f"[OK] Archivo procesado y embeddings almacenados: {file_name}")
                             return Response({
                                 "success": True,
                                 "message": f"Archivo '{file_name}' guardado localmente y procesado exitosamente",
@@ -330,7 +330,7 @@ def upload_to_drive(request):
                             })
                     
             except Exception as e:
-                logger.error(f"❌ Error en procesamiento automático: {e}")
+                logger.error(f"[ERROR] Error en procesamiento automático: {e}")
             
             return Response({
                 "success": True,
@@ -356,11 +356,11 @@ def upload_to_drive(request):
             if os.path.exists(temp_path):
                 os.remove(temp_path)
             
-            logger.info(f"✅ Archivo subido a Drive y guardado localmente: {file_name}")
+            logger.info(f"[OK] Archivo subido a Drive y guardado localmente: {file_name}")
             
             # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
             try:
-                logger.info(f"🔄 Iniciando procesamiento automático del archivo: {file_name}")
+                logger.info(f"[SYNC] Iniciando procesamiento automático del archivo: {file_name}")
                 
                 from rag_system.rag_engine.pipeline import RAGPipeline
                 pipeline = RAGPipeline()
@@ -370,7 +370,7 @@ def upload_to_drive(request):
                 
                 if process_result['success']:
                     chunks = process_result['chunks']
-                    logger.info(f"📄 Documento procesado: {len(chunks)} chunks generados")
+                    logger.info(f"[INFO] Documento procesado: {len(chunks)} chunks generados")
                     
                     # Generar embeddings
                     chunk_texts = [chunk['text'] for chunk in chunks]
@@ -384,7 +384,7 @@ def upload_to_drive(request):
                             valid_chunks.append(chunk)
                             valid_embeddings.append(embedding)
                     
-                    logger.info(f"🧮 Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
+                    logger.info(f"[INFO] Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
                     
                     # Almacenar en ChromaDB
                     if valid_chunks:
@@ -394,7 +394,7 @@ def upload_to_drive(request):
                         )
                         
                         if storage_success:
-                            logger.info(f"✅ Archivo procesado y embeddings almacenados: {file_name}")
+                            logger.info(f"[OK] Archivo procesado y embeddings almacenados: {file_name}")
                             return Response({
                                 "success": True,
                                 "message": f"Archivo '{file_name}' subido, sincronizado y procesado exitosamente",
@@ -407,14 +407,14 @@ def upload_to_drive(request):
                                 "embeddings_generated": len(valid_embeddings)
                             })
                         else:
-                            logger.warning(f"⚠️ Archivo subido pero falló el almacenamiento de embeddings")
+                            logger.warning(f"[WARN] Archivo subido pero falló el almacenamiento de embeddings")
                     else:
-                        logger.warning(f"⚠️ No se generaron chunks válidos para el archivo")
+                        logger.warning(f"[WARN] No se generaron chunks válidos para el archivo")
                 else:
-                    logger.error(f"❌ Error procesando documento: {process_result.get('error', 'Unknown')}")
+                    logger.error(f"[ERROR] Error procesando documento: {process_result.get('error', 'Unknown')}")
                     
             except Exception as e:
-                logger.error(f"❌ Error en procesamiento automático: {e}")
+                logger.error(f"[ERROR] Error en procesamiento automático: {e}")
                 # Continuar y retornar éxito de upload aunque falle el procesamiento
             
             return Response({
@@ -435,7 +435,7 @@ def upload_to_drive(request):
             import shutil
             shutil.move(temp_path, final_path)
             
-            logger.error(f"❌ Error subiendo a Drive. Archivo guardado localmente: {file_name}")
+            logger.error(f"[ERROR] Error subiendo a Drive. Archivo guardado localmente: {file_name}")
             
             return Response({
                 "success": True,
@@ -460,7 +460,7 @@ def delete_drive_file(request, file_id):
     """
     Eliminar un archivo de Google Drive
     """
-    logger.info(f"🗑️ Delete request recibido de usuario: {request.user.username} para file_id: {file_id}")
+    logger.info(f"[DEL] Delete request recibido de usuario: {request.user.username} para file_id: {file_id}")
     
     if not RAG_MODULES_AVAILABLE:
         return Response(
@@ -472,18 +472,18 @@ def delete_drive_file(request, file_id):
         drive_manager = GoogleDriveManager()
         
         if not drive_manager.is_authenticated():
-            logger.error("❌ Drive no autenticado")
+            logger.error("[ERROR] Drive no autenticado")
             return Response(
                 {"error": "No autenticado con Google Drive"},
                 status=status.HTTP_401_UNAUTHORIZED
             )
         
         # Eliminar de Google Drive
-        logger.info(f"🔄 Intentando eliminar archivo {file_id} de Drive...")
+        logger.info(f"[SYNC] Intentando eliminar archivo {file_id} de Drive...")
         success = drive_manager.delete_file(file_id)
         
         if success:
-            logger.info(f"✅ Archivo {file_id} eliminado de Drive")
+            logger.info(f"[OK] Archivo {file_id} eliminado de Drive")
             
             return Response({
                 "success": True,
@@ -621,7 +621,7 @@ def get_embeddings_status(request):
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        logger.info(f"🔍 get_embeddings_status - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
+        logger.info(f"[SEARCH] get_embeddings_status - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
         
         # Usar el vector store configurado
         if vector_backend == 'postgres' and database_url:
@@ -629,7 +629,7 @@ def get_embeddings_status(request):
             vector_store = PostgresVectorStore(database_url)
             
             if not vector_store.is_ready():
-                logger.error("❌ PostgresVectorStore no está listo")
+                logger.error("[ERROR] PostgresVectorStore no está listo")
                 return Response({
                     "success": False,
                     "error": "PostgreSQL no está disponible",
@@ -640,7 +640,7 @@ def get_embeddings_status(request):
             
             # Obtener estadísticas de PostgreSQL
             stats = vector_store.get_collection_stats()
-            logger.info(f"📊 Stats de PostgreSQL: {stats}")
+            logger.info(f"[STATS] Stats de PostgreSQL: {stats}")
             
             return Response({
                 "success": True,
@@ -674,7 +674,7 @@ def get_embeddings_status(request):
                 except Exception as e:
                     logger.warning(f"Error obteniendo info de colección {collection_name}: {e}")
             
-            logger.info(f"📊 ChromaDB: {len(collections)} colecciones, {total_documents} documentos totales")
+            logger.info(f"[STATS] ChromaDB: {len(collections)} colecciones, {total_documents} documentos totales")
             
             return Response({
                 "success": True,
@@ -795,14 +795,14 @@ def generate_embeddings(request):
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        logger.info(f"🚀 generate_embeddings - Backend configurado: {vector_backend}")
-        logger.info(f"🚀 DATABASE_URL presente: {bool(database_url)}")
+        logger.info(f"[START] generate_embeddings - Backend configurado: {vector_backend}")
+        logger.info(f"[START] DATABASE_URL presente: {bool(database_url)}")
         
         # Usar DocumentLoader para obtener archivos (PostgreSQL o filesystem)
         from rag_system.storage import DocumentLoader
         doc_loader = DocumentLoader()
         
-        logger.info(f"📁 Almacenamiento de archivos: {doc_loader.get_storage_type()}")
+        logger.info(f"[DIR] Almacenamiento de archivos: {doc_loader.get_storage_type()}")
         
         # Obtener lista de archivos disponibles
         available_files = doc_loader.list_available_files()
@@ -824,17 +824,17 @@ def generate_embeddings(request):
         if vector_backend == 'postgres' and database_url:
             from rag_system.vector_store.postgres_store import PostgresVectorStore
             vector_store = PostgresVectorStore(database_url)
-            logger.info("✅ Usando PostgreSQL como vector store")
+            logger.info("[OK] Usando PostgreSQL como vector store")
         else:
             vector_store = ChromaManager()
-            logger.info("✅ Usando ChromaDB como vector store")
+            logger.info("[OK] Usando ChromaDB como vector store")
         
         embedding_manager = EmbeddingManager()
         pdf_processor = PDFProcessor()
         text_processor = TextProcessor()
         
         total_files = len(pdf_files) + len(txt_files)
-        logger.info(f"🚀 INICIANDO GENERACIÓN DE EMBEDDINGS: {total_files} archivos totales ({len(pdf_files)} PDFs, {len(txt_files)} TXTs)")
+        logger.info(f"[START] INICIANDO GENERACIÓN DE EMBEDDINGS: {total_files} archivos totales ({len(pdf_files)} PDFs, {len(txt_files)} TXTs)")
         
         # Inicializar progreso
         progress = {
@@ -854,10 +854,10 @@ def generate_embeddings(request):
                 pdf_file = file_info['file_name']
                 progress["current"] = idx
                 progress["current_file"] = pdf_file
-                progress["logs"].append(f"📄 [{idx}/{total_files}] Procesando: {pdf_file}")
+                progress["logs"].append(f"[INFO] [{idx}/{total_files}] Procesando: {pdf_file}")
                 _save_progress(progress)
                 
-                logger.info(f"📄 [{idx}/{len(pdf_files)}] Procesando PDF: {pdf_file}")
+                logger.info(f"[INFO] [{idx}/{len(pdf_files)}] Procesando PDF: {pdf_file}")
                 
                 # Usar DocumentLoader para obtener ruta del archivo
                 with doc_loader.get_file_path(pdf_file, file_info.get('id')) as file_path:
@@ -882,12 +882,12 @@ def generate_embeddings(request):
                         continue
                     
                     # Procesar PDF
-                    logger.info(f"   🔍 Extrayendo texto del PDF...")
+                    logger.info(f"   [SEARCH] Extrayendo texto del PDF...")
                     result = pdf_processor.process_pdf(file_path)
                 
                     if result.get('success') and result.get('chunks'):
                         chunks = result['chunks']
-                        logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
+                        logger.info(f"   [INFO]  {len(chunks)} chunks extraídos")
                         # Preparar textos y metadatas
                         texts = []
                         metadatas = []
@@ -920,12 +920,12 @@ def generate_embeddings(request):
                                 metadatas.append(base_metadata)
                         
                         # Generar embeddings
-                        logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
+                        logger.info(f"   [BRAIN] Generando embeddings para {len(texts)} chunks...")
                         embeddings = embedding_manager.create_embeddings_batch(texts)
-                        logger.info(f"   ✅ Embeddings generados exitosamente")
+                        logger.info(f"   [OK] Embeddings generados exitosamente")
                         
                         # Preparar documentos para ChromaDB
-                        logger.info(f"   💾 Guardando en ChromaDB...")
+                        logger.info(f"   [SAVE] Guardando en ChromaDB...")
                         documents = []
                         for text, metadata in zip(texts, metadatas):
                             documents.append({
@@ -934,20 +934,20 @@ def generate_embeddings(request):
                             })
                         
                         # Agregar al vector store (ChromaDB o PostgreSQL según configuración)
-                        logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
-                        logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                        logger.info(f"   [SAVE] Llamando a add_documents con {len(documents)} documentos...")
+                        logger.info(f"   [SAVE] Vector store type: {type(vector_store).__name__}")
                         storage_result = vector_store.add_documents(
                             documents=documents,
                             embeddings=embeddings
                         )
-                        logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
+                        logger.info(f"   [SAVE] Resultado de almacenamiento: {storage_result}")
                         
                         if not storage_result:
-                            logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
+                            logger.error(f"   [ERROR] FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
                         else:
-                            logger.info(f"   ✅ PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
+                            logger.info(f"   [OK] PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                         progress["processed"] += 1
-                        progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
+                        progress["logs"].append(f"   [OK] Completado: {len(chunks)} chunks")
                         _save_progress(progress)
                         
                         processed_files.append({
@@ -956,17 +956,17 @@ def generate_embeddings(request):
                             "type": "pdf"
                         })
                     else:
-                        logger.warning(f"   ⚠️  No se extrajeron chunks del PDF '{pdf_file}'")
+                        logger.warning(f"   [WARN]  No se extrajeron chunks del PDF '{pdf_file}'")
                         skipped_files.append(pdf_file)
                     
             except Exception as e:
-                logger.error(f"   ❌ ERROR procesando {pdf_file}: {e}")
+                logger.error(f"   [ERROR] ERROR procesando {pdf_file}: {e}")
                 progress["errors"] += 1
-                progress["logs"].append(f"   ❌ Error: {str(e)[:100]}")
+                progress["logs"].append(f"   [ERROR] Error: {str(e)[:100]}")
                 _save_progress(progress)
                 errors.append({"file": pdf_file, "error": str(e)})
         
-        logger.info(f"📝 PDFs completados. Procesando archivos de texto...")
+        logger.info(f"[NOTE] PDFs completados. Procesando archivos de texto...")
         
         # Procesar archivos de texto
         for idx, file_info in enumerate(txt_files, 1):
@@ -975,10 +975,10 @@ def generate_embeddings(request):
                 current_file_idx = len(pdf_files) + idx
                 progress["current"] = current_file_idx
                 progress["current_file"] = txt_file
-                progress["logs"].append(f"📝 [{current_file_idx}/{total_files}] Procesando: {txt_file}")
+                progress["logs"].append(f"[NOTE] [{current_file_idx}/{total_files}] Procesando: {txt_file}")
                 _save_progress(progress)
                 
-                logger.info(f"📝 [{idx}/{len(txt_files)}] Procesando TXT: {txt_file}")
+                logger.info(f"[NOTE] [{idx}/{len(txt_files)}] Procesando TXT: {txt_file}")
                 
                 # Usar DocumentLoader para obtener ruta del archivo
                 with doc_loader.get_file_path(txt_file, file_info.get('id')) as file_path:
@@ -1003,11 +1003,11 @@ def generate_embeddings(request):
                         continue
                     
                     # Procesar texto
-                    logger.info(f"   🔍 Extrayendo texto...")
+                    logger.info(f"   [SEARCH] Extrayendo texto...")
                     chunks = text_processor.process_text_file(file_path)
                     
                     if chunks:
-                        logger.info(f"   ✂️  {len(chunks)} chunks extraídos")
+                        logger.info(f"   [INFO]  {len(chunks)} chunks extraídos")
                         # Preparar textos y metadatas
                         texts = []
                         metadatas = []
@@ -1040,12 +1040,12 @@ def generate_embeddings(request):
                                 metadatas.append(base_metadata)
                         
                         # Generar embeddings
-                        logger.info(f"   🧠 Generando embeddings para {len(texts)} chunks...")
+                        logger.info(f"   [BRAIN] Generando embeddings para {len(texts)} chunks...")
                         embeddings = embedding_manager.create_embeddings_batch(texts)
-                        logger.info(f"   ✅ Embeddings generados exitosamente")
+                        logger.info(f"   [OK] Embeddings generados exitosamente")
                         
                         # Preparar documentos para ChromaDB
-                        logger.info(f"   💾 Guardando en ChromaDB...")
+                        logger.info(f"   [SAVE] Guardando en ChromaDB...")
                         documents = []
                         for text, metadata in zip(texts, metadatas):
                             documents.append({
@@ -1053,20 +1053,20 @@ def generate_embeddings(request):
                                 'metadata': metadata
                             })
                         
-                        logger.info(f"   💾 Llamando a add_documents con {len(documents)} documentos...")
-                        logger.info(f"   💾 Vector store type: {type(vector_store).__name__}")
+                        logger.info(f"   [SAVE] Llamando a add_documents con {len(documents)} documentos...")
+                        logger.info(f"   [SAVE] Vector store type: {type(vector_store).__name__}")
                         storage_result = vector_store.add_documents(
                             documents=documents,
                             embeddings=embeddings
                         )
-                        logger.info(f"   💾 Resultado de almacenamiento: {storage_result}")
+                        logger.info(f"   [SAVE] Resultado de almacenamiento: {storage_result}")
                         
                         if not storage_result:
-                            logger.error(f"   ❌ FALLÓ el almacenamiento de embeddings para '{txt_file}'")
+                            logger.error(f"   [ERROR] FALLÓ el almacenamiento de embeddings para '{txt_file}'")
                         else:
-                            logger.info(f"   ✅ TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
+                            logger.info(f"   [OK] TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                         progress["processed"] += 1
-                        progress["logs"].append(f"   ✅ Completado: {len(chunks)} chunks")
+                        progress["logs"].append(f"   [OK] Completado: {len(chunks)} chunks")
                         _save_progress(progress)
                         
                         processed_files.append({
@@ -1075,24 +1075,24 @@ def generate_embeddings(request):
                             "type": "text"
                         })
                     else:
-                        logger.warning(f"   ⚠️  No se extrajeron chunks del TXT '{txt_file}'")
+                        logger.warning(f"   [WARN]  No se extrajeron chunks del TXT '{txt_file}'")
                         skipped_files.append(txt_file)
                     
             except Exception as e:
-                logger.error(f"   ❌ ERROR procesando {txt_file}: {e}")
+                logger.error(f"   [ERROR] ERROR procesando {txt_file}: {e}")
                 progress["errors"] += 1
-                progress["logs"].append(f"   ❌ Error: {str(e)[:100]}")
+                progress["logs"].append(f"   [ERROR] Error: {str(e)[:100]}")
                 _save_progress(progress)
                 errors.append({"file": txt_file, "error": str(e)})
         
-        logger.info(f"🎉 PROCESO COMPLETADO!")
-        logger.info(f"   ✅ Procesados: {len(processed_files)}")
+        logger.info(f"[DONE] PROCESO COMPLETADO!")
+        logger.info(f"   [OK] Procesados: {len(processed_files)}")
         logger.info(f"   ⏭️  Omitidos (duplicados): {len(skipped_files)}")
-        logger.info(f"   ❌ Errores: {len(errors)}")
+        logger.info(f"   [ERROR] Errores: {len(errors)}")
         
         # Finalizar progreso
         progress["status"] = "completed"
-        progress["logs"].append(f"🎉 Completado: {len(processed_files)} nuevos, {len(skipped_files)} ya existían, {len(errors)} errores")
+        progress["logs"].append(f"[DONE] Completado: {len(processed_files)} nuevos, {len(skipped_files)} ya existían, {len(errors)} errores")
         _save_progress(progress)
         
         return Response({
@@ -1103,7 +1103,7 @@ def generate_embeddings(request):
             "processed_files": processed_files,
             "skipped_files": skipped_files,
             "error_details": errors,
-            "message": f"✅ {len(processed_files)} archivos nuevos procesados. {len(skipped_files)} ya existían (omitidos)."
+            "message": f"[OK] {len(processed_files)} archivos nuevos procesados. {len(skipped_files)} ya existían (omitidos)."
         })
         
     except Exception as e:
@@ -1133,7 +1133,7 @@ def verify_embeddings(request):
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        logger.info(f"🔍 verify_embeddings - Backend: {vector_backend}")
+        logger.info(f"[SEARCH] verify_embeddings - Backend: {vector_backend}")
         
         verification_results = []
         
@@ -1176,7 +1176,7 @@ def verify_embeddings(request):
                         "backend": "chroma"
                     })
         
-        logger.info(f"✅ Verificación completada: {len(verification_results)} colecciones")
+        logger.info(f"[OK] Verificación completada: {len(verification_results)} colecciones")
         
         return Response({
             "success": True,
@@ -1285,7 +1285,7 @@ def delete_document_embeddings(request, file_name):
                 "success": deleted_count > 0,
                 "deleted_embeddings": deleted_count,
                 "file_name": file_name,
-                "message": f"✅ Eliminados {deleted_count} embeddings de '{file_name}'"
+                "message": f"[OK] Eliminados {deleted_count} embeddings de '{file_name}'"
             })
         else:
             return Response({
@@ -1320,7 +1320,7 @@ def clear_embeddings(request):
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        logger.info(f"🗑️ clear_embeddings - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
+        logger.info(f"[DEL] clear_embeddings - Backend: {vector_backend}, DB URL presente: {bool(database_url)}")
         
         if vector_backend == 'postgres' and database_url:
             # Usar PostgreSQL
@@ -1336,7 +1336,7 @@ def clear_embeddings(request):
             # Eliminar todos los embeddings
             deleted_count = vector_store.reset_collection()
             
-            logger.info(f"✅ {deleted_count} embeddings eliminados de PostgreSQL")
+            logger.info(f"[OK] {deleted_count} embeddings eliminados de PostgreSQL")
             
             return Response({
                 "success": True,
@@ -1367,11 +1367,11 @@ def clear_embeddings(request):
                     # Usar el cliente de ChromaDB directamente
                     chroma_manager.client.delete_collection(name=collection_name)
                     deleted_collections.append(collection_name)
-                    logger.info(f"✅ Colección '{collection_name}' eliminada")
+                    logger.info(f"[OK] Colección '{collection_name}' eliminada")
                 except Exception as e:
                     error_msg = f"Error eliminando '{collection_name}': {str(e)}"
                     errors.append(error_msg)
-                    logger.error(f"❌ {error_msg}")
+                    logger.error(f"[ERROR] {error_msg}")
             
             response_data = {
                 "success": len(errors) == 0,
@@ -1445,23 +1445,23 @@ def get_system_logs(request):
         return Response({
             "success": True,
             "logs": [
-                "📍 UBICACIÓN DE LOS LOGS:",
+                "[INFO] UBICACIÓN DE LOS LOGS:",
                 "",
                 "Los logs del sistema se muestran en la CONSOLA DEL SERVIDOR.",
                 "",
-                "👉 Para ver los logs:",
+                "[INFO] Para ver los logs:",
                 "   1. Ve a la terminal donde ejecutaste 'python manage.py runserver'",
                 "   2. Los logs aparecen en tiempo real ahí",
-                "   3. Busca líneas con emojis como 🚀 📄 🧠 ✅ ❌",
+                "   3. Busca líneas con emojis como [START] [INFO] [BRAIN] [OK] [ERROR]",
                 "",
-                "💡 Los logs incluyen:",
-                "   • Inicio del proceso (🚀)",
+                "[TIP] Los logs incluyen:",
+                "   • Inicio del proceso ([START])",
                 "   • Progreso por archivo ([1/400])",
-                "   • Extracción de texto (🔍)",
-                "   • Generación de embeddings (🧠)",
-                "   • Errores si ocurren (❌)",
+                "   • Extracción de texto ([SEARCH])",
+                "   • Generación de embeddings ([BRAIN])",
+                "   • Errores si ocurren ([ERROR])",
                 "",
-                "🔧 Para guardar logs en archivo, configura LOGGING en settings.py"
+                "[CONFIG] Para guardar logs en archivo, configura LOGGING en settings.py"
             ],
             "message": "Logs disponibles en consola del servidor"
         })
@@ -1654,7 +1654,7 @@ def get_system_metrics(request):
             }
         }
         
-        logger.info(f"📊 Métricas obtenidas: {metrics_data.get('totalQueries', 0)} consultas registradas")
+        logger.info(f"[STATS] Métricas obtenidas: {metrics_data.get('totalQueries', 0)} consultas registradas")
         
         return Response({
             "success": True,
@@ -1663,7 +1663,7 @@ def get_system_metrics(request):
         })
         
     except Exception as e:
-        logger.error(f"❌ Error obteniendo métricas: {e}")
+        logger.error(f"[ERROR] Error obteniendo métricas: {e}")
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -1751,7 +1751,7 @@ def get_query_list(request):
         })
         
     except Exception as e:
-        logger.error(f"❌ Error obteniendo lista de consultas: {e}", exc_info=True)
+        logger.error(f"[ERROR] Error obteniendo lista de consultas: {e}", exc_info=True)
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -1874,7 +1874,7 @@ def get_query_detail(request, query_id):
         })
         
     except Exception as e:
-        logger.error(f"❌ Error obteniendo detalle de consulta: {e}", exc_info=True)
+        logger.error(f"[ERROR] Error obteniendo detalle de consulta: {e}", exc_info=True)
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

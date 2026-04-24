@@ -33,20 +33,20 @@ def format_size(size_bytes):
     return f"{size_bytes:.1f} TB"
 
 def main():
-    logger.info("🔍 Analizando archivos en Google Drive...")
-    
+    logger.info("[SEARCH] Analizando archivos en Google Drive...")
+
     # Inicializar Google Drive Manager
     manager = GoogleDriveManager()
-    
+
     if not manager.service:
-        logger.error("❌ No se pudo inicializar Google Drive")
+        logger.error("[ERROR] No se pudo inicializar Google Drive")
         return
-    
+
     # Obtener lista de archivos con tamaños
     files = manager.list_files()
-    
+
     if not files:
-        logger.warning("⚠️ No se encontraron archivos")
+        logger.warning("[WARN] No se encontraron archivos")
         return
     
     # Recopilar información de tamaños
@@ -75,7 +75,7 @@ def main():
             })
             
         except Exception as e:
-            logger.warning(f"⚠️ No se pudo obtener tamaño de {file_name}: {e}")
+            logger.warning(f"[WARN] No se pudo obtener tamaño de {file_name}: {e}")
     
     # Ordenar por tamaño (mayor a menor)
     file_info.sort(key=lambda x: x['size_bytes'], reverse=True)
@@ -94,22 +94,22 @@ def main():
     }
     
     print("\n" + "="*80)
-    print("📊 ANÁLISIS DE TAMAÑOS DE ARCHIVOS EN GOOGLE DRIVE")
+    print("[STATS] ANÁLISIS DE TAMAÑOS DE ARCHIVOS EN GOOGLE DRIVE")
     print("="*80)
-    
-    print(f"\n📁 Total de archivos: {total_files}")
-    print(f"💾 Tamaño total: {format_size(total_size)}")
-    print(f"📏 Tamaño promedio: {format_size(avg_size)}")
-    
+
+    print(f"\n[DIR] Total de archivos: {total_files}")
+    print(f"[SAVE] Tamaño total: {format_size(total_size)}")
+    print(f"[INFO] Tamaño promedio: {format_size(avg_size)}")
+
     # Contar archivos por límite
-    print("\n📈 DISTRIBUCIÓN POR TAMAÑO:")
+    print("\n[UP] DISTRIBUCIÓN POR TAMAÑO:")
     for limit_name, limit_bytes in limits.items():
         count = sum(1 for f in file_info if f['size_bytes'] > limit_bytes)
         percentage = (count / total_files * 100) if total_files > 0 else 0
         print(f"   > {limit_name:6s}: {count:3d} archivos ({percentage:5.1f}%)")
     
     # Mostrar los 10 archivos más grandes
-    print("\n🔝 TOP 10 ARCHIVOS MÁS GRANDES:")
+    print("\n[INFO] TOP 10 ARCHIVOS MÁS GRANDES:")
     print("-" * 80)
     for i, file in enumerate(file_info[:10], 1):
         print(f"{i:2d}. {file['size_formatted']:>10s} - {file['name']}")
@@ -118,12 +118,12 @@ def main():
     large_files = [f for f in file_info if f['size_bytes'] > 50 * 1024 * 1024]
     
     if large_files:
-        print(f"\n⚠️  ARCHIVOS QUE EXCEDEN 50MB (límite actual):")
+        print(f"\n[WARN]  ARCHIVOS QUE EXCEDEN 50MB (límite actual):")
         print("-" * 80)
         for file in large_files:
             print(f"   {file['size_formatted']:>10s} - {file['name']}")
-        
-        print(f"\n💡 RECOMENDACIONES:")
+
+        print(f"\n[TIP] RECOMENDACIONES:")
         print(f"   • {len(large_files)} archivos exceden el límite de 50MB")
         print(f"   • Estos archivos causarán OOM si intentas sincronizarlos")
         print(f"   • Opciones:")
@@ -131,7 +131,7 @@ def main():
         print(f"     2. Aumentar límite a 100MB (rechazar {sum(1 for f in file_info if f['size_bytes'] > 100*1024*1024)} archivos)")
         print(f"     3. Comprimir archivos grandes antes de subirlos a Drive")
     else:
-        print(f"\n✅ Todos los archivos están bajo el límite de 50MB")
+        print(f"\n[OK] Todos los archivos están bajo el límite de 50MB")
     
     print("\n" + "="*80)
 

@@ -154,12 +154,12 @@ class TextProcessor:
                     'char_count': len(text)
                 })
             
-            logger.info(f"✅ Archivo TXT procesado: {len(text)} caracteres")
+            logger.info(f"[OK] Archivo TXT procesado: {len(text)} caracteres")
             
             return text, metadata
             
         except Exception as e:
-            logger.error(f"❌ Error procesando TXT {file_path}: {e}")
+            logger.error(f"[ERROR] Error procesando TXT {file_path}: {e}")
             raise
     
     def _process_markdown(self, file_path: str) -> Tuple[str, Dict[str, Any]]:
@@ -208,12 +208,12 @@ class TextProcessor:
                     'char_count': len(text)
                 })
             
-            logger.info(f"✅ Archivo Markdown procesado: {len(text)} caracteres")
+            logger.info(f"[OK] Archivo Markdown procesado: {len(text)} caracteres")
             
             return text, metadata
             
         except Exception as e:
-            logger.error(f"❌ Error procesando Markdown {file_path}: {e}")
+            logger.error(f"[ERROR] Error procesando Markdown {file_path}: {e}")
             raise
     
     def _enhance_markdown_structure(self, text: str) -> str:
@@ -313,12 +313,12 @@ class TextProcessor:
                     'char_count': len(text)
                 })
             
-            logger.info(f"✅ Archivo DOCX procesado: {len(text)} caracteres")
+            logger.info(f"[OK] Archivo DOCX procesado: {len(text)} caracteres")
             
             return text, metadata
             
         except Exception as e:
-            logger.error(f"❌ Error procesando DOCX {file_path}: {e}")
+            logger.error(f"[ERROR] Error procesando DOCX {file_path}: {e}")
             raise
     
     def extract_text(self, file_path: str) -> Tuple[str, Dict[str, Any]]:
@@ -339,7 +339,7 @@ class TextProcessor:
         if file_ext not in self.supported_formats:
             raise ValueError(f"Formato no soportado: {file_ext}")
         
-        logger.info(f"📄 Procesando archivo {file_ext}: {os.path.basename(file_path)}")
+        logger.info(f"[INFO] Procesando archivo {file_ext}: {os.path.basename(file_path)}")
         
         processor_func = self.supported_formats[file_ext]
         return processor_func(file_path)
@@ -404,7 +404,7 @@ class TextProcessor:
                 }
                 chunks.append(chunk)
         
-        logger.info(f"📝 Texto dividido en {len(chunks)} chunks")
+        logger.info(f"[NOTE] Texto dividido en {len(chunks)} chunks")
         return chunks
     
     def _split_text_into_chunks(self, text: str) -> List[str]:
@@ -482,11 +482,11 @@ class TextProcessor:
                 }
             }
             
-            logger.info(f"✅ Documento procesado exitosamente: {result['stats']}")
+            logger.info(f"[OK] Documento procesado exitosamente: {result['stats']}")
             return result
             
         except Exception as e:
-            logger.error(f"❌ Error procesando documento {file_path}: {e}")
+            logger.error(f"[ERROR] Error procesando documento {file_path}: {e}")
             return {
                 "success": False,
                 "error": str(e),

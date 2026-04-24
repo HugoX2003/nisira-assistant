@@ -24,40 +24,40 @@ from tqdm import tqdm
 def migrate_embeddings():
     """Migrar embeddings de ChromaDB a PostgreSQL"""
     
-    print("🔄 Iniciando migración de embeddings...")
+    print("[SYNC] Iniciando migración de embeddings...")
     print("=" * 60)
-    
+
     # 1. Conectar a ChromaDB local
-    print("📂 Conectando a ChromaDB local...")
+    print("[DIR] Conectando a ChromaDB local...")
     chroma = ChromaManager()
-    
+
     if not chroma.is_ready():
-        print("❌ ChromaDB no está disponible")
+        print("[ERROR] ChromaDB no está disponible")
         return False
-    
+
     # 2. Obtener estadísticas
     stats = chroma.get_collection_stats()
     total_docs = stats.get('total_documents', 0)
-    
+
     if total_docs == 0:
-        print("⚠️  No hay documentos en ChromaDB para migrar")
+        print("[WARN]  No hay documentos en ChromaDB para migrar")
         return False
-    
-    print(f"✅ ChromaDB listo: {total_docs} documentos encontrados")
-    
+
+    print(f"[OK] ChromaDB listo: {total_docs} documentos encontrados")
+
     # 3. Conectar a PostgreSQL
-    print("🐘 Conectando a PostgreSQL...")
+    print("[INFO] Conectando a PostgreSQL...")
     postgres = PostgresVectorStore()
-    
+
     if not postgres.is_ready():
-        print("❌ PostgreSQL no está disponible")
-        print("💡 Asegúrate de tener DATABASE_URL configurado")
+        print("[ERROR] PostgreSQL no está disponible")
+        print("[TIP] Asegúrate de tener DATABASE_URL configurado")
         return False
-    
-    print("✅ PostgreSQL listo")
-    
+
+    print("[OK] PostgreSQL listo")
+
     # 4. Obtener TODOS los documentos de ChromaDB
-    print(f"📥 Obteniendo {total_docs} documentos de ChromaDB...")
+    print(f"[INFO] Obteniendo {total_docs} documentos de ChromaDB...")
     
     try:
         collection = chroma.collection
@@ -70,14 +70,14 @@ def migrate_embeddings():
         metadatas = all_data.get('metadatas', [])
         embeddings = all_data.get('embeddings', [])
         
-        print(f"✅ Datos obtenidos: {len(documents)} documentos")
-        
+        print(f"[OK] Datos obtenidos: {len(documents)} documentos")
+
     except Exception as e:
-        print(f"❌ Error obteniendo datos de ChromaDB: {e}")
+        print(f"[ERROR] Error obteniendo datos de ChromaDB: {e}")
         return False
-    
+
     # 5. Preparar documentos para PostgreSQL
-    print("🔄 Preparando documentos para PostgreSQL...")
+    print("[SYNC] Preparando documentos para PostgreSQL...")
     
     docs_to_insert = []
     embeddings_to_insert = []
@@ -95,10 +95,10 @@ def migrate_embeddings():
         docs_to_insert.append(doc)
         embeddings_to_insert.append(embedding)
     
-    print(f"✅ {len(docs_to_insert)} documentos preparados")
-    
+    print(f"[OK] {len(docs_to_insert)} documentos preparados")
+
     # 6. Insertar en PostgreSQL en lotes
-    print("💾 Insertando en PostgreSQL...")
+    print("[SAVE] Insertando en PostgreSQL...")
     
     batch_size = 100
     total_batches = (len(docs_to_insert) + batch_size - 1) // batch_size
@@ -120,37 +120,37 @@ def migrate_embeddings():
             else:
                 failed += len(batch_docs)
         except Exception as e:
-            print(f"❌ Error en batch {batch_num//batch_size + 1}: {e}")
+            print(f"[ERROR] Error en batch {batch_num//batch_size + 1}: {e}")
             failed += len(batch_docs)
-    
+
     # 7. Verificar migración
     print("\n" + "=" * 60)
-    print("📊 Resumen de migración:")
+    print("[STATS] Resumen de migración:")
     print(f"   Total documentos: {total_docs}")
-    print(f"   ✅ Exitosos: {successful}")
-    print(f"   ❌ Fallidos: {failed}")
-    
+    print(f"   [OK] Exitosos: {successful}")
+    print(f"   [ERROR] Fallidos: {failed}")
+
     # Verificar en PostgreSQL
     pg_stats = postgres.get_collection_stats()
     pg_total = pg_stats.get('total_documents', 0)
-    
-    print(f"\n🐘 PostgreSQL ahora tiene: {pg_total} documentos")
+
+    print(f"\n[INFO] PostgreSQL ahora tiene: {pg_total} documentos")
     print(f"   Tamaño en disco: {pg_stats.get('table_size', 'N/A')}")
-    
+
     if pg_total >= total_docs * 0.95:  # Al menos 95% migrado
-        print("\n✅ Migración EXITOSA")
-        print("💡 Ahora puedes hacer deploy sin regenerar embeddings")
+        print("\n[OK] Migración EXITOSA")
+        print("[TIP] Ahora puedes hacer deploy sin regenerar embeddings")
         return True
     else:
-        print("\n⚠️  Migración PARCIAL")
-        print("💡 Algunos documentos no se migraron correctamente")
+        print("\n[WARN]  Migración PARCIAL")
+        print("[TIP] Algunos documentos no se migraron correctamente")
         return False
 
 
 def verify_migration():
     """Verificar que la migración fue exitosa"""
-    
-    print("\n🔍 Verificando migración...")
+
+    print("\n[SEARCH] Verificando migración...")
     
     chroma = ChromaManager()
     postgres = PostgresVectorStore()
@@ -161,14 +161,14 @@ def verify_migration():
     chroma_count = chroma_stats.get('total_documents', 0)
     postgres_count = postgres_stats.get('total_documents', 0)
     
-    print(f"\n📊 Comparación:")
+    print(f"\n[STATS] Comparación:")
     print(f"   ChromaDB:   {chroma_count} documentos")
     print(f"   PostgreSQL: {postgres_count} documentos")
-    
+
     if postgres_count >= chroma_count * 0.95:
-        print("   ✅ Migración verificada correctamente")
+        print("   [OK] Migración verificada correctamente")
     else:
-        print("   ⚠️  Discrepancia detectada")
+        print("   [WARN]  Discrepancia detectada")
 
 
 if __name__ == "__main__":
@@ -186,7 +186,7 @@ if __name__ == "__main__":
         
         if success:
             print("\n" + "=" * 60)
-            print("🎉 ¡MIGRACIÓN COMPLETADA!")
+            print("[DONE] ¡MIGRACIÓN COMPLETADA!")
             print("=" * 60)
             print("\nPróximos pasos:")
             print("1. git add .")

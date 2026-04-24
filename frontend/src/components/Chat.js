@@ -1,6 +1,19 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  BookOpen,
+  FileText,
+  ThumbsUp,
+  ThumbsDown,
+  Trash2,
+  Menu,
+  X,
+  AlertTriangle,
+  Bot,
+  Send,
+  ChevronDown,
+} from 'lucide-react';
 import { ragEnhancedChat, getConversations, getMessages, deleteConversation, submitRating } from '../services/api';
 import '../styles/Chat.css';
 
@@ -12,23 +25,25 @@ const Markdown = ({ content }) => (
 // Componente de fuentes con visor integrado
 const Sources = ({ sources, onOpenPdf }) => {
   const [open, setOpen] = useState(false);
-  
+
   if (!sources?.length) return null;
 
   return (
     <div className="sources">
       <button className="sources-btn" onClick={() => setOpen(!open)}>
-        📚 Fuentes ({sources.length})
-        <span className={`sources-arrow ${open ? 'open' : ''}`}>▼</span>
+        <BookOpen size={16} /> Fuentes ({sources.length})
+        <ChevronDown size={14} className={`sources-arrow ${open ? 'open' : ''}`} />
       </button>
-      
+
       {open && (
         <div className="sources-list">
           {sources.map((s, i) => (
             <div key={i} className="source-item" onClick={() => onOpenPdf(s)}>
-              <div className="source-name">📄 {s.file_name || `Documento ${i + 1}`}</div>
+              <div className="source-name">
+                <FileText size={14} /> {s.file_name || `Documento ${i + 1}`}
+              </div>
               <div className="source-meta">
-                {s.page && `Pág. ${s.page} • `}
+                {s.page && `Pag. ${s.page} - `}
                 Relevancia: {((s.similarity_score || 0) * 100).toFixed(0)}%
               </div>
               {s.content && (
@@ -54,10 +69,10 @@ const PdfViewer = ({ source, onClose }) => {
     const loadPdf = async () => {
       setLoading(true);
       setError(null);
-      
+
       const baseUrl = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
       const token = localStorage.getItem('token');
-      
+
       if (!token || !source?.file_name) {
         setError('No se puede cargar el documento');
         setLoading(false);
@@ -69,13 +84,12 @@ const PdfViewer = ({ source, onClose }) => {
         const res = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        
+
         if (!res.ok) throw new Error('Error al cargar');
-        
+
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        
-        // Agregar página específica si está disponible
+
         const pageParam = source.page ? `#page=${source.page}` : '';
         setPdfUrl(objectUrl + pageParam);
       } catch (e) {
@@ -96,26 +110,31 @@ const PdfViewer = ({ source, onClose }) => {
     <div className="pdf-viewer">
       <div className="pdf-header">
         <div className="pdf-info">
-          <span className="pdf-title">📄 {source?.file_name}</span>
-          {source?.page && <span className="pdf-page">Página {source.page}</span>}
+          <span className="pdf-title">
+            <FileText size={16} /> {source?.file_name}
+          </span>
+          {source?.page && <span className="pdf-page">Pagina {source.page}</span>}
         </div>
-        <button className="pdf-close" onClick={onClose}>✕</button>
+        <button className="pdf-close" onClick={onClose}>
+          <X size={18} />
+        </button>
       </div>
-      
-      {/* Texto del chunk resaltado */}
+
       {source?.content && (
         <div className="pdf-chunk">
-          <div className="chunk-label">📝 Fragmento referenciado:</div>
+          <div className="chunk-label">
+            <FileText size={14} /> Fragmento referenciado:
+          </div>
           <div className="chunk-text">{source.content}</div>
         </div>
       )}
-      
+
       <div className="pdf-content">
         {loading && <div className="pdf-loading">Cargando documento...</div>}
         {error && <div className="pdf-error">{error}</div>}
         {pdfUrl && !loading && (
-          <iframe 
-            src={pdfUrl} 
+          <iframe
+            src={pdfUrl}
             title="Documento PDF"
             className="pdf-iframe"
           />
@@ -133,14 +152,14 @@ const Feedback = ({ value, onChange, disabled }) => (
       onClick={() => onChange(value === 'like' ? 'clear' : 'like')}
       disabled={disabled}
     >
-      👍 Útil
+      <ThumbsUp size={14} /> Util
     </button>
     <button
       className={`fb-btn ${value === 'dislike' ? 'active' : ''}`}
       onClick={() => onChange(value === 'dislike' ? 'clear' : 'dislike')}
       disabled={disabled}
     >
-      👎 No útil
+      <ThumbsDown size={14} /> No util
     </button>
   </div>
 );
@@ -151,15 +170,15 @@ const Message = ({ msg, onRate, ratingBusy, onOpenPdf }) => (
     <div className="message-text">
       {msg.sender === 'user' ? msg.text : <Markdown content={msg.text || ''} />}
     </div>
-    
+
     {msg.sender === 'bot' && msg.sources?.length > 0 && (
       <Sources sources={msg.sources} onOpenPdf={onOpenPdf} />
     )}
-    
+
     {msg.sender === 'bot' && onRate && (
       <Feedback value={msg.rating} onChange={onRate} disabled={ratingBusy} />
     )}
-    
+
     <div className="message-time">{msg.timestamp}</div>
   </div>
 );
@@ -183,12 +202,11 @@ export default function Chat({ onLogout, user }) {
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [deleteModal, setDeleteModal] = useState(null);
   const [ratingBusy, setRatingBusy] = useState({});
-  const [pdfSource, setPdfSource] = useState(null); // Estado para el visor PDF
-  
+  const [pdfSource, setPdfSource] = useState(null);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Scroll al final
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
@@ -197,7 +215,6 @@ export default function Chat({ onLogout, user }) {
     setTimeout(scrollToBottom, 100);
   }, [messages, scrollToBottom]);
 
-  // Cargar conversaciones
   const loadConversations = useCallback(async () => {
     try {
       const res = await getConversations();
@@ -211,7 +228,6 @@ export default function Chat({ onLogout, user }) {
     loadConversations();
   }, [loadConversations]);
 
-  // Cargar mensajes al cambiar conversación
   useEffect(() => {
     if (!activeConv) {
       setMessages([]);
@@ -237,7 +253,6 @@ export default function Chat({ onLogout, user }) {
     loadMessages();
   }, [activeConv]);
 
-  // Enviar mensaje
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!message.trim() || loading) return;
@@ -256,7 +271,7 @@ export default function Chat({ onLogout, user }) {
 
     try {
       const res = await ragEnhancedChat(userMsg.text, activeConv);
-      
+
       setMessages(prev => [...prev, {
         id: res.assistant_message?.id || Date.now() + 1,
         text: res.assistant_message?.content || res.response || '',
@@ -269,13 +284,13 @@ export default function Chat({ onLogout, user }) {
       if (res.conversation_id && res.conversation_id !== activeConv) {
         setActiveConv(res.conversation_id);
       }
-      
+
       loadConversations();
     } catch (e) {
       setError(e.message || 'Error al enviar mensaje');
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: 'Lo siento, ocurrió un error. Intenta de nuevo.',
+        text: 'Lo siento, ocurrio un error. Intenta de nuevo.',
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString()
       }]);
@@ -285,7 +300,6 @@ export default function Chat({ onLogout, user }) {
     }
   };
 
-  // Nueva conversación
   const handleNewConversation = () => {
     setActiveConv(null);
     setMessages([]);
@@ -293,10 +307,9 @@ export default function Chat({ onLogout, user }) {
     inputRef.current?.focus();
   };
 
-  // Eliminar conversación
   const handleDelete = async () => {
     if (!deleteModal) return;
-    
+
     try {
       await deleteConversation(deleteModal);
       if (deleteModal === activeConv) {
@@ -310,15 +323,14 @@ export default function Chat({ onLogout, user }) {
     setDeleteModal(null);
   };
 
-  // Calificar mensaje
   const handleRate = async (msgId, value) => {
     if (!msgId) return;
-    
+
     setRatingBusy(prev => ({ ...prev, [msgId]: true }));
-    
+
     try {
       const res = await submitRating({ messageId: msgId, value });
-      setMessages(prev => prev.map(m => 
+      setMessages(prev => prev.map(m =>
         m.id === msgId ? { ...m, rating: res?.value || null } : m
       ));
     } catch (e) {
@@ -334,17 +346,17 @@ export default function Chat({ onLogout, user }) {
 
   return (
     <div className={`chat-layout ${pdfSource ? 'with-pdf' : ''}`}>
-      {/* Overlay móvil */}
       {sidebarOpen && window.innerWidth <= 768 && (
         <div className="sidebar-overlay show" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <aside className={`sidebar ${!sidebarOpen ? 'hidden' : ''}`}>
         <div className="sidebar-header">
           <span className="sidebar-title">Conversaciones</span>
           <button className="btn-new" onClick={handleNewConversation}>+ Nueva</button>
-          <button className="btn-close" onClick={() => setSidebarOpen(false)}>✕</button>
+          <button className="btn-close" onClick={() => setSidebarOpen(false)}>
+            <X size={18} />
+          </button>
         </div>
 
         <div className="conversations">
@@ -354,12 +366,12 @@ export default function Chat({ onLogout, user }) {
               className={`conv-item ${c.id === activeConv ? 'active' : ''}`}
               onClick={() => setActiveConv(c.id)}
             >
-              <span className="conv-title">{c.title || `Conversación ${c.id}`}</span>
+              <span className="conv-title">{c.title || `Conversacion ${c.id}`}</span>
               <button
                 className="btn-delete"
                 onClick={(e) => { e.stopPropagation(); setDeleteModal(c.id); }}
               >
-                🗑️
+                <Trash2 size={16} />
               </button>
             </div>
           ))}
@@ -371,27 +383,32 @@ export default function Chat({ onLogout, user }) {
         </div>
       </aside>
 
-      {/* Main */}
       <main className="chat-main">
         <header className="chat-header">
-          <button className="btn-menu" onClick={() => setSidebarOpen(true)}>☰</button>
+          <button className="btn-menu" onClick={() => setSidebarOpen(true)}>
+            <Menu size={20} />
+          </button>
           <h1 className="chat-title">NISIRA Assistant</h1>
           {loading && <span className="chat-status">Procesando...</span>}
         </header>
 
         {error && (
           <div className="error-banner">
-            ⚠️ {error}
-            <button onClick={() => setError(null)}>×</button>
+            <AlertTriangle size={16} /> {error}
+            <button onClick={() => setError(null)}>
+              <X size={16} />
+            </button>
           </div>
         )}
 
         <div className="messages">
           {messages.length === 0 && !loading && (
             <div className="welcome">
-              <div className="welcome-icon">🤖</div>
-              <h2>¡Hola! Soy NISIRA Assistant</h2>
-              <p>Tu asistente inteligente. Pregúntame lo que necesites.</p>
+              <div className="welcome-icon">
+                <Bot size={64} strokeWidth={1.5} />
+              </div>
+              <h2>Hola! Soy NISIRA Assistant</h2>
+              <p>Tu asistente inteligente. Preguntame lo que necesites.</p>
             </div>
           )}
 
@@ -428,19 +445,18 @@ export default function Chat({ onLogout, user }) {
                 }}
               />
               <button type="submit" className="btn-send" disabled={!message.trim() || loading}>
-                ➤
+                <Send size={18} />
               </button>
             </div>
           </form>
         </div>
       </main>
 
-      {/* Modal de confirmación */}
       {deleteModal && (
         <div className="modal-overlay">
           <div className="modal">
-            <h3>¿Eliminar conversación?</h3>
-            <p>Esta acción no se puede deshacer.</p>
+            <h3>Eliminar conversacion?</h3>
+            <p>Esta accion no se puede deshacer.</p>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setDeleteModal(null)}>
                 Cancelar
@@ -453,7 +469,6 @@ export default function Chat({ onLogout, user }) {
         </div>
       )}
 
-      {/* Visor de PDF lateral */}
       {pdfSource && (
         <PdfViewer source={pdfSource} onClose={() => setPdfSource(null)} />
       )}

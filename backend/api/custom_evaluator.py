@@ -30,7 +30,7 @@ class CustomMetricsEvaluator:
     
     def __init__(self):
         """Inicializar evaluador"""
-        logger.info("✅ CustomMetricsEvaluator inicializado (sin dependencias externas)")
+        logger.info("[OK] CustomMetricsEvaluator inicializado (sin dependencias externas)")
     
     def calculate_precision_at_k(
         self,
@@ -64,9 +64,9 @@ class CustomMetricsEvaluator:
         relevant_count = 0
         answer_words = set(self._tokenize(answer.lower()))
         
-        logger.info(f"\n🔍 Método: Jaccard Similarity entre palabras de respuesta y cada documento")
+        logger.info(f"\n[SEARCH] Método: Jaccard Similarity entre palabras de respuesta y cada documento")
         logger.info(f"   Threshold: 0.20 (20% de overlap mínimo para considerar relevante)")
-        logger.info(f"\n📝 Palabras en la respuesta: {len(answer_words)} palabras únicas")
+        logger.info(f"\n[NOTE] Palabras en la respuesta: {len(answer_words)} palabras únicas")
         logger.info(f"   Muestra: {list(answer_words)[:10]}...\n")
         
         for i, context in enumerate(top_k_contexts):
@@ -84,7 +84,7 @@ class CustomMetricsEvaluator:
                 # Similitud de Jaccard = intersección / unión
                 similarity = overlap / union if union > 0 else 0.0
                 
-                logger.info(f"📄 DOCUMENTO {i+1}:")
+                logger.info(f"[INFO] DOCUMENTO {i+1}:")
                 logger.info(f"   Contenido: {context[:150]}...")
                 logger.info(f"   Palabras en documento: {len(context_words)}")
                 logger.info(f"   Palabras comunes (overlap): {overlap}")
@@ -98,19 +98,19 @@ class CustomMetricsEvaluator:
                 
                 if similarity > THRESHOLD:
                     relevant_count += 1
-                    logger.info(f"   ✅ RELEVANTE (similarity {similarity:.4f} > {THRESHOLD})")
+                    logger.info(f"   [OK] RELEVANTE (similarity {similarity:.4f} > {THRESHOLD})")
                     logger.info(f"   Palabras clave compartidas: {list(palabras_comunes)[:20]}...")
                 else:
-                    logger.info(f"   ❌ IRRELEVANTE (similarity {similarity:.4f} ≤ {THRESHOLD})")
+                    logger.info(f"   [ERROR] IRRELEVANTE (similarity {similarity:.4f} ≤ {THRESHOLD})")
                     # Mostrar por qué no es relevante
                     if overlap == 0:
-                        logger.info(f"   ⚠️ Sin palabras en común entre respuesta y documento")
+                        logger.info(f"   [WARN] Sin palabras en común entre respuesta y documento")
                     elif similarity < 0.05:
-                        logger.info(f"   ⚠️ Muy poca similitud (<5%), documento probablemente no útil")
+                        logger.info(f"   [WARN] Muy poca similitud (<5%), documento probablemente no útil")
                 logger.info("")
         
         precision = relevant_count / k
-        logger.info(f"\n🎯 RESULTADO FINAL - Precision@{k}:")
+        logger.info(f"\n[GOAL] RESULTADO FINAL - Precision@{k}:")
         logger.info(f"   Fórmula: (documentos_relevantes) / k")
         logger.info(f"   Cálculo: {relevant_count} / {k} = {precision:.4f}")
         logger.info(f"   Porcentaje: {precision * 100:.2f}%")
@@ -150,7 +150,7 @@ class CustomMetricsEvaluator:
         # Contar cuántos contextos tienen información en la respuesta
         contexts_covered = 0
         
-        logger.info(f"\n🔍 Método: Detección de n-gramas (frases de 3 palabras) del contexto en la respuesta")
+        logger.info(f"\n[SEARCH] Método: Detección de n-gramas (frases de 3 palabras) del contexto en la respuesta")
         logger.info(f"   Si al menos 1 frase del documento aparece en la respuesta → contexto USADO\n")
         
         for i, context in enumerate(top_k_contexts):
@@ -161,7 +161,7 @@ class CustomMetricsEvaluator:
             frases_encontradas = [phrase for phrase in key_phrases if phrase in answer_lower]
             found = len(frases_encontradas) > 0
             
-            logger.info(f"📄 CONTEXTO {i+1}:")
+            logger.info(f"[INFO] CONTEXTO {i+1}:")
             logger.info(f"   Contenido: {context[:100]}...")
             logger.info(f"   Frases clave extraídas: {len(key_phrases)}")
             logger.info(f"   Muestra de frases: {key_phrases[:5]}")
@@ -171,14 +171,14 @@ class CustomMetricsEvaluator:
             
             if found:
                 contexts_covered += 1
-                logger.info(f"   ✅ USADO - La respuesta contiene información de este documento")
+                logger.info(f"   [OK] USADO - La respuesta contiene información de este documento")
             else:
-                logger.info(f"   ❌ NO USADO - La respuesta no usa información de este documento")
+                logger.info(f"   [ERROR] NO USADO - La respuesta no usa información de este documento")
             logger.info("")
         
         # Recall = contextos cubiertos / total contextos recuperados
         recall = contexts_covered / k
-        logger.info(f"\n🎯 RESULTADO FINAL - Recall@{k}:")
+        logger.info(f"\n[GOAL] RESULTADO FINAL - Recall@{k}:")
         logger.info(f"   Fórmula: (contextos_usados) / k")
         logger.info(f"   Cálculo: {contexts_covered} / {k} = {recall:.4f}")
         logger.info(f"   Porcentaje: {recall * 100:.2f}%")
@@ -235,17 +235,17 @@ class CustomMetricsEvaluator:
             keywords_in_context = sum(1 for kw in keywords if kw in full_context)
             coverage = keywords_in_context / len(keywords)
             
-            logger.info(f"  📝 Oración {i+1}: {keywords_in_context}/{len(keywords)} keywords en contexto ({coverage:.2%})")
+            logger.info(f"  [NOTE] Oración {i+1}: {keywords_in_context}/{len(keywords)} keywords en contexto ({coverage:.2%})")
             
             # Si >60% de las palabras clave están en el contexto, la oración está respaldada
             if coverage > 0.6:
                 supported_sentences += 1
-                logger.info(f"    ✅ Respaldada (coverage > 60%)")
+                logger.info(f"    [OK] Respaldada (coverage > 60%)")
             else:
-                logger.info(f"    ❌ Sin respaldo (coverage ≤ 60%)")
+                logger.info(f"    [ERROR] Sin respaldo (coverage ≤ 60%)")
         
         faithfulness = supported_sentences / len(sentences)
-        logger.info(f"🎯 Faithfulness = {supported_sentences}/{len(sentences)} = {faithfulness:.4f}")
+        logger.info(f"[GOAL] Faithfulness = {supported_sentences}/{len(sentences)} = {faithfulness:.4f}")
         logger.info(f"   Fórmula: (oraciones_respaldadas) / (total_oraciones)")
         logger.info(f"   Cálculo: ({supported_sentences}) / {len(sentences)} = {faithfulness:.4f}")
         
@@ -300,9 +300,9 @@ class CustomMetricsEvaluator:
         keywords_in_answer = sum(1 for kw in question_keywords if kw in answer_lower)
         keywords_missing = len(question_keywords) - keywords_in_answer
         
-        logger.info(f"  🔑 Keywords pregunta: {question_keywords}")
-        logger.info(f"  ✅ Presentes en respuesta: {keywords_in_answer}")
-        logger.info(f"  ❌ Ausentes: {keywords_missing}")
+        logger.info(f"  [KEY] Keywords pregunta: {question_keywords}")
+        logger.info(f"  [OK] Presentes en respuesta: {keywords_in_answer}")
+        logger.info(f"  [ERROR] Ausentes: {keywords_missing}")
         
         # Calcular relevancia base
         relevancy = keywords_in_answer / len(question_keywords)
@@ -312,9 +312,9 @@ class CustomMetricsEvaluator:
         if 20 <= answer_length <= 300:
             old_relevancy = relevancy
             relevancy = min(1.0, relevancy + 0.1)
-            logger.info(f"  🎁 Bonus longitud razonable: {old_relevancy:.4f} + 0.1 = {relevancy:.4f}")
+            logger.info(f"  [INFO] Bonus longitud razonable: {old_relevancy:.4f} + 0.1 = {relevancy:.4f}")
         
-        logger.info(f"🎯 Answer Relevancy = {keywords_in_answer}/{len(question_keywords)} = {relevancy:.4f}")
+        logger.info(f"[GOAL] Answer Relevancy = {keywords_in_answer}/{len(question_keywords)} = {relevancy:.4f}")
         logger.info(f"   Fórmula: (keywords_presentes) / (total_keywords)")
         logger.info(f"   Cálculo: ({keywords_in_answer}) / {len(question_keywords)} = {relevancy:.4f}")
         
@@ -349,7 +349,7 @@ class CustomMetricsEvaluator:
         # WER = distancia / longitud de referencia
         wer = distance / len(ref_words) if ref_words else 0.0
         
-        logger.debug(f"📊 WER: {distance}/{len(ref_words)} = {wer:.3f}")
+        logger.debug(f"[STATS] WER: {distance}/{len(ref_words)} = {wer:.3f}")
         
         return wer
     
@@ -376,21 +376,21 @@ class CustomMetricsEvaluator:
         """
         try:
             logger.info("\n" + "="*80)
-            logger.info("🔬 EVALUACIÓN DE PRECISIÓN Y EXHAUSTIVIDAD")
+            logger.info("[INFO] EVALUACIÓN DE PRECISIÓN Y EXHAUSTIVIDAD")
             logger.info("="*80)
-            logger.info(f"📋 Pregunta: {question}")
-            logger.info(f"📋 Respuesta generada: {len(answer)} caracteres")
-            logger.info(f"📋 Documentos recuperados: {len(contexts)}")
-            logger.info(f"📋 K value (top-k para evaluar): {k}")
+            logger.info(f"[LIST] Pregunta: {question}")
+            logger.info(f"[LIST] Respuesta generada: {len(answer)} caracteres")
+            logger.info(f"[LIST] Documentos recuperados: {len(contexts)}")
+            logger.info(f"[LIST] K value (top-k para evaluar): {k}")
             logger.info("\n" + "-"*80)
-            logger.info("📊 CALCULANDO ÍNDICE DE PRECISIÓN (Precision@k)")
+            logger.info("[STATS] CALCULANDO ÍNDICE DE PRECISIÓN (Precision@k)")
             logger.info("-"*80)
             
             # Calcular SOLO precision y recall
             precision = self.calculate_precision_at_k(contexts, answer, k)
             
             logger.info("\n" + "-"*80)
-            logger.info("📊 CALCULANDO ÍNDICE DE EXHAUSTIVIDAD (Recall@k)")
+            logger.info("[STATS] CALCULANDO ÍNDICE DE EXHAUSTIVIDAD (Recall@k)")
             logger.info("-"*80)
             recall = self.calculate_recall_at_k(contexts, answer, k)
             
@@ -400,16 +400,16 @@ class CustomMetricsEvaluator:
             }
             
             logger.info("\n" + "="*80)
-            logger.info("✅ EVALUACIÓN COMPLETADA")
+            logger.info("[OK] EVALUACIÓN COMPLETADA")
             logger.info("="*80)
-            logger.info(f"   📊 Índice de Precisión (Precision@k): {precision:.4f} ({precision*100:.2f}%)")
-            logger.info(f"   📊 Índice de Exhaustividad (Recall@k): {recall:.4f} ({recall*100:.2f}%)")
+            logger.info(f"   [STATS] Índice de Precisión (Precision@k): {precision:.4f} ({precision*100:.2f}%)")
+            logger.info(f"   [STATS] Índice de Exhaustividad (Recall@k): {recall:.4f} ({recall*100:.2f}%)")
             logger.info("="*80 + "\n")
             
             return metrics
             
         except Exception as e:
-            logger.error(f"❌ Error en evaluación: {e}", exc_info=True)
+            logger.error(f"[ERROR] Error en evaluación: {e}", exc_info=True)
             return {
                 'context_precision': 0.0,
                 'context_recall': 0.0

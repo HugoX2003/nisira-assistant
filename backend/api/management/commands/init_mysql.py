@@ -14,7 +14,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        self.stdout.write(self.style.SUCCESS('🚀 Inicializando base de datos MySQL...'))
+        self.stdout.write(self.style.SUCCESS('[START] Inicializando base de datos MySQL...'))
         
         # Crear superusuario si se solicita
         if options['create_admin']:
@@ -26,7 +26,7 @@ class Command(BaseCommand):
         # Mostrar estadísticas
         self.show_statistics()
         
-        self.stdout.write(self.style.SUCCESS('✅ Inicialización completada'))
+        self.stdout.write(self.style.SUCCESS('[OK] Inicialización completada'))
 
     def create_admin_user(self):
         """Crear usuario administrador"""
@@ -43,7 +43,7 @@ class Command(BaseCommand):
                 admin_user.set_password('admin123')
                 admin_user.save()
                 self.stdout.write(
-                    self.style.SUCCESS('👤 Usuario administrador creado: admin / admin123')
+                    self.style.SUCCESS('[INFO] Usuario administrador creado: admin / admin123')
                 )
             else:
                 self.stdout.write(
@@ -51,7 +51,7 @@ class Command(BaseCommand):
                 )
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f'❌ Error al crear usuario administrador: {e}')
+                self.style.ERROR(f'[ERROR] Error al crear usuario administrador: {e}')
             )
 
     def verify_database_connection(self):
@@ -62,11 +62,11 @@ class Command(BaseCommand):
             cursor.execute("SELECT VERSION()")
             version = cursor.fetchone()[0]
             self.stdout.write(
-                self.style.SUCCESS(f'🗃️ Conectado a MySQL versión: {version}')
+                self.style.SUCCESS(f'[DB] Conectado a MySQL versión: {version}')
             )
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f'❌ Error de conexión a MySQL: {e}')
+                self.style.ERROR(f'[ERROR] Error de conexión a MySQL: {e}')
             )
 
     def show_statistics(self):
@@ -76,12 +76,12 @@ class Command(BaseCommand):
             conversations_count = Conversation.objects.count()
             messages_count = Message.objects.count()
             
-            self.stdout.write('\n📊 Estadísticas de la base de datos:')
+            self.stdout.write('\n[STATS] Estadísticas de la base de datos:')
             self.stdout.write(f'   • Usuarios: {users_count}')
             self.stdout.write(f'   • Conversaciones: {conversations_count}')
             self.stdout.write(f'   • Mensajes: {messages_count}')
             
         except Exception as e:
             self.stdout.write(
-                self.style.ERROR(f'❌ Error al obtener estadísticas: {e}')
+                self.style.ERROR(f'[ERROR] Error al obtener estadísticas: {e}')
             )

@@ -98,7 +98,7 @@ for name, resp in {
     "guardrail_status": guardrail_response,
 }.items():
     if resp.status_code != 200:
-        raise SystemExit(f"❌ La llamada a {name} falló con status {resp.status_code}: {getattr(resp, 'data', resp.content)}")
+        raise SystemExit(f"[ERROR] La llamada a {name} falló con status {resp.status_code}: {getattr(resp, 'data', resp.content)}")
 
 EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -116,4 +116,4 @@ EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
     encoding="utf-8",
 )
 
-print(f"✅ Evidencias generadas:\n- {summary_path}\n- {export_json_path}\n- {export_csv_path}\n- {guardrail_path}")
+print(f"[OK] Evidencias generadas:\n- {summary_path}\n- {export_json_path}\n- {export_csv_path}\n- {guardrail_path}")

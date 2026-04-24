@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Bot } from 'lucide-react';
 import { login, tokenManager } from '../services/api';
 import '../styles/Login.css';
 
@@ -41,7 +42,7 @@ export default function Login({ onLogin, onShowRegister }) {
     <div className="auth-page">
       <div className="auth-card">
         <header className="auth-header">
-          <div className="auth-logo">🤖</div>
+          <div className="auth-logo"><Bot size={48} strokeWidth={1.5} /></div>
           <h1 className="auth-title">Bienvenido</h1>
           <p className="auth-subtitle">Inicia sesión en NISIRA Assistant</p>
         </header>

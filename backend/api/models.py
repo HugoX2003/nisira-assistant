@@ -358,6 +358,6 @@ class UploadedDocument(models.Model):
         ]
     
     def __str__(self):
-        status = "✅ Procesado" if self.processed else "⏳ Pendiente"
+        status = "[OK] Procesado" if self.processed else "[WAIT] Pendiente"
         return f"{self.file_name} ({status})"
 

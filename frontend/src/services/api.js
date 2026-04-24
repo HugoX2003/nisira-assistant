@@ -12,9 +12,9 @@ const defaultBase = (typeof window !== 'undefined')
 // Priorizar REACT_APP_API_URL para entornos productivos
 const API_BASE = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE || defaultBase;
 
-console.log('🔧 API_BASE configurado:', API_BASE);
-console.log('🔧 REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
-console.log('🔧 REACT_APP_API_BASE:', process.env.REACT_APP_API_BASE);
+console.log('[API] Base URL configurada:', API_BASE);
+console.log('[API] REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
+console.log('[API] REACT_APP_API_BASE:', process.env.REACT_APP_API_BASE);
 
 // ================================
 // MANEJO DE TOKENS
@@ -35,9 +35,9 @@ class TokenManager {
       
       // Verificar que los tokens sean válidos (no null, no undefined, no vacío)
       if (this.accessToken && this.accessToken !== 'null' && this.accessToken !== 'undefined') {
-        console.log('✅ Token cargado desde localStorage');
+        console.log('[AUTH] Token cargado desde localStorage');
       } else {
-        console.log('⚠️ No hay token válido en localStorage');
+        console.log('[AUTH] No hay token valido en localStorage');
         this.accessToken = null;
         this.refreshToken = null;
       }
@@ -145,9 +145,9 @@ api.interceptors.request.use(
       const token = tokenManager.getAccessToken();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-        console.log('🔐 Agregando token a la petición:', config.url);
+        console.log('[AUTH] Agregando token a la peticion:', config.url);
       } else {
-        console.warn('⚠️ No hay token disponible para:', config.url);
+        console.warn('[AUTH] No hay token disponible para:', config.url);
       }
     }
 

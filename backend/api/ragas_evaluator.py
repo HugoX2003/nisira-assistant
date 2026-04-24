@@ -68,10 +68,10 @@ class RAGASEvaluator:
                 answer_relevancy       # Relevancia de la respuesta
             ]
             
-            logger.info("✅ RAGASEvaluator inicializado con Gemini API (gemini-2.0-flash)")
+            logger.info("[OK] RAGASEvaluator inicializado con Gemini API (gemini-2.0-flash)")
             
         except Exception as e:
-            logger.error(f"❌ Error al inicializar RAGASEvaluator: {e}")
+            logger.error(f"[ERROR] Error al inicializar RAGASEvaluator: {e}")
             raise
     
     def evaluate_response(
@@ -115,7 +115,7 @@ class RAGASEvaluator:
             dataset = Dataset.from_dict(data)
             
             # Ejecutar evaluación RAGAS
-            logger.info(f"🔍 Evaluando con RAGAS...")
+            logger.info(f"[SEARCH] Evaluando con RAGAS...")
             logger.info(f"   Question: {question[:100]}...")
             logger.info(f"   Answer length: {len(answer)} chars")
             logger.info(f"   Contexts: {len(contexts)} documents")
@@ -162,16 +162,16 @@ class RAGASEvaluator:
                 'calidad_respuesta': float(calidad)
             }
             
-            logger.info(f"✅ RAGAS Evaluation Results:")
+            logger.info(f"[OK] RAGAS Evaluation Results:")
             logger.info(f"   Faithfulness: {faithfulness_score:.2%}")
             logger.info(f"   Answer Relevancy: {relevancy_score:.2%}")
             logger.info(f"   Context Utilization: {context_util_score:.2%}")
-            logger.info(f"   📊 CALIDAD DE RESPUESTA: {calidad:.2%}")
+            logger.info(f"   [STATS] CALIDAD DE RESPUESTA: {calidad:.2%}")
             
             return metrics
             
         except Exception as e:
-            logger.error(f"❌ Error en evaluación RAGAS: {e}")
+            logger.error(f"[ERROR] Error en evaluación RAGAS: {e}")
             # Retornar valores por defecto en caso de error
             return {
                 'faithfulness': 0.0,
@@ -260,13 +260,13 @@ class RAGASEvaluator:
             calidad_score: Score de calidad (0.0-1.0)
         
         Returns:
-            Emoji: 🟢, 🟡, 🟠, 🔴
+            Emoji: [INFO], [INFO], [INFO], [INFO]
         """
         if calidad_score >= 0.8:
-            return "🟢"
+            return "[INFO]"
         elif calidad_score >= 0.6:
-            return "🟡"
+            return "[INFO]"
         elif calidad_score >= 0.4:
-            return "🟠"
+            return "[INFO]"
         else:
-            return "🔴"
+            return "[INFO]"

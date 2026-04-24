@@ -14,10 +14,10 @@ function App() {
   const checkAuth = () => {
     const token = localStorage.getItem('token');
     const isValid = token && token !== 'null' && token !== 'undefined' && token.trim() !== '';
-    console.log('🔍 Verificando autenticación:', { 
-      hasToken: !!token, 
-      isValid, 
-      tokenLength: token ? token.length : 0 
+    console.log('[AUTH] Verificando autenticacion:', {
+      hasToken: !!token,
+      isValid,
+      tokenLength: token ? token.length : 0
     });
     return isValid;
   };

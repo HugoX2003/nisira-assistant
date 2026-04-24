@@ -217,7 +217,7 @@ if ('runserver' in sys.argv or 'migrate' in sys.argv) and not os.environ.get('DA
                 'database': os.environ.get('DB_NAME', 'rag_asistente'),
             }
 
-            print(f"🔍 Verificando base de datos '{db_config['database']}'...")
+            print(f"[SEARCH] Verificando base de datos '{db_config['database']}'...")
 
             conn = mysql.connector.connect(
                 host=db_config['host'],
@@ -232,13 +232,13 @@ if ('runserver' in sys.argv or 'migrate' in sys.argv) and not os.environ.get('DA
             cursor.close()
             conn.close()
 
-            print(f"✅ Base de datos '{db_config['database']}' lista")
+            print(f"[OK] Base de datos '{db_config['database']}' lista")
         except ImportError:
-            print("⚠️ Falta instalar mysql-connector-python → pip install mysql-connector-python")
+            print("[WARN] Falta instalar mysql-connector-python -> pip install mysql-connector-python")
         except Error as e:
-            print(f"⚠️ Error MySQL: {e}")
+            print(f"[WARN] Error MySQL: {e}")
         except Exception as e:
-            print(f"⚠️ Error inesperado: {e}")
+            print(f"[WARN] Error inesperado: {e}")
 
     auto_configure_database()
 

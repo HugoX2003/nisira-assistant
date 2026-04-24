@@ -100,7 +100,7 @@ def create_sample_queries():
         }
     ]
     
-    print("🔄 Insertando consultas de prueba...")
+    print("[SYNC] Insertando consultas de prueba...")
     
     for i, query_data in enumerate(sample_queries):
         # Crear QueryMetrics
@@ -138,23 +138,23 @@ def create_sample_queries():
             k_value=5
         )
         
-        print(f"  ✅ Consulta {i+1}: {query_data['query_text'][:50]}...")
-    
-    print(f"\n✅ {len(sample_queries)} consultas de prueba insertadas correctamente")
-    print(f"\n📊 Total en base de datos: {QueryMetrics.objects.count()} consultas")
-    print(f"📊 Consultas complejas: {QueryMetrics.objects.filter(is_complex_query=True).count()}")
-    print(f"📊 Métricas de precisión: {RAGASMetrics.objects.count()}")
+        print(f"  [OK] Consulta {i+1}: {query_data['query_text'][:50]}...")
+
+    print(f"\n[OK] {len(sample_queries)} consultas de prueba insertadas correctamente")
+    print(f"\n[STATS] Total en base de datos: {QueryMetrics.objects.count()} consultas")
+    print(f"[STATS] Consultas complejas: {QueryMetrics.objects.filter(is_complex_query=True).count()}")
+    print(f"[STATS] Métricas de precisión: {RAGASMetrics.objects.count()}")
 
 if __name__ == "__main__":
     print("\n" + "="*60)
-    print("📊 GENERADOR DE CONSULTAS DE PRUEBA")
+    print("[STATS] GENERADOR DE CONSULTAS DE PRUEBA")
     print("="*60 + "\n")
-    
+
     try:
         create_sample_queries()
-        print("\n✅ ¡Listo! Ahora recarga el panel de administración")
-        print("📍 Ve a: Métricas → Detalle por Consulta")
+        print("\n[OK] ¡Listo! Ahora recarga el panel de administración")
+        print("[INFO] Ve a: Métricas → Detalle por Consulta")
     except Exception as e:
-        print(f"\n❌ Error: {e}")
+        print(f"\n[ERROR] Error: {e}")
         import traceback
         traceback.print_exc()

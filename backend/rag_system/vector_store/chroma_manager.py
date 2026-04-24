@@ -46,7 +46,7 @@ class ChromaManager:
     def _initialize_client(self):
         """Inicializar cliente de ChromaDB"""
         if not CHROMADB_AVAILABLE:
-            logger.error("❌ ChromaDB no está disponible")
+            logger.error("[ERROR] ChromaDB no está disponible")
             return False
         
         try:
@@ -60,24 +60,24 @@ class ChromaManager:
                 self.collection = self.client.get_collection(
                     name=self.collection_name
                 )
-                logger.info(f"✅ Colección existente cargada: {self.collection_name}")
+                logger.info(f"[OK] Colección existente cargada: {self.collection_name}")
             except Exception:
                 # Crear nueva colección
                 self.collection = self.client.create_collection(
                     name=self.collection_name,
                     metadata={"description": "Documentos RAG del sistema Nisira"}
                 )
-                logger.info(f"✅ Nueva colección creada: {self.collection_name}")
+                logger.info(f"[OK] Nueva colección creada: {self.collection_name}")
             
             return True
             
         except Exception as e:
             err_text = str(e)
-            logger.error(f"❌ Error inicializando ChromaDB: {err_text}")
+            logger.error(f"[ERROR] Error inicializando ChromaDB: {err_text}")
             # Si el archivo es un puntero LFS o está corrupto, limpiar y reintentar una vez
             if "file is not a database" in err_text.lower():
                 try:
-                    logger.warning("🧹 Limpiando directorio de persistencia de ChromaDB y reintentando...")
+                    logger.warning("[CLEAN] Limpiando directorio de persistencia de ChromaDB y reintentando...")
                     for entry in os.listdir(self.persist_directory):
                         path = os.path.join(self.persist_directory, entry)
                         if os.path.isdir(path):
@@ -93,10 +93,10 @@ class ChromaManager:
                         name=self.collection_name,
                         metadata={"description": "Documentos RAG del sistema Nisira"}
                     )
-                    logger.info("✅ ChromaDB reinicializado con colección vacía tras limpiar persistencia")
+                    logger.info("[OK] ChromaDB reinicializado con colección vacía tras limpiar persistencia")
                     return True
                 except Exception as e2:
-                    logger.error(f"❌ Reintento fallido de ChromaDB tras limpieza: {e2}")
+                    logger.error(f"[ERROR] Reintento fallido de ChromaDB tras limpieza: {e2}")
             return False
     
     def is_ready(self) -> bool:
@@ -121,8 +121,8 @@ class ChromaManager:
         Returns:
             True si fue exitoso
         """
-        logger.info(f"🟡 ChromaDB add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
-        logger.info(f"🟡 Client status: {self.client is not None}, Collection: {self.collection_name}")
+        logger.info(f"[INFO] ChromaDB add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
+        logger.info(f"[INFO] Client status: {self.client is not None}, Collection: {self.collection_name}")
         
         # Verificar si la colección existe, si no, recrearla
         try:
@@ -130,38 +130,38 @@ class ChromaManager:
                 # Intentar obtener la colección
                 try:
                     self.collection = self.client.get_collection(name=self.collection_name)
-                    logger.info(f"🟡 Colección '{self.collection_name}' encontrada")
+                    logger.info(f"[INFO] Colección '{self.collection_name}' encontrada")
                 except Exception:
                     # Si no existe, crearla
-                    logger.warning(f"⚠️  Colección '{self.collection_name}' no existe, creándola...")
+                    logger.warning(f"[WARN]  Colección '{self.collection_name}' no existe, creándola...")
                     self.collection = self.client.create_collection(
                         name=self.collection_name,
                         metadata={"description": "Documentos RAG del sistema Nisira"}
                     )
-                    logger.info(f"✅ Colección '{self.collection_name}' creada")
+                    logger.info(f"[OK] Colección '{self.collection_name}' creada")
         except Exception as e:
-            logger.error(f"❌ Error verificando/creando colección: {e}")
+            logger.error(f"[ERROR] Error verificando/creando colección: {e}")
         
         if not self.is_ready():
-            logger.error("❌ ChromaDB no está listo")
+            logger.error("[ERROR] ChromaDB no está listo")
             logger.error(f"   - CHROMADB_AVAILABLE: {CHROMADB_AVAILABLE}")
             logger.error(f"   - self.client: {self.client}")
             logger.error(f"   - self.collection: {self.collection}")
             return False
         
         if len(documents) != len(embeddings):
-            logger.error("❌ Número de documentos y embeddings no coinciden")
+            logger.error("[ERROR] Número de documentos y embeddings no coinciden")
             return False
         
         if not documents:
-            logger.warning("⚠️  No hay documentos para agregar")
+            logger.warning("[WARN]  No hay documentos para agregar")
             return True
         
         try:
             total_docs = len(documents)
             successful = 0
             
-            logger.info(f"📝 Agregando {total_docs} documentos a ChromaDB")
+            logger.info(f"[NOTE] Agregando {total_docs} documentos a ChromaDB")
             
             # Procesar en lotes
             for i in range(0, total_docs, batch_size):
@@ -176,7 +176,7 @@ class ChromaManager:
                 
                 for doc, embedding in zip(batch_docs, batch_embeddings):
                     if embedding is None:
-                        logger.warning(f"⚠️  Documento sin embedding saltado: {doc.get('metadata', {}).get('file_name', 'unknown')}")
+                        logger.warning(f"[WARN]  Documento sin embedding saltado: {doc.get('metadata', {}).get('file_name', 'unknown')}")
                         continue
                     
                     # Generar ID único
@@ -209,13 +209,13 @@ class ChromaManager:
                     )
                     
                     successful += len(ids)
-                    logger.info(f"📊 Progreso: {successful}/{total_docs} documentos agregados")
+                    logger.info(f"[STATS] Progreso: {successful}/{total_docs} documentos agregados")
             
-            logger.info(f"✅ {successful} documentos agregados exitosamente a ChromaDB")
+            logger.info(f"[OK] {successful} documentos agregados exitosamente a ChromaDB")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error agregando documentos a ChromaDB: {e}")
+            logger.error(f"[ERROR] Error agregando documentos a ChromaDB: {e}")
             return False
     
     def _clean_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
@@ -261,7 +261,7 @@ class ChromaManager:
             Lista de documentos similares con scores
         """
         if not self.is_ready():
-            logger.error("❌ ChromaDB no está listo")
+            logger.error("[ERROR] ChromaDB no está listo")
             return []
         
         try:
@@ -303,11 +303,11 @@ class ChromaManager:
                     if len(formatted_results) >= n_results:
                         break
             
-            logger.info(f"🔍 Búsqueda completada: {len(formatted_results)} resultados (threshold: {similarity_threshold})")
+            logger.info(f"[SEARCH] Búsqueda completada: {len(formatted_results)} resultados (threshold: {similarity_threshold})")
             return formatted_results
             
         except Exception as e:
-            logger.error(f"❌ Error en búsqueda: {e}")
+            logger.error(f"[ERROR] Error en búsqueda: {e}")
             return []
     
     def search_by_text(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
@@ -357,7 +357,7 @@ class ChromaManager:
             return formatted_results
             
         except Exception as e:
-            logger.error(f"❌ Error en búsqueda por texto: {e}")
+            logger.error(f"[ERROR] Error en búsqueda por texto: {e}")
             return []
     
     def get_collection_stats(self) -> Dict[str, Any]:
@@ -401,7 +401,7 @@ class ChromaManager:
             return stats
             
         except Exception as e:
-            logger.error(f"❌ Error obteniendo estadísticas: {e}")
+            logger.error(f"[ERROR] Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
     
     def list_collections(self) -> List[str]:
@@ -418,7 +418,7 @@ class ChromaManager:
             collections = self.client.list_collections()
             return [col.name for col in collections]
         except Exception as e:
-            logger.error(f"❌ Error listando colecciones: {e}")
+            logger.error(f"[ERROR] Error listando colecciones: {e}")
             return []
     
     def list_all_documents(self) -> Dict[str, Any]:
@@ -476,7 +476,7 @@ class ChromaManager:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error listando documentos: {e}")
+            logger.error(f"[ERROR] Error listando documentos: {e}")
             return {"success": False, "error": str(e)}
     
     def get_collection_count(self, collection_name: str = None) -> int:
@@ -500,7 +500,7 @@ class ChromaManager:
                 return self.collection.count()
             return 0
         except Exception as e:
-            logger.error(f"❌ Error obteniendo conteo: {e}")
+            logger.error(f"[ERROR] Error obteniendo conteo: {e}")
             return 0
     
     def delete_documents(self, filter_metadata: Dict[str, Any]) -> bool:
@@ -530,14 +530,14 @@ class ChromaManager:
                 # Eliminar documentos
                 self.collection.delete(ids=ids_to_delete)
                 
-                logger.info(f"🗑️  {len(ids_to_delete)} documentos eliminados")
+                logger.info(f"[DEL]  {len(ids_to_delete)} documentos eliminados")
                 return True
             else:
-                logger.info("ℹ️  No se encontraron documentos para eliminar")
+                logger.info("[INFO]  No se encontraron documentos para eliminar")
                 return True
                 
         except Exception as e:
-            logger.error(f"❌ Error eliminando documentos: {e}")
+            logger.error(f"[ERROR] Error eliminando documentos: {e}")
             return False
     
     def reset_collection(self) -> bool:
@@ -560,11 +560,11 @@ class ChromaManager:
                 metadata={"description": "Documentos RAG del sistema Nisira"}
             )
             
-            logger.info(f"🔄 Colección {self.collection_name} reseteada")
+            logger.info(f"[SYNC] Colección {self.collection_name} reseteada")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error reseteando colección: {e}")
+            logger.error(f"[ERROR] Error reseteando colección: {e}")
             return False
     
     def backup_collection(self, backup_path: str) -> bool:
@@ -600,11 +600,11 @@ class ChromaManager:
             with open(backup_path, 'w', encoding='utf-8') as f:
                 json.dump(backup_data, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"💾 Respaldo creado: {backup_path}")
+            logger.info(f"[SAVE] Respaldo creado: {backup_path}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error creando respaldo: {e}")
+            logger.error(f"[ERROR] Error creando respaldo: {e}")
             return False
     
     def restore_collection(self, backup_path: str) -> bool:
@@ -618,7 +618,7 @@ class ChromaManager:
             True si fue exitoso
         """
         if not os.path.exists(backup_path):
-            logger.error(f"❌ Archivo de respaldo no encontrado: {backup_path}")
+            logger.error(f"[ERROR] Archivo de respaldo no encontrado: {backup_path}")
             return False
         
         try:
@@ -638,11 +638,11 @@ class ChromaManager:
                     embeddings=backup_data['embeddings']
                 )
             
-            logger.info(f"📥 Colección restaurada desde {backup_path}")
-            logger.info(f"📊 {backup_data['total_documents']} documentos restaurados")
+            logger.info(f"[INFO] Colección restaurada desde {backup_path}")
+            logger.info(f"[STATS] {backup_data['total_documents']} documentos restaurados")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error restaurando respaldo: {e}")
+            logger.error(f"[ERROR] Error restaurando respaldo: {e}")
             return False

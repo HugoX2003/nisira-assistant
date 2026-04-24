@@ -100,11 +100,11 @@ try:
     
     from rag_system.rag_engine.pipeline import RAGPipeline
     RAG_MODULES_AVAILABLE = True
-    logger.info("✅ Sistema RAG importado correctamente")
+    logger.info("[OK] Sistema RAG importado correctamente")
 except ImportError as e:
     RAG_MODULES_AVAILABLE = False
     RAGPipeline = None
-    logger.warning(f"⚠️ Sistema RAG no disponible: {e}")
+    logger.warning(f"[WARN] Sistema RAG no disponible: {e}")
 
 
 def calculate_adaptive_top_k(question: str) -> int:
@@ -157,7 +157,7 @@ def process_rating_event(event: RatingFeedbackEvent) -> RatingFeedbackEvent:
 
     try:
         logger.info(
-            "📨 Procesando evento de calificación %s (rating=%s, intento=%s)",
+            "[INFO] Procesando evento de calificación %s (rating=%s, intento=%s)",
             event.pk,
             event.rating_id,
             event.attempts,
@@ -345,7 +345,7 @@ def serve_document(request, filename: str):
             file_data = file_store.get_file(file_name=filename)
             
             if file_data:
-                logger.info(f"✅ Documento encontrado directamente en PostgreSQL: {filename}")
+                logger.info(f"[OK] Documento encontrado directamente en PostgreSQL: {filename}")
                 content_type = file_data.get('mime_type', 'application/octet-stream')
                 
                 response = HttpResponse(file_data['file_content'], content_type=content_type)
@@ -1177,7 +1177,7 @@ def rag_query(request):
         
         include_generation = request.data.get('include_generation', True)
         
-        logger.info(f"📊 Consulta con top_k adaptativo: {top_k} (longitud: {len(question)} chars)")
+        logger.info(f"[STATS] Consulta con top_k adaptativo: {top_k} (longitud: {len(question)} chars)")
         
         pipeline = RAGPipeline()
         result = pipeline.query(
@@ -1214,13 +1214,13 @@ def rag_query(request):
 def rag_enhanced_chat(request):
     """
     Chat mejorado con RAG - Integra RAG en las conversaciones normales
-    ✨ AHORA CON TRACKING DE MÉTRICAS PARA TESIS
+    [NEW] AHORA CON TRACKING DE MÉTRICAS PARA TESIS
     """
     if not RAG_MODULES_AVAILABLE:
         # Fallback al chat normal si RAG no está disponible
         return send_message(request)
     
-    # ✨ INICIAR TRACKING DE MÉTRICAS
+    # [NEW] INICIAR TRACKING DE MÉTRICAS
     from .metrics_tracker import MetricsTracker
     tracker = MetricsTracker()
     
@@ -1268,7 +1268,7 @@ def rag_enhanced_chat(request):
             sender='user'
         )
         
-        # ✨ INICIAR TRACKING DE LA CONSULTA
+        # [NEW] INICIAR TRACKING DE LA CONSULTA
         tracker.start_query(content, user=request.user, conversation=conversation)
         
         # Variable para almacenar las fuentes
@@ -1276,12 +1276,12 @@ def rag_enhanced_chat(request):
         
         # Generar respuesta
         if use_rag:
-            # ✨ INICIAR MEDICIÓN DE RECUPERACIÓN
+            # [NEW] INICIAR MEDICIÓN DE RECUPERACIÓN
             tracker.start_retrieval()
             
             # Calcular top_k dinámico basado en complejidad
             adaptive_top_k = calculate_adaptive_top_k(content)
-            logger.info(f"📊 RAG Chat - top_k adaptativo: {adaptive_top_k}")
+            logger.info(f"[STATS] RAG Chat - top_k adaptativo: {adaptive_top_k}")
             
             # Usar RAG para generar respuesta
             pipeline = RAGPipeline()
@@ -1291,21 +1291,21 @@ def rag_enhanced_chat(request):
                 include_generation=True
             )
             
-            # ✨ FINALIZAR MEDICIÓN DE RECUPERACIÓN
+            # [NEW] FINALIZAR MEDICIÓN DE RECUPERACIÓN
             sources_count = len(rag_result.get('sources', []))
             tracker.end_retrieval(num_documents=sources_count, k=adaptive_top_k)
             
-            # ✨ INICIAR MEDICIÓN DE GENERACIÓN
+            # [NEW] INICIAR MEDICIÓN DE GENERACIÓN
             tracker.start_generation()
             
             if rag_result['success'] and rag_result.get('answer'):
                 response_content = rag_result['answer']
                 sources = rag_result.get('sources', [])
                 
-                # ✨ MARCAR PRIMER TOKEN (asumimos que ya se generó)
+                # [NEW] MARCAR PRIMER TOKEN (asumimos que ya se generó)
                 tracker.mark_first_token()
                 
-                # ✨ CAPTURAR RESPUESTA Y CONTEXTOS PARA RAGAS
+                # [NEW] CAPTURAR RESPUESTA Y CONTEXTOS PARA RAGAS
                 # Extraer el texto de los contextos recuperados
                 contexts_text = [
                     source.get('content', '') or source.get('text', '')
@@ -1321,7 +1321,7 @@ def rag_enhanced_chat(request):
                 response_content = "Lo siento, no pude encontrar información relevante en los documentos para responder tu pregunta. ¿Podrías ser más específico?"
                 tracker.mark_first_token()
             
-            # ✨ FINALIZAR MEDICIÓN DE GENERACIÓN
+            # [NEW] FINALIZAR MEDICIÓN DE GENERACIÓN
             tracker.end_generation()
         else:
             # Respuesta básica sin RAG
@@ -1343,10 +1343,10 @@ def rag_enhanced_chat(request):
         # Actualizar timestamp de conversación
         conversation.save()
         
-        # ✨ GUARDAR MÉTRICAS EN BASE DE DATOS
+        # [NEW] GUARDAR MÉTRICAS EN BASE DE DATOS
         saved_metrics = tracker.save_metrics()
         if saved_metrics:
-            logger.info(f"✅ Métricas guardadas para query: {saved_metrics.query_id[:8]}")
+            logger.info(f"[OK] Métricas guardadas para query: {saved_metrics.query_id[:8]}")
         
         return Response({
             'conversation_id': conversation.id,
@@ -1365,11 +1365,11 @@ def rag_enhanced_chat(request):
             'response': response_content,  # Para compatibilidad con el frontend
             'rag_used': use_rag and RAG_MODULES_AVAILABLE,
             'sources': sources,
-            'metrics': tracker.get_summary()  # ✨ INCLUIR MÉTRICAS EN RESPUESTA
+            'metrics': tracker.get_summary()  # [NEW] INCLUIR MÉTRICAS EN RESPUESTA
         }, status=status.HTTP_201_CREATED)
         
     except Exception as e:
-        logger.error(f"❌ Error en chat RAG: {e}")
+        logger.error(f"[ERROR] Error en chat RAG: {e}")
         # Intentar guardar métricas incluso si hay error
         try:
             tracker.save_metrics()
@@ -1429,7 +1429,7 @@ def register_user(request):
         
         # Validación de username vacío
         if not username:
-            logger.warning(f"❌ Registro fallido: username vacío")
+            logger.warning(f"[ERROR] Registro fallido: username vacío")
             return Response(
                 {'error': 'El nombre de usuario es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1437,14 +1437,14 @@ def register_user(request):
         
         # Validar longitud de username (3-20 caracteres)
         if len(username) < 3:
-            logger.warning(f"❌ Registro fallido: username muy corto ({username})")
+            logger.warning(f"[ERROR] Registro fallido: username muy corto ({username})")
             return Response(
                 {'error': 'El nombre de usuario debe tener al menos 3 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
         if len(username) > 20:
-            logger.warning(f"❌ Registro fallido: username muy largo ({username})")
+            logger.warning(f"[ERROR] Registro fallido: username muy largo ({username})")
             return Response(
                 {'error': 'El nombre de usuario no puede tener más de 20 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1453,7 +1453,7 @@ def register_user(request):
         # Validar caracteres en username (solo letras, números y guion bajo)
         import re
         if not re.match(r'^[a-zA-Z0-9_]+$', username):
-            logger.warning(f"❌ Registro fallido: username con caracteres inválidos ({username})")
+            logger.warning(f"[ERROR] Registro fallido: username con caracteres inválidos ({username})")
             return Response(
                 {'error': 'El nombre de usuario solo puede contener letras, números y guion bajo (_)'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1461,7 +1461,7 @@ def register_user(request):
         
         # Validar que empiece con letra
         if not username[0].isalpha():
-            logger.warning(f"❌ Registro fallido: username no empieza con letra ({username})")
+            logger.warning(f"[ERROR] Registro fallido: username no empieza con letra ({username})")
             return Response(
                 {'error': 'El nombre de usuario debe comenzar con una letra'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1469,7 +1469,7 @@ def register_user(request):
             
         # Validación de email vacío
         if not email:
-            logger.warning(f"❌ Registro fallido: email vacío (username: {username})")
+            logger.warning(f"[ERROR] Registro fallido: email vacío (username: {username})")
             return Response(
                 {'error': 'El email es requerido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1479,7 +1479,7 @@ def register_user(request):
         # Regex mejorado: no permite puntos consecutivos, ni al inicio/final del local part
         email_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9._%+-]*[a-zA-Z0-9])?@[a-zA-Z0-9]([a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,}$'
         if not re.match(email_pattern, email):
-            logger.warning(f"❌ Registro fallido: formato email inválido ({email})")
+            logger.warning(f"[ERROR] Registro fallido: formato email inválido ({email})")
             return Response(
                 {'error': 'El formato del email no es válido'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1487,7 +1487,7 @@ def register_user(request):
         
         # Validar que no tenga puntos consecutivos
         if '..' in email:
-            logger.warning(f"❌ Registro fallido: email con puntos consecutivos ({email})")
+            logger.warning(f"[ERROR] Registro fallido: email con puntos consecutivos ({email})")
             return Response(
                 {'error': 'El email no puede contener puntos consecutivos (..)'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1495,7 +1495,7 @@ def register_user(request):
             
         # Validación de contraseña vacía
         if not password:
-            logger.warning(f"❌ Registro fallido: contraseña vacía (username: {username})")
+            logger.warning(f"[ERROR] Registro fallido: contraseña vacía (username: {username})")
             return Response(
                 {'error': 'La contraseña es requerida'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1503,7 +1503,7 @@ def register_user(request):
             
         # Validar longitud mínima de contraseña
         if len(password) < 6:
-            logger.warning(f"❌ Registro fallido: contraseña muy corta (username: {username})")
+            logger.warning(f"[ERROR] Registro fallido: contraseña muy corta (username: {username})")
             return Response(
                 {'error': 'La contraseña debe tener al menos 6 caracteres'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1511,7 +1511,7 @@ def register_user(request):
         
         # Validar que contenga al menos una letra y un número
         if not re.search(r'[a-zA-Z]', password) or not re.search(r'[0-9]', password):
-            logger.warning(f"❌ Registro fallido: contraseña sin letra/número (username: {username})")
+            logger.warning(f"[ERROR] Registro fallido: contraseña sin letra/número (username: {username})")
             return Response(
                 {'error': 'La contraseña debe contener al menos una letra y un número'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1519,14 +1519,14 @@ def register_user(request):
         
         # Verificar si el usuario ya existe
         if User.objects.filter(username=username).exists():
-            logger.warning(f"❌ Registro fallido: username ya existe ({username})")
+            logger.warning(f"[ERROR] Registro fallido: username ya existe ({username})")
             return Response(
                 {'error': 'El nombre de usuario ya está en uso'},
                 status=status.HTTP_400_BAD_REQUEST
             )
             
         if User.objects.filter(email=email).exists():
-            logger.warning(f"❌ Registro fallido: email ya registrado ({email})")
+            logger.warning(f"[ERROR] Registro fallido: email ya registrado ({email})")
             return Response(
                 {'error': 'El email ya está registrado'},
                 status=status.HTTP_400_BAD_REQUEST
@@ -1539,7 +1539,7 @@ def register_user(request):
             password=password
         )
         
-        logger.info(f"✅ Usuario registrado: {username}")
+        logger.info(f"[OK] Usuario registrado: {username}")
         
         return Response({
             'message': 'Usuario registrado exitosamente',

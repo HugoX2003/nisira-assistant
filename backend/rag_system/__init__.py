@@ -36,8 +36,8 @@ try:
     
     RAG_MODULES_AVAILABLE = True
 except ImportError as e:
-    print(f"⚠️  Algunos módulos RAG no están disponibles: {e}")
-    print("📦 Instala las dependencias con: pip install -r requirements.txt")
+    print(f"[WARN]  Algunos módulos RAG no están disponibles: {e}")
+    print("[PKG] Instala las dependencias con: pip install -r requirements.txt")
     RAG_MODULES_AVAILABLE = False
 
 def initialize_rag_system():

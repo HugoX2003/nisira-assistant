@@ -31,7 +31,7 @@ class Command(BaseCommand):
         - Sincroniza documentos desde Google Drive usando RAGPipeline
         - Procesa y genera embeddings
         """
-        self.stdout.write(self.style.SUCCESS('🚀 Iniciando sincronización completa desde Google Drive...'))
+        self.stdout.write(self.style.SUCCESS('[START] Iniciando sincronización completa desde Google Drive...'))
         
         try:
             # Importar RAGPipeline directamente
@@ -54,15 +54,15 @@ class Command(BaseCommand):
             result = pipeline.sync_and_process_documents(force_reprocess=force_reprocess)
             
             if result.get('success'):
-                self.stdout.write(self.style.SUCCESS('✅ Sincronización completada exitosamente'))
-                self.stdout.write(f"📊 Documentos procesados: {result.get('documents_processed', 0)}")
-                self.stdout.write(f"📝 Chunks generados: {result.get('chunks_generated', 0)}")
+                self.stdout.write(self.style.SUCCESS('[OK] Sincronización completada exitosamente'))
+                self.stdout.write(f"[STATS] Documentos procesados: {result.get('documents_processed', 0)}")
+                self.stdout.write(f"[NOTE] Chunks generados: {result.get('chunks_generated', 0)}")
             else:
-                self.stdout.write(self.style.ERROR(f'❌ Error: {result.get("error", "Unknown error")}'))
+                self.stdout.write(self.style.ERROR(f'[ERROR] Error: {result.get("error", "Unknown error")}'))
                 
         except ImportError as e:
-            self.stdout.write(self.style.ERROR(f'❌ Sistema RAG no disponible: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Sistema RAG no disponible: {e}'))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ Error durante sincronización: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Error durante sincronización: {e}'))
             import traceback
             self.stdout.write(traceback.format_exc())

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Sparkles } from 'lucide-react';
 import { register } from '../services/api';
 import '../styles/Login.css';
 
@@ -66,7 +67,7 @@ export default function Register({ onRegister, onBackToLogin }) {
     <div className="auth-page">
       <div className="auth-card">
         <header className="auth-header">
-          <div className="auth-logo">✨</div>
+          <div className="auth-logo"><Sparkles size={48} strokeWidth={1.5} /></div>
           <h1 className="auth-title">Crear cuenta</h1>
           <p className="auth-subtitle">Únete a NISIRA Assistant</p>
         </header>

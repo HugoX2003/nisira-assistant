@@ -48,7 +48,7 @@ def _register_uploaded_document(file_name: str, file_path: str, file_size: int, 
                 'uploaded_at': django_timezone.now(),
             }
         )
-        logger.info(f"✅ Registrado en UploadedDocument: {file_name}")
+        logger.info(f"[OK] Registrado en UploadedDocument: {file_name}")
     except Exception as e:
         logger.warning(f"No se pudo registrar en UploadedDocument: {e}")
 
@@ -72,12 +72,12 @@ class GoogleDriveManager:
         if self.use_postgres:
             self.file_store = PostgresFileStore(database_url)
             if self.file_store.is_ready():
-                logger.info("✅ Usando PostgreSQL para almacenamiento de archivos (PERSISTENTE)")
+                logger.info("[OK] Usando PostgreSQL para almacenamiento de archivos (PERSISTENTE)")
             else:
-                logger.warning("⚠️  PostgreSQL no disponible, usando filesystem (EFÍMERO)")
+                logger.warning("[WARN]  PostgreSQL no disponible, usando filesystem (EFÍMERO)")
                 self.use_postgres = False
         else:
-            logger.warning("⚠️  DATABASE_URL no configurado, usando filesystem (EFÍMERO)")
+            logger.warning("[WARN]  DATABASE_URL no configurado, usando filesystem (EFÍMERO)")
             self.use_postgres = False
         
         # Crear directorio de descarga temporal si no se usa PostgreSQL
@@ -97,7 +97,7 @@ class GoogleDriveManager:
             credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
             
             if not os.path.exists(credentials_path):
-                logger.error(f"❌ Archivo de credenciales no encontrado: {credentials_path}")
+                logger.error(f"[ERROR] Archivo de credenciales no encontrado: {credentials_path}")
                 return False
             
             # Cargar credenciales
@@ -108,12 +108,12 @@ class GoogleDriveManager:
             # Las Service Accounts tienen 0 quota, así que preferimos usar el token del usuario si existe
             if os.path.exists(self.token_path):
                 try:
-                    logger.info(f"🔑 Cargando token de usuario desde: {self.token_path}")
+                    logger.info(f"[KEY] Cargando token de usuario desde: {self.token_path}")
                     creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
                     
                     if creds:
                         if creds.expired and creds.refresh_token:
-                            logger.info("🔄 Refrescando token de usuario expirado...")
+                            logger.info("[SYNC] Refrescando token de usuario expirado...")
                             try:
                                 creds.refresh(Request())
                                 # Guardar token refrescado
@@ -126,10 +126,10 @@ class GoogleDriveManager:
                         if creds and creds.valid:
                             self.credentials = creds
                             self.service = build('drive', 'v3', credentials=self.credentials)
-                            logger.info("✅ Servicio inicializado con Token de Usuario (con cuota de almacenamiento)")
+                            logger.info("[OK] Servicio inicializado con Token de Usuario (con cuota de almacenamiento)")
                             return True
                 except Exception as e:
-                    logger.warning(f"⚠️ Error cargando token de usuario: {e}. Intentando con Service Account...")
+                    logger.warning(f"[WARN] Error cargando token de usuario: {e}. Intentando con Service Account...")
 
             # 2. Si no hay token válido, usar Service Account
             if 'type' in cred_data and cred_data['type'] == 'service_account':
@@ -138,30 +138,30 @@ class GoogleDriveManager:
                     credentials_path,
                     scopes=GOOGLE_DRIVE_CONFIG['scopes']
                 )
-                logger.info(f"✅ Service Account: {cred_data.get('client_email', 'N/A')}")
+                logger.info(f"[OK] Service Account: {cred_data.get('client_email', 'N/A')}")
                 
                 self.credentials = creds
                 self.service = build('drive', 'v3', credentials=self.credentials)
                 return True
             else:
                 # OAuth credentials (flujo antiguo - deprecated pero mantenido por compatibilidad)
-                logger.info("🔑 Usando OAuth credentials (flujo legacy)")
+                logger.info("[KEY] Usando OAuth credentials (flujo legacy)")
                 
                 creds = None
                 
                 # Intentar cargar token existente (si falló arriba o no existía)
                 if os.path.exists(self.token_path):
-                    logger.info(f"🔑 Cargando token desde: {self.token_path}")
+                    logger.info(f"[KEY] Cargando token desde: {self.token_path}")
                     creds = Credentials.from_authorized_user_file(self.token_path, GOOGLE_DRIVE_CONFIG['scopes'])
                 
                 # Si no hay credenciales válidas, autenticar
                 if not creds or not creds.valid:
                     if creds and creds.expired and creds.refresh_token:
-                        logger.info("🔄 Refrescando token expirado...")
+                        logger.info("[SYNC] Refrescando token expirado...")
                         creds.refresh(Request())
                     else:
                         # Flujo OAuth
-                        logger.info("🌐 Iniciando flujo de autenticación OAuth...")
+                        logger.info("[NET] Iniciando flujo de autenticación OAuth...")
                         flow = InstalledAppFlow.from_client_secrets_file(
                             credentials_path, 
                             GOOGLE_DRIVE_CONFIG['scopes']
@@ -173,17 +173,17 @@ class GoogleDriveManager:
                         with open(self.token_path, 'w') as token:
                             token.write(creds.to_json())
                         
-                        logger.info(f"✅ Token guardado en: {self.token_path}")
+                        logger.info(f"[OK] Token guardado en: {self.token_path}")
             
             self.credentials = creds
             
             # Construir servicio
             self.service = build('drive', 'v3', credentials=self.credentials)
-            logger.info("✅ Servicio de Google Drive inicializado correctamente")
+            logger.info("[OK] Servicio de Google Drive inicializado correctamente")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Error inicializando Google Drive: {e}")
+            logger.error(f"[ERROR] Error inicializando Google Drive: {e}")
             return False
     
     def is_authenticated(self) -> bool:
@@ -254,15 +254,15 @@ class GoogleDriveManager:
                 
                 logger.info(f"� Obtenidos {len(all_files)} archivos hasta ahora...")
             
-            logger.info(f"📁 Total: {len(all_files)} archivos en Google Drive")
+            logger.info(f"[DIR] Total: {len(all_files)} archivos en Google Drive")
             
             return all_files
             
         except HttpError as e:
-            logger.error(f"❌ Error listando archivos: {e}")
+            logger.error(f"[ERROR] Error listando archivos: {e}")
             return []
         except Exception as e:
-            logger.error(f"❌ Error inesperado: {e}")
+            logger.error(f"[ERROR] Error inesperado: {e}")
             return []
     
     def download_file(self, file_id: str, file_name: str, file_modified_time: str = None) -> Optional[str]:
@@ -294,7 +294,7 @@ class GoogleDriveManager:
             
             # Verificar tamaño si vamos a usar PostgreSQL
             if self.use_postgres and file_size > MAX_FILE_SIZE_POSTGRES:
-                logger.warning(f"⚠️ Archivo muy grande ({file_size / 1024 / 1024:.1f}MB): {file_name}")
+                logger.warning(f"[WARN] Archivo muy grande ({file_size / 1024 / 1024:.1f}MB): {file_name}")
                 logger.warning(f"   Límite para PostgreSQL: {MAX_FILE_SIZE_POSTGRES / 1024 / 1024:.0f}MB")
                 logger.warning(f"   Saltando archivo para evitar crash del servidor")
                 return "TOO_LARGE"
@@ -325,7 +325,7 @@ class GoogleDriveManager:
                     
                     # Verificar tamaño durante descarga
                     if self.use_postgres and downloaded_size > MAX_FILE_SIZE_POSTGRES:
-                        logger.warning(f"⚠️ Descarga excedió límite: {file_name} ({downloaded_size / 1024 / 1024:.1f}MB)")
+                        logger.warning(f"[WARN] Descarga excedió límite: {file_name} ({downloaded_size / 1024 / 1024:.1f}MB)")
                         return "TOO_LARGE"
                     logger.debug(f"Descarga {int(status.progress() * 100)}% - {file_name}")
             
@@ -344,7 +344,7 @@ class GoogleDriveManager:
                     except:
                         pass
                 
-                logger.info(f"💾 Guardando en PostgreSQL: {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
+                logger.info(f"[SAVE] Guardando en PostgreSQL: {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
                 
                 try:
                     saved_id = self.file_store.save_file(
@@ -361,7 +361,7 @@ class GoogleDriveManager:
                     )
                     
                     if saved_id:
-                        logger.info(f"✅ Guardado en PostgreSQL: {file_name} (ID: {saved_id})")
+                        logger.info(f"[OK] Guardado en PostgreSQL: {file_name} (ID: {saved_id})")
                         
                         # Registrar en UploadedDocument para el endpoint serve_document
                         _register_uploaded_document(
@@ -374,20 +374,20 @@ class GoogleDriveManager:
                         
                         return saved_id
                     else:
-                        logger.error(f"❌ Error guardando en PostgreSQL: {file_name}")
+                        logger.error(f"[ERROR] Error guardando en PostgreSQL: {file_name}")
                         return None
                         
                 except Exception as e:
                     # Detectar errores de OOM o memoria
                     error_msg = str(e).lower()
                     if 'memory' in error_msg or 'oom' in error_msg or 'out of memory' in error_msg:
-                        logger.error(f"❌ Error de memoria al guardar {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
+                        logger.error(f"[ERROR] Error de memoria al guardar {file_name} ({len(file_bytes) / 1024 / 1024:.1f}MB)")
                         logger.error(f"   Archivo muy grande para PostgreSQL, considere reducir MAX_FILE_SIZE_POSTGRES")
                     elif 'connection' in error_msg or 'closed' in error_msg:
-                        logger.error(f"❌ Conexión PostgreSQL perdida al guardar {file_name}")
+                        logger.error(f"[ERROR] Conexión PostgreSQL perdida al guardar {file_name}")
                         logger.error(f"   Posible crash del servidor - revisar logs de PostgreSQL")
                     else:
-                        logger.error(f"❌ Error inesperado al guardar {file_name}: {e}")
+                        logger.error(f"[ERROR] Error inesperado al guardar {file_name}: {e}")
                     return None
             else:
                 # Guardar en filesystem (fallback)
@@ -395,7 +395,7 @@ class GoogleDriveManager:
                 with open(local_path, 'wb') as f:
                     f.write(file_bytes)
                 
-                logger.info(f"📁 Archivo guardado en filesystem: {local_path}")
+                logger.info(f"[DIR] Archivo guardado en filesystem: {local_path}")
                 
                 # Registrar en UploadedDocument
                 _register_uploaded_document(
@@ -409,10 +409,10 @@ class GoogleDriveManager:
                 return local_path
             
         except HttpError as e:
-            logger.error(f"❌ Error descargando {file_name}: {e}")
+            logger.error(f"[ERROR] Error descargando {file_name}: {e}")
             return None
         except Exception as e:
-            logger.error(f"❌ Error inesperado descargando {file_name}: {e}")
+            logger.error(f"[ERROR] Error inesperado descargando {file_name}: {e}")
             return None
     
     def get_file_info(self, file_id: str) -> Optional[Dict[str, Any]]:
@@ -453,8 +453,8 @@ class GoogleDriveManager:
                 "error": "Servicio de Google Drive no inicializado"
             }
         
-        logger.info("🔄 Iniciando sincronización de documentos desde Google Drive")
-        logger.info(f"💾 Modo de almacenamiento: {'PostgreSQL (persistente)' if self.use_postgres else 'Filesystem (efímero)'}")
+        logger.info("[SYNC] Iniciando sincronización de documentos desde Google Drive")
+        logger.info(f"[SAVE] Modo de almacenamiento: {'PostgreSQL (persistente)' if self.use_postgres else 'Filesystem (efímero)'}")
         
         try:
             # Listar archivos en Drive
@@ -554,21 +554,21 @@ class GoogleDriveManager:
                 result["error_details"] = errors
             
             # Log resumen con detalles
-            logger.info(f"✅ Sincronización completada:")
-            logger.info(f"   📥 {len(downloaded_files)} descargados")
-            logger.info(f"   ⏭️  {len(skipped_files)} omitidos (ya existían)")
+            logger.info(f"[OK] Sincronización completada:")
+            logger.info(f"   [INFO] {len(downloaded_files)} descargados")
+            logger.info(f"   [INFO]  {len(skipped_files)} omitidos (ya existían)")
             if too_large_files:
-                logger.warning(f"   ⚠️  {len(too_large_files)} muy grandes (>50MB)")
+                logger.warning(f"   [WARN]  {len(too_large_files)} muy grandes (>50MB)")
                 logger.warning(f"   Archivos grandes omitidos: {', '.join(too_large_files[:5])}")
                 if len(too_large_files) > 5:
                     logger.warning(f"   ... y {len(too_large_files) - 5} más")
             if errors:
-                logger.error(f"   ❌ {len(errors)} errores")
+                logger.error(f"   [ERROR] {len(errors)} errores")
             
             return result
             
         except Exception as e:
-            logger.error(f"❌ Error en sincronización: {e}")
+            logger.error(f"[ERROR] Error en sincronización: {e}")
             return {
                 "success": False,
                 "error": str(e)
@@ -626,7 +626,7 @@ class GoogleDriveManager:
                 fields='id, name, mimeType, size, modifiedTime'
             ).execute()
             
-            logger.info(f"✅ Archivo subido a Drive: {upload_name} (ID: {file.get('id')})")
+            logger.info(f"[OK] Archivo subido a Drive: {upload_name} (ID: {file.get('id')})")
             
             return file
             
@@ -639,19 +639,19 @@ class GoogleDriveManager:
                 pass
 
             if e.resp.status == 403 and error_reason == 'storageQuotaExceeded':
-                logger.error("❌ ERROR DE CUOTA DE SERVICE ACCOUNT:")
+                logger.error("[ERROR] ERROR DE CUOTA DE SERVICE ACCOUNT:")
                 logger.error("   Las Service Accounts tienen 0 bytes de almacenamiento propio.")
                 logger.error("   SOLUCIÓN: Debes compartir una carpeta de tu Google Drive personal con el email del Service Account:")
-                logger.error(f"   📧 Email SA: {self.credentials.service_account_email if hasattr(self.credentials, 'service_account_email') else 'ver credentials.json'}")
+                logger.error(f"   [MAIL] Email SA: {self.credentials.service_account_email if hasattr(self.credentials, 'service_account_email') else 'ver credentials.json'}")
                 logger.error("   1. Crea una carpeta en tu Drive")
                 logger.error("   2. Comparte la carpeta con el email del SA (permiso Editor)")
                 logger.error("   3. Copia el ID de la carpeta (parte final de la URL)")
                 logger.error("   4. Configura la variable de entorno GOOGLE_DRIVE_FOLDER_ID con ese ID")
             
-            logger.error(f"❌ Error HTTP subiendo archivo: {e}")
+            logger.error(f"[ERROR] Error HTTP subiendo archivo: {e}")
             return None
         except Exception as e:
-            logger.error(f"❌ Error subiendo archivo: {e}")
+            logger.error(f"[ERROR] Error subiendo archivo: {e}")
             return None
     
     def delete_file(self, file_id: str) -> bool:
@@ -670,14 +670,14 @@ class GoogleDriveManager:
         
         try:
             self.service.files().delete(fileId=file_id).execute()
-            logger.info(f"✅ Archivo eliminado de Drive: {file_id}")
+            logger.info(f"[OK] Archivo eliminado de Drive: {file_id}")
             return True
             
         except HttpError as e:
-            logger.error(f"❌ Error HTTP eliminando archivo: {e}")
+            logger.error(f"[ERROR] Error HTTP eliminando archivo: {e}")
             return False
         except Exception as e:
-            logger.error(f"❌ Error eliminando archivo: {e}")
+            logger.error(f"[ERROR] Error eliminando archivo: {e}")
             return False
     
     def setup_folder_monitoring(self) -> bool:
@@ -689,7 +689,7 @@ class GoogleDriveManager:
         """
         # Placeholder para monitoreo en tiempo real
         # Requeriría webhooks o polling periódico
-        logger.info("⚠️  Monitoreo de carpetas no implementado aún")
+        logger.info("[WARN]  Monitoreo de carpetas no implementado aún")
         return False
     
     def get_sync_status(self) -> Dict[str, Any]:

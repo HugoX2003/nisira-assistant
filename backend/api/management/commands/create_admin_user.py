@@ -28,7 +28,7 @@ class Command(BaseCommand):
             user.save()
             
             self.stdout.write(
-                self.style.SUCCESS('✅ Contraseña de admin reseteada a: admin123')
+                self.style.SUCCESS('[OK] Contraseña de admin reseteada a: admin123')
             )
         else:
             User.objects.create_user(
@@ -40,7 +40,7 @@ class Command(BaseCommand):
             )
             
             self.stdout.write(
-                self.style.SUCCESS('✅ Usuario admin creado exitosamente')
+                self.style.SUCCESS('[OK] Usuario admin creado exitosamente')
             )
             self.stdout.write('   Usuario: admin')
             self.stdout.write('   Contraseña: admin123')

@@ -45,7 +45,7 @@ if _token_json_env and not _token_file_path.exists():
     try:
         _token_data = json.loads(_token_json_env)
         _token_file_path.write_text(json.dumps(_token_data, indent=2))
-        logging.info("✅ token.json creado desde variable de entorno")
+        logging.info("[OK] token.json creado desde variable de entorno")
     except Exception as e:
         logging.warning(f"No se pudo crear token.json desde env var: {e}")
 

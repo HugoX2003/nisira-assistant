@@ -15,29 +15,29 @@ def main():
     # Verificar que tenemos la URL de la base de datos
     database_url = os.getenv('DATABASE_URL')
     if not database_url:
-        print("❌ DATABASE_URL no está configurada")
+        print("[ERROR] DATABASE_URL no está configurada")
         print("   Configura la variable de entorno con la URL de PostgreSQL de producción")
         return
-    
-    print(f"🔗 Conectando a: {database_url[:50]}...")
-    
+
+    print(f"[INFO] Conectando a: {database_url[:50]}...")
+
     try:
         import psycopg2
     except ImportError:
-        print("❌ psycopg2 no está instalado. Ejecuta: pip install psycopg2-binary")
+        print("[ERROR] psycopg2 no está instalado. Ejecuta: pip install psycopg2-binary")
         return
-    
+
     try:
         conn = psycopg2.connect(database_url)
         cur = conn.cursor()
-        
+
         # 1. Contar total de embeddings
         cur.execute("SELECT COUNT(*) FROM rag_embeddings")
         total = cur.fetchone()[0]
-        print(f"\n📊 Total de embeddings en PostgreSQL: {total}")
-        
+        print(f"\n[STATS] Total de embeddings en PostgreSQL: {total}")
+
         # 2. Listar documentos únicos con sus chunks
-        print("\n📁 Documentos únicos por nombre de archivo:")
+        print("\n[DIR] Documentos únicos por nombre de archivo:")
         cur.execute("""
             SELECT 
                 COALESCE(metadata->>'source', metadata->>'file_name', 'Desconocido') as doc_name,
@@ -52,11 +52,11 @@ def main():
             # Resaltar si contiene "despliegue" o "gua"
             highlight = ""
             if 'despliegue' in doc_name.lower() or 'gua' in doc_name.lower():
-                highlight = " 🎯 <-- RELEVANTE"
+                highlight = " [GOAL] <-- RELEVANTE"
             print(f"   - {doc_name}: {chunks} chunks{highlight}")
-        
+
         # 3. Buscar específicamente documentos que contengan "despliegue" o "gua"
-        print("\n🔍 Buscando documentos con 'despliegue' o 'gua' en el nombre:")
+        print("\n[SEARCH] Buscando documentos con 'despliegue' o 'gua' en el nombre:")
         cur.execute("""
             SELECT DISTINCT 
                 COALESCE(metadata->>'source', metadata->>'file_name', 'Desconocido') as doc_name
@@ -70,12 +70,12 @@ def main():
         results = cur.fetchall()
         if results:
             for row in results:
-                print(f"   ✅ {row[0]}")
+                print(f"   [OK] {row[0]}")
         else:
-            print("   ❌ No se encontraron documentos con esos términos en el nombre")
-        
+            print("   [ERROR] No se encontraron documentos con esos términos en el nombre")
+
         # 4. Buscar en el contenido de los chunks
-        print("\n🔍 Buscando chunks que contengan 'autores' Y 'despliegue':")
+        print("\n[SEARCH] Buscando chunks que contengan 'autores' Y 'despliegue':")
         cur.execute("""
             SELECT 
                 COALESCE(metadata->>'source', 'Desconocido') as doc_name,
@@ -89,13 +89,13 @@ def main():
         results = cur.fetchall()
         if results:
             for row in results:
-                print(f"\n   📄 Documento: {row[0]}")
-                print(f"   📝 Preview: {row[1][:150]}...")
+                print(f"\n   [INFO] Documento: {row[0]}")
+                print(f"   [NOTE] Preview: {row[1][:150]}...")
         else:
-            print("   ❌ No se encontraron chunks con 'autores' y 'despliegue'")
-        
+            print("   [ERROR] No se encontraron chunks con 'autores' y 'despliegue'")
+
         # 5. Verificar dimensión de embeddings
-        print("\n📐 Verificando dimensión de embeddings:")
+        print("\n[INFO] Verificando dimensión de embeddings:")
         cur.execute("""
             SELECT 
                 vector_dims(embedding_vector) as dim
@@ -108,10 +108,10 @@ def main():
         
         cur.close()
         conn.close()
-        print("\n✅ Conexión cerrada")
-        
+        print("\n[OK] Conexión cerrada")
+
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         import traceback
         traceback.print_exc()
 

@@ -36,7 +36,7 @@ class PostgresVectorStore:
         self.use_vector_type = False  # Rastrear si pgvector está disponible
         
         if not PSYCOPG2_AVAILABLE:
-            logger.error("❌ psycopg2 no disponible")
+            logger.error("[ERROR] psycopg2 no disponible")
             return
         
         self._initialize_connection()
@@ -47,9 +47,9 @@ class PostgresVectorStore:
         try:
             self.conn = psycopg2.connect(self.database_url)
             self.conn.autocommit = False
-            logger.info("✅ Conectado a PostgreSQL para embeddings")
+            logger.info("[OK] Conectado a PostgreSQL para embeddings")
         except Exception as e:
-            logger.error(f"❌ Error conectando a PostgreSQL: {e}")
+            logger.error(f"[ERROR] Error conectando a PostgreSQL: {e}")
             self.conn = None
     
     def _ensure_table_exists(self):
@@ -66,9 +66,9 @@ class PostgresVectorStore:
                     self.conn.commit()
                     use_vector = True
                     self.use_vector_type = True
-                    logger.info("✅ Extensión pgvector habilitada")
+                    logger.info("[OK] Extensión pgvector habilitada")
                 except Exception as e:
-                    logger.warning(f"⚠️ pgvector no disponible, usando JSONB para vectores: {e}")
+                    logger.warning(f"[WARN] pgvector no disponible, usando JSONB para vectores: {e}")
                     self.conn.rollback()
                     use_vector = False
                     self.use_vector_type = False
@@ -87,12 +87,12 @@ class PostgresVectorStore:
                     column_type = existing_column[2]  # udt_name
                     
                     if use_vector and column_type != 'vector':
-                        logger.warning(f"⚠️ Columna embedding_vector es tipo '{column_type}', migrando a vector...")
+                        logger.warning(f"[WARN] Columna embedding_vector es tipo '{column_type}', migrando a vector...")
                         
                         # Renombrar tabla antigua
                         cur.execute("ALTER TABLE IF EXISTS rag_embeddings RENAME TO rag_embeddings_old;")
                         self.conn.commit()
-                        logger.info("✅ Tabla antigua respaldada como rag_embeddings_old")
+                        logger.info("[OK] Tabla antigua respaldada como rag_embeddings_old")
                 
                 # Crear tabla
                 if use_vector:
@@ -108,7 +108,7 @@ class PostgresVectorStore:
                         );
                     """)
                     self.conn.commit()
-                    logger.info("✅ Tabla rag_embeddings creada con tipo vector")
+                    logger.info("[OK] Tabla rag_embeddings creada con tipo vector")
                     
                     # Migrar datos de tabla antigua si existe
                     cur.execute("""
@@ -118,7 +118,7 @@ class PostgresVectorStore:
                         )
                     """)
                     if cur.fetchone()[0]:
-                        logger.info("🔄 Migrando datos de rag_embeddings_old...")
+                        logger.info("[SYNC] Migrando datos de rag_embeddings_old...")
                         try:
                             # Migrar datos - convertir TEXT/JSONB a vector
                             cur.execute(f"""
@@ -138,14 +138,14 @@ class PostgresVectorStore:
                             """)
                             migrated = cur.rowcount
                             self.conn.commit()
-                            logger.info(f"✅ {migrated} embeddings migrados exitosamente")
+                            logger.info(f"[OK] {migrated} embeddings migrados exitosamente")
                             
                             # Eliminar tabla antigua
                             cur.execute("DROP TABLE rag_embeddings_old;")
                             self.conn.commit()
-                            logger.info("✅ Tabla antigua eliminada")
+                            logger.info("[OK] Tabla antigua eliminada")
                         except Exception as migrate_error:
-                            logger.error(f"❌ Error migrando datos: {migrate_error}")
+                            logger.error(f"[ERROR] Error migrando datos: {migrate_error}")
                             self.conn.rollback()
                     
                     # Crear índice IVFFlat (solo si hay suficientes datos)
@@ -162,7 +162,7 @@ class PostgresVectorStore:
                             row_count = cur.fetchone()[0]
                             
                             if row_count > 1000:
-                                logger.info(f"📊 Creando índice IVFFlat para {row_count} embeddings...")
+                                logger.info(f"[STATS] Creando índice IVFFlat para {row_count} embeddings...")
                                 cur.execute(f"""
                                     CREATE INDEX idx_embedding_vector 
                                     ON rag_embeddings 
@@ -170,11 +170,11 @@ class PostgresVectorStore:
                                     WITH (lists = 100);
                                 """)
                                 self.conn.commit()
-                                logger.info("✅ Índice IVFFlat creado")
+                                logger.info("[OK] Índice IVFFlat creado")
                             else:
-                                logger.info(f"ℹ️  Solo {row_count} embeddings, índice IVFFlat se creará después de 1000+")
+                                logger.info(f"[INFO]  Solo {row_count} embeddings, índice IVFFlat se creará después de 1000+")
                     except Exception as idx_error:
-                        logger.warning(f"⚠️ No se pudo crear índice IVFFlat: {idx_error}")
+                        logger.warning(f"[WARN] No se pudo crear índice IVFFlat: {idx_error}")
                         self.conn.rollback()
                 else:
                     # Sin pgvector, usar JSONB
@@ -189,7 +189,7 @@ class PostgresVectorStore:
                         );
                     """)
                     self.conn.commit()
-                    logger.info("✅ Tabla rag_embeddings creada con tipo JSONB")
+                    logger.info("[OK] Tabla rag_embeddings creada con tipo JSONB")
                     
                     # Índice para metadata
                     try:
@@ -198,15 +198,15 @@ class PostgresVectorStore:
                             ON rag_embeddings USING gin(metadata);
                         """)
                         self.conn.commit()
-                        logger.info("✅ Índice GIN para metadata creado")
+                        logger.info("[OK] Índice GIN para metadata creado")
                     except Exception as idx_error:
-                        logger.warning(f"⚠️ Error creando índice metadata: {idx_error}")
+                        logger.warning(f"[WARN] Error creando índice metadata: {idx_error}")
                         self.conn.rollback()
                 
-                logger.info("✅ Tabla rag_embeddings lista")
+                logger.info("[OK] Tabla rag_embeddings lista")
                 
         except Exception as e:
-            logger.error(f"❌ Error creando tabla: {e}")
+            logger.error(f"[ERROR] Error creando tabla: {e}")
             if self.conn:
                 self.conn.rollback()
     
@@ -226,18 +226,18 @@ class PostgresVectorStore:
         Returns:
             True si fue exitoso
         """
-        logger.info(f"🔵 PostgreSQL add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
-        logger.info(f"🔵 DB connection status: {self.conn is not None}")
-        logger.info(f"🔵 DB URL configured: {bool(self.database_url)}")
+        logger.info(f"[INFO] PostgreSQL add_documents llamado con {len(documents)} docs, {len(embeddings)} embeddings")
+        logger.info(f"[INFO] DB connection status: {self.conn is not None}")
+        logger.info(f"[INFO] DB URL configured: {bool(self.database_url)}")
         
         if not self.is_ready():
-            logger.error("❌ PostgreSQL no está listo")
+            logger.error("[ERROR] PostgreSQL no está listo")
             logger.error(f"   - PSYCOPG2_AVAILABLE: {PSYCOPG2_AVAILABLE}")
             logger.error(f"   - self.conn: {self.conn}")
             return False
         
         if len(documents) != len(embeddings):
-            logger.error("❌ Número de documentos y embeddings no coinciden")
+            logger.error("[ERROR] Número de documentos y embeddings no coinciden")
             return False
         
         try:
@@ -272,15 +272,15 @@ class PostgresVectorStore:
                     ))
                 
                 if not values:
-                    logger.warning("⚠️ No hay documentos válidos para insertar")
+                    logger.warning("[WARN] No hay documentos válidos para insertar")
                     return True
                 
-                logger.info(f"🔵 Preparados {len(values)} valores para insertar en PostgreSQL")
-                logger.info(f"🔵 Usando tipo: {'vector' if self.use_vector_type else 'JSONB'}")
-                logger.info(f"🔵 Muestra del primer valor: id={values[0][0][:8]}..., texto_len={len(values[0][1])}")
+                logger.info(f"[INFO] Preparados {len(values)} valores para insertar en PostgreSQL")
+                logger.info(f"[INFO] Usando tipo: {'vector' if self.use_vector_type else 'JSONB'}")
+                logger.info(f"[INFO] Muestra del primer valor: id={values[0][0][:8]}..., texto_len={len(values[0][1])}")
                 
                 # Inserción batch con el tipo correcto
-                logger.info("🔵 Ejecutando INSERT batch en PostgreSQL...")
+                logger.info("[INFO] Ejecutando INSERT batch en PostgreSQL...")
                 if self.use_vector_type:
                     # Con pgvector
                     execute_values(
@@ -306,19 +306,19 @@ class PostgresVectorStore:
                         template="(%s, %s, %s::jsonb, %s, %s, %s)"
                     )
                 
-                logger.info("🔵 INSERT completado, ejecutando COMMIT...")
+                logger.info("[INFO] INSERT completado, ejecutando COMMIT...")
                 self.conn.commit()
-                logger.info(f"✅ {len(values)} documentos CONFIRMADOS en PostgreSQL (COMMIT exitoso)")
+                logger.info(f"[OK] {len(values)} documentos CONFIRMADOS en PostgreSQL (COMMIT exitoso)")
                 
                 # Verificar que realmente se insertaron
                 cur.execute("SELECT COUNT(*) FROM rag_embeddings")
                 total_count = cur.fetchone()[0]
-                logger.info(f"📊 Total de documentos en tabla rag_embeddings: {total_count}")
+                logger.info(f"[STATS] Total de documentos en tabla rag_embeddings: {total_count}")
                 
                 return True
                 
         except Exception as e:
-            logger.error(f"❌ Error insertando documentos: {e}")
+            logger.error(f"[ERROR] Error insertando documentos: {e}")
             if self.conn:
                 self.conn.rollback()
             return False
@@ -338,7 +338,7 @@ class PostgresVectorStore:
             Lista de documentos similares con scores
         """
         if not self.is_ready():
-            logger.error("❌ PostgreSQL no está listo")
+            logger.error("[ERROR] PostgreSQL no está listo")
             return []
         
         try:
@@ -432,11 +432,11 @@ class PostgresVectorStore:
                         if len(results) >= n_results:
                             break
                 
-                logger.info(f"🔍 Búsqueda completada: {len(results)} resultados")
+                logger.info(f"[SEARCH] Búsqueda completada: {len(results)} resultados")
                 return results
                 
         except Exception as e:
-            logger.error(f"❌ Error en búsqueda: {e}")
+            logger.error(f"[ERROR] Error en búsqueda: {e}")
             return []
     
     def get_collection_stats(self) -> Dict[str, Any]:
@@ -469,7 +469,7 @@ class PostgresVectorStore:
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo estadísticas: {e}")
+            logger.error(f"[ERROR] Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
     
     def list_all_documents(self) -> Dict[str, Any]:
@@ -521,7 +521,7 @@ class PostgresVectorStore:
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error listando documentos: {e}")
+            logger.error(f"[ERROR] Error listando documentos: {e}")
             return {"success": False, "error": str(e)}
     
     def check_document_exists(self, file_name: str, file_hash: str = None) -> bool:
@@ -558,7 +558,7 @@ class PostgresVectorStore:
                 return count > 0
                 
         except Exception as e:
-            logger.error(f"❌ Error verificando duplicado: {e}")
+            logger.error(f"[ERROR] Error verificando duplicado: {e}")
             return False
     
     def get_processed_files(self) -> List[Dict[str, Any]]:
@@ -601,7 +601,7 @@ class PostgresVectorStore:
                 return results
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo archivos procesados: {e}")
+            logger.error(f"[ERROR] Error obteniendo archivos procesados: {e}")
             return []
     
     def delete_document_embeddings(self, file_name: str, file_hash: str = None) -> int:
@@ -637,11 +637,11 @@ class PostgresVectorStore:
                 deleted_count = len(cur.fetchall())
                 self.conn.commit()
                 
-                logger.info(f"🗑️ Eliminados {deleted_count} embeddings de '{file_name}'")
+                logger.info(f"[DEL] Eliminados {deleted_count} embeddings de '{file_name}'")
                 return deleted_count
                 
         except Exception as e:
-            logger.error(f"❌ Error eliminando embeddings: {e}")
+            logger.error(f"[ERROR] Error eliminando embeddings: {e}")
             self.conn.rollback()
             return 0
 
@@ -660,7 +660,7 @@ class PostgresVectorStore:
             Lista de documentos con scores léxicos
         """
         if not self.is_ready():
-            logger.error("❌ PostgreSQL no está listo para búsqueda léxica")
+            logger.error("[ERROR] PostgreSQL no está listo para búsqueda léxica")
             return []
         
         try:
@@ -678,10 +678,10 @@ class PostgresVectorStore:
                 keywords = [w for w in words if len(w) > 2 and w not in stopwords]
             
             if not keywords:
-                logger.warning("⚠️ No se encontraron keywords para búsqueda léxica")
+                logger.warning("[WARN] No se encontraron keywords para búsqueda léxica")
                 return []
             
-            logger.info(f"🔤 Búsqueda léxica con keywords: {keywords[:10]}")
+            logger.info(f"[INFO] Búsqueda léxica con keywords: {keywords[:10]}")
             
             with self.conn.cursor() as cur:
                 # Construir condiciones de búsqueda
@@ -710,7 +710,7 @@ class PostgresVectorStore:
                     if kw_lower not in question_words and len(kw_lower) > 3:
                         important_keywords.append(kw_lower)
                 
-                logger.info(f"🔑 Keywords importantes para boost: {important_keywords[:5]}")
+                logger.info(f"[KEY] Keywords importantes para boost: {important_keywords[:5]}")
                 
                 # Query con scoring basado en coincidencias
                 # BOOST MUCHO MÁS ALTO (0.8) para keywords importantes
@@ -769,7 +769,7 @@ class PostgresVectorStore:
                     # Log chunks con bonus alto
                     if imp_kw_bonus and imp_kw_bonus > 0:
                         source = (metadata or {}).get('source', 'unknown')[:40]
-                        logger.info(f"🎯 Chunk con keyword importante: {source} (bonus: +{imp_kw_bonus:.2f})")
+                        logger.info(f"[GOAL] Chunk con keyword importante: {source} (bonus: +{imp_kw_bonus:.2f})")
                     
                     results.append({
                         'id': str(doc_id),
@@ -787,11 +787,11 @@ class PostgresVectorStore:
                     if len(results) >= n_results:
                         break
                 
-                logger.info(f"🔤 Búsqueda léxica completada: {len(results)} resultados")
+                logger.info(f"[INFO] Búsqueda léxica completada: {len(results)} resultados")
                 return results
                 
         except Exception as e:
-            logger.error(f"❌ Error en búsqueda léxica: {e}")
+            logger.error(f"[ERROR] Error en búsqueda léxica: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -847,7 +847,7 @@ class PostgresVectorStore:
                     normalized_keywords.add('guia')
             
             keywords = list(normalized_keywords)
-            logger.info(f"🔍 Keywords normalizadas para búsqueda en metadatos: {keywords}")
+            logger.info(f"[SEARCH] Keywords normalizadas para búsqueda en metadatos: {keywords}")
             
             with self.conn.cursor() as cur:
                 # Buscar en el campo metadata->>'source' (nombre del archivo)
@@ -903,7 +903,7 @@ class PostgresVectorStore:
                     # BOOST ESPECIAL: Si el nombre contiene "despliegue" o "guia/gua"
                     if 'despliegue' in source_name or 'gua' in source_name:
                         score = min(1.0, score + 0.3)
-                        logger.info(f"🎯 Boost especial para: {source_name}")
+                        logger.info(f"[GOAL] Boost especial para: {source_name}")
                     
                     if score > 0:
                         results.append({
@@ -917,11 +917,11 @@ class PostgresVectorStore:
                 # Ordenar por score
                 results.sort(key=lambda x: x['similarity_score'], reverse=True)
                 
-                logger.info(f"📂 Búsqueda por metadatos completada: {len(results)} resultados")
+                logger.info(f"[INFO] Búsqueda por metadatos completada: {len(results)} resultados")
                 return results[:n_results]
                 
         except Exception as e:
-            logger.error(f"❌ Error en búsqueda por metadatos: {e}")
+            logger.error(f"[ERROR] Error en búsqueda por metadatos: {e}")
             import traceback
             traceback.print_exc()
             return []
@@ -960,7 +960,7 @@ class PostgresVectorStore:
                 return results
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo documentos: {e}")
+            logger.error(f"[ERROR] Error obteniendo documentos: {e}")
             return []
 
     def reset_collection(self) -> int:
@@ -982,11 +982,11 @@ class PostgresVectorStore:
                 cur.execute("TRUNCATE TABLE rag_embeddings;")
                 self.conn.commit()
                 
-                logger.info(f"🔄 Tabla rag_embeddings vaciada: {count} embeddings eliminados")
+                logger.info(f"[SYNC] Tabla rag_embeddings vaciada: {count} embeddings eliminados")
                 return count
                 
         except Exception as e:
-            logger.error(f"❌ Error vaciando tabla: {e}")
+            logger.error(f"[ERROR] Error vaciando tabla: {e}")
             if self.conn:
                 self.conn.rollback()
             return 0
@@ -995,4 +995,4 @@ class PostgresVectorStore:
         """Cerrar conexión"""
         if self.conn:
             self.conn.close()
-            logger.info("✅ Conexión PostgreSQL cerrada")
+            logger.info("[OK] Conexión PostgreSQL cerrada")

@@ -20,16 +20,16 @@ def sync_postgres_to_uploaded_docs():
     Sincronizar archivos de la tabla document_files (PostgreSQL) 
     a la tabla api_uploadeddocument (Django)
     """
-    print("🔄 Iniciando sincronización de metadatos...")
-    
+    print("[SYNC] Iniciando sincronización de metadatos...")
+
     store = PostgresFileStore()
     if not store.is_ready():
-        print("❌ No se pudo conectar a PostgreSQL")
+        print("[ERROR] No se pudo conectar a PostgreSQL")
         return
 
     # Obtener todos los archivos de PostgreSQL
     files = store.list_files(limit=10000)
-    print(f"📊 Encontrados {len(files)} archivos en PostgreSQL")
+    print(f"[STATS] Encontrados {len(files)} archivos en PostgreSQL")
     
     count = 0
     updated = 0
@@ -54,18 +54,18 @@ def sync_postgres_to_uploaded_docs():
             )
             
             if created:
-                print(f"✅ Creado registro para: {file_name}")
+                print(f"[OK] Creado registro para: {file_name}")
                 count += 1
             else:
                 # Si existía pero apuntaba a otro lado, actualizar
                 if not doc.file_path.startswith('postgres://'):
-                    print(f"📝 Actualizado path para: {file_name}")
+                    print(f"[NOTE] Actualizado path para: {file_name}")
                     updated += 1
-                    
+
         except Exception as e:
-            print(f"❌ Error procesando {file_info.get('file_name')}: {e}")
-            
-    print(f"\n✨ Sincronización completada:")
+            print(f"[ERROR] Error procesando {file_info.get('file_name')}: {e}")
+
+    print(f"\n[NEW] Sincronización completada:")
     print(f"   - Nuevos registros: {count}")
     print(f"   - Actualizados: {updated}")
 

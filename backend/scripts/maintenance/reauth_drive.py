@@ -12,36 +12,36 @@ django.setup()
 from rag_system.drive_sync.drive_manager import GoogleDriveManager
 
 def main():
-    print("🔐 Re-autenticando Google Drive con nuevos permisos...")
+    print("[INFO] Re-autenticando Google Drive con nuevos permisos...")
     print("=" * 60)
-    
+
     # Crear instancia del manager
     drive_manager = GoogleDriveManager()
-    
+
     # Verificar autenticación
     if drive_manager.is_authenticated():
-        print("✅ Google Drive autenticado correctamente!")
-        print(f"📁 Folder ID: {drive_manager.folder_id}")
-        
+        print("[OK] Google Drive autenticado correctamente!")
+        print(f"[DIR] Folder ID: {drive_manager.folder_id}")
+
         # Listar archivos para verificar
-        print("\n📋 Listando archivos en Google Drive...")
+        print("\n[LIST] Listando archivos en Google Drive...")
         try:
             files = drive_manager.list_files()
-            print(f"✅ Se encontraron {len(files)} archivos")
-            
+            print(f"[OK] Se encontraron {len(files)} archivos")
+
             for i, file in enumerate(files[:5], 1):
                 print(f"  {i}. {file.get('name')} ({file.get('mimeType')})")
-            
+
             if len(files) > 5:
                 print(f"  ... y {len(files) - 5} archivos más")
-            
-            print("\n✅ ¡Todo listo! Ahora puedes subir y eliminar archivos desde el panel de administración.")
-            
+
+            print("\n[OK] ¡Todo listo! Ahora puedes subir y eliminar archivos desde el panel de administración.")
+
         except Exception as e:
-            print(f"⚠️ Error listando archivos: {e}")
+            print(f"[WARN] Error listando archivos: {e}")
             print("Pero la autenticación fue exitosa.")
     else:
-        print("❌ Error: No se pudo autenticar con Google Drive")
+        print("[ERROR] Error: No se pudo autenticar con Google Drive")
         print("Verifica que el archivo credentials.json esté en la carpeta backend/")
         return 1
     

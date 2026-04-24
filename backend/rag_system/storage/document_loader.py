@@ -29,9 +29,9 @@ class DocumentLoader:
         if self.use_postgres:
             self.file_store = PostgresFileStore(database_url)
             if self.file_store.is_ready():
-                logger.info("✅ DocumentLoader usando PostgreSQL")
+                logger.info("[OK] DocumentLoader usando PostgreSQL")
             else:
-                logger.warning("⚠️  PostgreSQL no disponible, usando filesystem")
+                logger.warning("[WARN]  PostgreSQL no disponible, usando filesystem")
                 self.use_postgres = False
         else:
             self.use_postgres = False
@@ -60,7 +60,7 @@ class DocumentLoader:
                 )
                 
                 if not file_data:
-                    logger.error(f"❌ Archivo no encontrado en PostgreSQL: {file_name}")
+                    logger.error(f"[ERROR] Archivo no encontrado en PostgreSQL: {file_name}")
                     raise FileNotFoundError(f"Archivo no encontrado: {file_name}")
                 
                 # Crear archivo temporal
@@ -73,7 +73,7 @@ class DocumentLoader:
                     temp_file.write(file_data['file_content'])
                     temp_path = temp_file.name
                 
-                logger.debug(f"📄 Archivo temporal creado: {file_name} -> {temp_path}")
+                logger.debug(f"[INFO] Archivo temporal creado: {file_name} -> {temp_path}")
                 yield temp_path
             else:
                 # Usar filesystem directamente
@@ -91,9 +91,9 @@ class DocumentLoader:
             if temp_path and os.path.exists(temp_path):
                 try:
                     os.unlink(temp_path)
-                    logger.debug(f"🗑️  Archivo temporal eliminado: {temp_path}")
+                    logger.debug(f"[DEL]  Archivo temporal eliminado: {temp_path}")
                 except Exception as e:
-                    logger.warning(f"⚠️  Error eliminando archivo temporal: {e}")
+                    logger.warning(f"[WARN]  Error eliminando archivo temporal: {e}")
     
     def list_available_files(self):
         """

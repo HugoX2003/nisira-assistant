@@ -16,8 +16,8 @@ if not User.objects.filter(username='admin').exists():
         is_staff=True,
         is_superuser=True
     )
-    print("✅ Usuario admin creado exitosamente")
+    print("[OK] Usuario admin creado exitosamente")
     print("   Usuario: admin")
     print("   Contraseña: admin123")
 else:
-    print("ℹ️  Usuario admin ya existe")
+    print("[INFO]  Usuario admin ya existe")

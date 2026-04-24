@@ -41,9 +41,9 @@ logger = logging.getLogger(__name__)
 
 # DEBUG: Log de configuración al cargar el módulo
 print("=" * 80)
-print("🚀 RAG PIPELINE MODULE LOADED")
-print(f"🔍 VECTOR_STORE_CONFIG: {VECTOR_STORE_CONFIG}")
-print(f"🔍 DATABASE_URL presente: {bool(VECTOR_STORE_CONFIG.get('database_url'))}")
+print("[START] RAG PIPELINE MODULE LOADED")
+print(f"[SEARCH] VECTOR_STORE_CONFIG: {VECTOR_STORE_CONFIG}")
+print(f"[SEARCH] DATABASE_URL presente: {bool(VECTOR_STORE_CONFIG.get('database_url'))}")
 print("=" * 80)
 
 class RAGPipeline:
@@ -64,22 +64,22 @@ class RAGPipeline:
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
         
-        logger.info(f"🔍 Vector store backend configurado: {vector_backend}")
-        logger.info(f"🔍 DATABASE_URL presente: {bool(database_url)}")
+        logger.info(f"[SEARCH] Vector store backend configurado: {vector_backend}")
+        logger.info(f"[SEARCH] DATABASE_URL presente: {bool(database_url)}")
         
         if vector_backend == 'postgres' and database_url:
             try:
                 self.vector_store = PostgresVectorStore(database_url)
-                logger.info("✅ Usando PostgreSQL como vector store")
+                logger.info("[OK] Usando PostgreSQL como vector store")
             except Exception as e:
-                logger.error(f"❌ Error al inicializar PostgreSQL: {e}")
-                logger.warning("⚠️ Fallback a ChromaDB")
+                logger.error(f"[ERROR] Error al inicializar PostgreSQL: {e}")
+                logger.warning("[WARN] Fallback a ChromaDB")
                 self.vector_store = ChromaManager()
         else:
             if vector_backend == 'postgres' and not database_url:
-                logger.warning("⚠️ PostgreSQL configurado pero DATABASE_URL no disponible, usando ChromaDB")
+                logger.warning("[WARN] PostgreSQL configurado pero DATABASE_URL no disponible, usando ChromaDB")
             self.vector_store = ChromaManager()
-            logger.info("✅ Usando ChromaDB como vector store")
+            logger.info("[OK] Usando ChromaDB como vector store")
         
         # Alias para compatibilidad
         self.chroma_manager = self.vector_store
@@ -102,7 +102,7 @@ class RAGPipeline:
         from ..config import RAG_CONFIG
         
         provider = RAG_CONFIG["generation"]["provider"]
-        logger.info(f"🤖 Inicializando LLM con proveedor: {provider}")
+        logger.info(f"[BOT] Inicializando LLM con proveedor: {provider}")
         
         try:
             if provider == "openrouter":
@@ -112,11 +112,11 @@ class RAGPipeline:
             elif provider == "google":
                 self._initialize_google_llm()
             else:
-                logger.error(f"❌ Proveedor no soportado: {provider}")
+                logger.error(f"[ERROR] Proveedor no soportado: {provider}")
                 return
                 
         except Exception as e:
-            logger.error(f"❌ Error inicializando LLM {provider}: {e}")
+            logger.error(f"[ERROR] Error inicializando LLM {provider}: {e}")
             # Fallback a modo solo búsqueda
             self.llm = None
     
@@ -125,7 +125,7 @@ class RAGPipeline:
         try:
             from langchain_openai import ChatOpenAI
         except ImportError:
-            logger.error("❌ langchain_openai no disponible. Instalar con: pip install langchain-openai")
+            logger.error("[ERROR] langchain_openai no disponible. Instalar con: pip install langchain-openai")
             return
             
         from ..config import RAG_CONFIG
@@ -134,7 +134,7 @@ class RAGPipeline:
         api_key = config["api_key"]
         
         if not api_key or api_key == "your_openrouter_api_key_here":
-            logger.warning("❌ API key de OpenRouter no configurada")
+            logger.warning("[ERROR] API key de OpenRouter no configurada")
             return
         
         self.llm = ChatOpenAI(
@@ -144,14 +144,14 @@ class RAGPipeline:
             temperature=0.7,
             max_tokens=2048
         )
-        logger.info(f"✅ LLM OpenRouter inicializado: {config['model']}")
+        logger.info(f"[OK] LLM OpenRouter inicializado: {config['model']}")
     
     def _initialize_groq_llm(self):
         """Inicializar Groq LLM"""
         try:
             from langchain_groq import ChatGroq
         except ImportError:
-            logger.error("❌ langchain_groq no disponible. Instalar con: pip install langchain-groq")
+            logger.error("[ERROR] langchain_groq no disponible. Instalar con: pip install langchain-groq")
             return
             
         from ..config import RAG_CONFIG
@@ -160,7 +160,7 @@ class RAGPipeline:
         api_key = config["api_key"]
         
         if not api_key or api_key == "your_groq_api_key_here":
-            logger.warning("❌ API key de Groq no configurada")
+            logger.warning("[ERROR] API key de Groq no configurada")
             return
         
         self.llm = ChatGroq(
@@ -169,17 +169,17 @@ class RAGPipeline:
             temperature=0.7,
             max_tokens=2048
         )
-        logger.info(f"✅ LLM Groq inicializado: {config['model']}")
+        logger.info(f"[OK] LLM Groq inicializado: {config['model']}")
     
     def _initialize_google_llm(self):
         """Inicializar Google Gemini LLM (método original)"""
         if not LANGCHAIN_GOOGLE_AVAILABLE:
-            logger.warning("❌ LangChain Google no disponible")
+            logger.warning("[ERROR] LangChain Google no disponible")
             return
 
         api_key = os.getenv('GOOGLE_API_KEY')
         if not api_key:
-            logger.warning("❌ API key de Google no configurada")
+            logger.warning("[ERROR] API key de Google no configurada")
             return
 
         self.llm = ChatGoogleGenerativeAI(
@@ -188,7 +188,7 @@ class RAGPipeline:
             temperature=0.7,
             max_tokens=1024
         )
-        logger.info("✅ LLM Google Gemini inicializado")
+        logger.info("[OK] LLM Google Gemini inicializado")
     
     def is_ready(self) -> Dict[str, bool]:
         """Verificar estado de todos los componentes"""
@@ -621,29 +621,29 @@ PREGUNTA DEL USUARIO: {question}
 DOCUMENTOS DISPONIBLES:
 {context}
 
-📋 REGLAS DE RELEVANCIA:
+[LIST] REGLAS DE RELEVANCIA:
 - SOLO usa documentos que traten DIRECTAMENTE el tema preguntado
 - Si preguntan sobre TEMA X, NO uses documentos de TEMA Y aunque parezcan relacionados
 - Si no hay información relevante, dilo honestamente
 
-✍️ ESTILO DE RESPUESTA:
+[INFO] ESTILO DE RESPUESTA:
 - Responde de forma NATURAL y CONVERSACIONAL, como un profesor explicando a un estudiante
 - NO seas robótico ni telegráfico - desarrolla las ideas con fluidez
 - Explica los conceptos, no solo los menciones
 - Conecta las ideas entre sí para dar contexto
 - Usa un tono amigable pero profesional
 
-📝 ESTRUCTURA SUGERIDA:
+[NOTE] ESTRUCTURA SUGERIDA:
 1. **Introducción breve**: Contextualiza el tema en 1-2 oraciones
 2. **Desarrollo**: Explica los puntos principales de forma clara y conectada
 3. **Citas de apoyo**: Incluye citas textuales relevantes entre comillas con la fuente
 4. **Conclusión o resumen** (opcional): Si aplica, cierra con una síntesis
 
-💡 EJEMPLO DE BUEN ESTILO:
+[TIP] EJEMPLO DE BUEN ESTILO:
 En lugar de: "Concepto X. Definición Y. (fuente.pdf)"
 Escribe: "El concepto X es fundamental porque... Según el documento, 'definición textual' (fuente.pdf). Esto significa que en la práctica..."
 
-🎯 FORMATO:
+[GOAL] FORMATO:
 - Usa **negritas** para conceptos clave
 - Usa > para citas textuales importantes
 - Organiza con párrafos fluidos, no listas excesivas
@@ -769,7 +769,7 @@ Responde en español de forma natural y completa:"""
             total_chunks = docs_info.get('total_chunks', 0)
             
             if total_docs == 0:
-                answer = """📚 **No tengo documentos almacenados actualmente.**
+                answer = """[DOCS] **No tengo documentos almacenados actualmente.**
 
 Para que pueda ayudarte, necesitas sincronizar documentos desde Google Drive usando el endpoint de sincronización.
 
@@ -786,7 +786,7 @@ Una vez que tengas documentos, podré responder preguntas sobre su contenido."""
                     docs_by_type[ext].append(doc)
                 
                 # Construir respuesta amigable
-                answer = f"""📚 **Documentos disponibles en mi base de conocimiento**
+                answer = f"""[DOCS] **Documentos disponibles en mi base de conocimiento**
 
 Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total_chunks} fragmentos** para búsqueda eficiente.
 
@@ -794,12 +794,12 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                 # Listar por tipo
                 for doc_type, docs in sorted(docs_by_type.items()):
                     type_name = {
-                        'pdf': '📄 Documentos PDF',
-                        'txt': '📝 Archivos de texto',
-                        'md': '📋 Archivos Markdown',
-                        'docx': '📃 Documentos Word',
-                        'otros': '📁 Otros archivos'
-                    }.get(doc_type, f'📁 Archivos .{doc_type}')
+                        'pdf': '[INFO] Documentos PDF',
+                        'txt': '[NOTE] Archivos de texto',
+                        'md': '[LIST] Archivos Markdown',
+                        'docx': '[INFO] Documentos Word',
+                        'otros': '[DIR] Otros archivos'
+                    }.get(doc_type, f'[DIR] Archivos .{doc_type}')
                     
                     answer += f"### {type_name} ({len(docs)})\n\n"
                     
@@ -819,7 +819,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                     answer += "\n"
                 
                 answer += """---
-💡 **¿Cómo puedo ayudarte?** Pregúntame sobre cualquiera de estos temas y buscaré la información relevante en los documentos."""
+[TIP] **¿Cómo puedo ayudarte?** Pregúntame sobre cualquiera de estos temas y buscaré la información relevante en los documentos."""
             
             return {
                 "success": True,
@@ -885,10 +885,10 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         
         # Si no hay identificadores específicos, no filtrar
         if not question_identifiers:
-            logger.info("🔍 No se detectaron identificadores específicos, sin filtrado temático")
+            logger.info("[SEARCH] No se detectaron identificadores específicos, sin filtrado temático")
             return docs
         
-        logger.info(f"🔍 Identificadores detectados en pregunta: {question_identifiers}")
+        logger.info(f"[SEARCH] Identificadores detectados en pregunta: {question_identifiers}")
         
         filtered_docs = []
         excluded_count = 0
@@ -929,7 +929,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                 if common_identifiers:
                     # Coincidencia directa - documento relevante
                     filtered_docs.append(doc)
-                    logger.debug(f"✅ Documento relevante: {source} (coincide: {common_identifiers})")
+                    logger.debug(f"[OK] Documento relevante: {source} (coincide: {common_identifiers})")
                 else:
                     # El documento tiene otros identificadores - probablemente no es relevante
                     # Verificar si es un documento "general" que podría aplicar
@@ -940,16 +940,16 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                     
                     if is_general_doc:
                         filtered_docs.append(doc)
-                        logger.debug(f"⚠️ Documento general incluido: {source}")
+                        logger.debug(f"[WARN] Documento general incluido: {source}")
                     else:
                         excluded_count += 1
-                        logger.debug(f"❌ Documento excluido: {source} (tiene: {doc_identifiers}, busca: {question_identifiers})")
+                        logger.debug(f"[ERROR] Documento excluido: {source} (tiene: {doc_identifiers}, busca: {question_identifiers})")
             else:
                 # Documento sin identificadores específicos - incluir con menor prioridad
                 filtered_docs.append(doc)
         
         if excluded_count > 0:
-            logger.info(f"🚫 Filtrado temático: {excluded_count} documentos excluidos por no coincidir con el tema")
+            logger.info(f"[INFO] Filtrado temático: {excluded_count} documentos excluidos por no coincidir con el tema")
         
         return filtered_docs
     
@@ -992,7 +992,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         all_results = []
         seen_ids = set()
         
-        logger.info(f"🔍 Iniciando búsqueda híbrida optimizada para: '{original_query}'")
+        logger.info(f"[SEARCH] Iniciando búsqueda híbrida optimizada para: '{original_query}'")
         
         # Obtener configuración de pesos
         config = self.config.get("retrieval", {})
@@ -1021,7 +1021,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                     doc['original_score'] = doc.get('similarity_score', 0)
                     all_results.append(doc)
                     seen_ids.add(doc_id)
-            logger.info(f"📊 Búsqueda semántica: {len(semantic_docs)} documentos (peso: {semantic_weight})")
+            logger.info(f"[STATS] Búsqueda semántica: {len(semantic_docs)} documentos (peso: {semantic_weight})")
         except Exception as e:
             logger.warning(f"Error en búsqueda semántica: {e}")
         
@@ -1051,7 +1051,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                                 # Multiplicador alto para que los chunks con keywords importantes dominen
                                 boost_amount = important_kw_bonus * 0.8
                                 base_score = min(1.0, base_score + boost_amount)
-                                logger.info(f"🔥 Boost por keyword importante en chunk: +{boost_amount:.2f}")
+                                logger.info(f"[INFO] Boost por keyword importante en chunk: +{boost_amount:.2f}")
                             
                             doc['id'] = doc_id
                             doc['search_type'] = 'lexical'
@@ -1059,7 +1059,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                             doc['original_score'] = doc.get('similarity_score', 0)
                             all_results.append(doc)
                             seen_ids.add(doc_id)
-                    logger.info(f"📊 Búsqueda léxica: {len(lexical_docs)} documentos (peso: {lexical_weight})")
+                    logger.info(f"[STATS] Búsqueda léxica: {len(lexical_docs)} documentos (peso: {lexical_weight})")
                 else:
                     # Fallback a búsqueda léxica en ChromaDB
                     lexical_docs = self._smart_lexical_search(keywords, original_query, max_results)
@@ -1073,7 +1073,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                             doc['original_score'] = doc.get('similarity_score', 0)
                             all_results.append(doc)
                             seen_ids.add(doc_id)
-                    logger.info(f"📊 Búsqueda léxica (fallback): {len(lexical_docs)} documentos")
+                    logger.info(f"[STATS] Búsqueda léxica (fallback): {len(lexical_docs)} documentos")
         except Exception as e:
             logger.warning(f"Error en búsqueda lexical: {e}")
             import traceback
@@ -1109,9 +1109,9 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                     seen_ids.add(doc['id'])
                     
                     if metadata_boost > 0:
-                        logger.info(f"🎯 Boost por metadata: {source_name[:50]} -> +{metadata_boost:.2f}")
+                        logger.info(f"[GOAL] Boost por metadata: {source_name[:50]} -> +{metadata_boost:.2f}")
                         
-            logger.info(f"📊 Búsqueda por metadatos: {len(metadata_docs)} documentos")
+            logger.info(f"[STATS] Búsqueda por metadatos: {len(metadata_docs)} documentos")
         except Exception as e:
             logger.warning(f"Error en búsqueda por metadatos: {e}")
         
@@ -1127,7 +1127,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                         doc['original_score'] = doc.get('similarity_score', 0)
                         all_results.append(doc)
                         seen_ids.add(doc['id'])
-                logger.info(f"📊 Búsqueda expandida: {len(expanded_docs)} documentos adicionales")
+                logger.info(f"[STATS] Búsqueda expandida: {len(expanded_docs)} documentos adicionales")
             except Exception as e:
                 logger.warning(f"Error en búsqueda expandida: {e}")
         
@@ -1141,7 +1141,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
             config.get("max_per_source")
         )
         
-        logger.info(f"✅ Búsqueda híbrida completada: {len(diverse_results)} documentos únicos (de {len(all_results)} totales)")
+        logger.info(f"[OK] Búsqueda híbrida completada: {len(diverse_results)} documentos únicos (de {len(all_results)} totales)")
         
         return diverse_results[:top_k]
     
@@ -1346,7 +1346,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
             
             # Fallback a ChromaDB si no hay resultados de PostgreSQL o no está disponible
             if not hasattr(self.chroma_manager, 'collection') or self.chroma_manager.collection is None:
-                logger.warning("⚠️ No hay colección disponible para búsqueda de metadatos")
+                logger.warning("[WARN] No hay colección disponible para búsqueda de metadatos")
                 return []
                 
             collection = self.chroma_manager.collection

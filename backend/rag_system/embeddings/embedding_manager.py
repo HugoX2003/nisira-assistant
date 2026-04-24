@@ -106,7 +106,7 @@ class EmbeddingManager:
     def _initialize_providers(self):
         """Inicializar proveedores de embeddings disponibles"""
         if not LANGCHAIN_AVAILABLE:
-            logger.error("❌ Ningún proveedor de embeddings está disponible (instala sentence-transformers o langchain-google-genai)")
+            logger.error("[ERROR] Ningún proveedor de embeddings está disponible (instala sentence-transformers o langchain-google-genai)")
             return
         
         self.available_providers = {}
@@ -121,9 +121,9 @@ class EmbeddingManager:
                     'rate_limit': 60,  # requests per minute
                     'free_quota': True
                 }
-                logger.info("✅ Google Gemini disponible para embeddings (MODELO AVANZADO)")
+                logger.info("[OK] Google Gemini disponible para embeddings (MODELO AVANZADO)")
             except Exception as e:
-                logger.warning(f"⚠️  Error configurando Google Gemini: {e}")
+                logger.warning(f"[WARN]  Error configurando Google Gemini: {e}")
         
         # Hugging Face (gratuito, sin API key necesaria)
         if HUGGINGFACE_AVAILABLE or SENTENCE_TRANSFORMERS_AVAILABLE:
@@ -137,11 +137,11 @@ class EmbeddingManager:
                     'free_quota': True,
                     'backend': backend
                 }
-                logger.info("✅ Hugging Face disponible para embeddings (MÁXIMA CALIDAD - 768D)")
+                logger.info("[OK] Hugging Face disponible para embeddings (MÁXIMA CALIDAD - 768D)")
             except Exception as e:
-                logger.warning(f"⚠️  Error configurando Hugging Face: {e}")
+                logger.warning(f"[WARN]  Error configurando Hugging Face: {e}")
         else:
-            logger.warning("⚠️  No se encontraron adaptadores de Hugging Face; instala sentence-transformers")
+            logger.warning("[WARN]  No se encontraron adaptadores de Hugging Face; instala sentence-transformers")
         
         # Seleccionar proveedor por defecto (preferir HuggingFace para ahorrar cuota de Google)
         if 'huggingface' in self.available_providers:
@@ -149,7 +149,7 @@ class EmbeddingManager:
         elif 'google' in self.available_providers:
             self.current_provider = 'google'
         else:
-            logger.error("❌ No hay proveedores de embeddings disponibles")
+            logger.error("[ERROR] No hay proveedores de embeddings disponibles")
     
     def is_ready(self) -> bool:
         """Verificar si el sistema está listo para generar embeddings"""
@@ -198,9 +198,9 @@ class EmbeddingManager:
                     )
                 elif SENTENCE_TRANSFORMERS_AVAILABLE and SentenceTransformerAdapter is not None:
                     model = SentenceTransformerAdapter(provider_info.get('model'))
-                    logger.info("ℹ️  Usando SentenceTransformer directo para embeddings Hugging Face")
+                    logger.info("[INFO]  Usando SentenceTransformer directo para embeddings Hugging Face")
                 elif HUGGINGFACE_AVAILABLE and HuggingFaceEmbeddings is not None:
-                    logger.warning("⚠️  Usando backend langchain_community (deprecado); instala sentence-transformers para un adaptador nativo")
+                    logger.warning("[WARN]  Usando backend langchain_community (deprecado); instala sentence-transformers para un adaptador nativo")
                     model = HuggingFaceEmbeddings(
                         model_name=provider_info.get('model'),
                         model_kwargs={'device': 'cpu'},
@@ -214,12 +214,12 @@ class EmbeddingManager:
             
             # Cachear modelo
             self.embedding_models[provider] = model
-            logger.info(f"✅ Modelo {provider} inicializado correctamente")
+            logger.info(f"[OK] Modelo {provider} inicializado correctamente")
             
             return model
             
         except Exception as e:
-            logger.error(f"❌ Error inicializando modelo {provider}: {e}")
+            logger.error(f"[ERROR] Error inicializando modelo {provider}: {e}")
             raise
     
     def _get_text_hash(self, text: str) -> str:
@@ -267,13 +267,13 @@ class EmbeddingManager:
             Vector de embedding o None si falló
         """
         if not text.strip():
-            logger.warning("⚠️  Texto vacío, no se puede crear embedding")
+            logger.warning("[WARN]  Texto vacío, no se puede crear embedding")
             return None
         
         provider = provider or self.current_provider
         
         if not self.is_ready():
-            logger.error("❌ Sistema de embeddings no está listo")
+            logger.error("[ERROR] Sistema de embeddings no está listo")
             return None
         
         try:
@@ -282,7 +282,7 @@ class EmbeddingManager:
             cache_key = f"{provider}_{text_hash}"
             
             if cache_key in self.cache:
-                logger.debug("📋 Embedding obtenido del cache")
+                logger.debug("[LIST] Embedding obtenido del cache")
                 return self.cache[cache_key]
             
             # Truncar texto si es necesario
@@ -296,21 +296,21 @@ class EmbeddingManager:
             embedding = self._normalize_vector(embedding)
             
             if embedding is None:
-                logger.error("❌ El backend de embeddings devolvió un resultado vacío")
+                logger.error("[ERROR] El backend de embeddings devolvió un resultado vacío")
                 return None
 
             # Cachear resultado
             self.cache[cache_key] = embedding
             
-            logger.debug(f"✅ Embedding creado con {provider}: {len(embedding)} dimensiones")
+            logger.debug(f"[OK] Embedding creado con {provider}: {len(embedding)} dimensiones")
             return embedding
             
         except Exception as e:
-            logger.error(f"❌ Error creando embedding con {provider}: {e}")
+            logger.error(f"[ERROR] Error creando embedding con {provider}: {e}")
             
             # Intentar con otro proveedor si está disponible
             if provider != 'huggingface' and 'huggingface' in self.available_providers:
-                logger.info("🔄 Intentando con Hugging Face como respaldo")
+                logger.info("[SYNC] Intentando con Hugging Face como respaldo")
                 return self.create_embedding(text, 'huggingface')
             
             return None
@@ -334,10 +334,10 @@ class EmbeddingManager:
         provider = provider or self.current_provider
         
         if not self.is_ready():
-            logger.error("❌ Sistema de embeddings no está listo")
+            logger.error("[ERROR] Sistema de embeddings no está listo")
             return [None] * len(texts)
         
-        logger.info(f"🔄 Procesando {len(texts)} textos con {provider}")
+        logger.info(f"[SYNC] Procesando {len(texts)} textos con {provider}")
         
         # Para Hugging Face, usar procesamiento por lotes OPTIMIZADO
         if provider == 'huggingface':
@@ -361,7 +361,7 @@ class EmbeddingManager:
                     
                     # Log progreso detallado
                     progress = min(i + batch_size, len(processed_texts))
-                    logger.info(f"📊 Embeddings 768D: {progress}/{len(processed_texts)} ({(progress/len(processed_texts)*100):.1f}%)")
+                    logger.info(f"[STATS] Embeddings 768D: {progress}/{len(processed_texts)} ({(progress/len(processed_texts)*100):.1f}%)")
                     
                     # Pequeña pausa para evitar sobrecarga
                     import time
@@ -375,11 +375,11 @@ class EmbeddingManager:
                     cache_key = f"{provider}_{text_hash}"
                     self.cache[cache_key] = embedding
                 
-                logger.info(f"✅ {len(embeddings)} embeddings creados en mini-batches optimizados")
+                logger.info(f"[OK] {len(embeddings)} embeddings creados en mini-batches optimizados")
                 return embeddings
                 
             except Exception as e:
-                logger.error(f"❌ Error en procesamiento por lotes: {e}")
+                logger.error(f"[ERROR] Error en procesamiento por lotes: {e}")
                 # Fallar al procesamiento individual
         
         # Procesamiento individual con hilos paralelos
@@ -399,14 +399,14 @@ class EmbeddingManager:
                     embeddings.append(self._normalize_vector(embedding))
                     
                     if (i + 1) % 10 == 0:
-                        logger.info(f"📊 Progreso: {i + 1}/{len(texts)} embeddings")
+                        logger.info(f"[STATS] Progreso: {i + 1}/{len(texts)} embeddings")
                         
                 except Exception as e:
-                    logger.error(f"❌ Error procesando texto {i}: {e}")
+                    logger.error(f"[ERROR] Error procesando texto {i}: {e}")
                     embeddings.append(None)
         
         successful = len([e for e in embeddings if e is not None])
-        logger.info(f"✅ Procesamiento completado: {successful}/{len(texts)} exitosos")
+        logger.info(f"[OK] Procesamiento completado: {successful}/{len(texts)} exitosos")
         
         return embeddings
     
@@ -435,7 +435,7 @@ class EmbeddingManager:
                 return 0
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo dimensión: {e}")
+            logger.error(f"[ERROR] Error obteniendo dimensión: {e}")
             return 0
     
     def calculate_similarity(self, embedding1: List[float], embedding2: List[float]) -> float:
@@ -450,7 +450,7 @@ class EmbeddingManager:
             Similitud coseno (0-1)
         """
         if not NUMPY_AVAILABLE:
-            logger.warning("⚠️  NumPy no disponible, usando cálculo básico")
+            logger.warning("[WARN]  NumPy no disponible, usando cálculo básico")
             
             # Cálculo manual de similitud coseno
             dot_product = sum(a * b for a, b in zip(embedding1, embedding2))
@@ -473,7 +473,7 @@ class EmbeddingManager:
             return float(similarity)
             
         except Exception as e:
-            logger.error(f"❌ Error calculando similitud: {e}")
+            logger.error(f"[ERROR] Error calculando similitud: {e}")
             return 0.0
     
     def get_provider_info(self) -> Dict[str, Any]:
@@ -503,7 +503,7 @@ class EmbeddingManager:
             True si el cambio fue exitoso
         """
         if provider not in self.available_providers:
-            logger.error(f"❌ Proveedor no disponible: {provider}")
+            logger.error(f"[ERROR] Proveedor no disponible: {provider}")
             return False
         
         try:
@@ -513,20 +513,20 @@ class EmbeddingManager:
             
             if test_embedding:
                 self.current_provider = provider
-                logger.info(f"✅ Proveedor cambiado a: {provider}")
+                logger.info(f"[OK] Proveedor cambiado a: {provider}")
                 return True
             else:
-                logger.error(f"❌ Error probando proveedor: {provider}")
+                logger.error(f"[ERROR] Error probando proveedor: {provider}")
                 return False
                 
         except Exception as e:
-            logger.error(f"❌ Error cambiando a proveedor {provider}: {e}")
+            logger.error(f"[ERROR] Error cambiando a proveedor {provider}: {e}")
             return False
     
     def clear_cache(self):
         """Limpiar cache de embeddings"""
         self.cache.clear()
-        logger.info("🧹 Cache de embeddings limpiado")
+        logger.info("[CLEAN] Cache de embeddings limpiado")
     
     def get_stats(self) -> Dict[str, Any]:
         """

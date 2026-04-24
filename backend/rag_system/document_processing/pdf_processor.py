@@ -22,7 +22,7 @@ try:
     DEPENDENCIES_AVAILABLE = True
 except ImportError as e:
     DEPENDENCIES_AVAILABLE = False
-    print(f"⚠️ Dependencias PDF no disponibles: {e}")
+    print(f"[WARN] Dependencias PDF no disponibles: {e}")
     
     # Definir Document como clase simple para evitar errores
     class Document:
@@ -53,7 +53,7 @@ class PDFProcessor:
         self.chunk_overlap = chunk_config["chunk_overlap"] 
         self.min_chunk_size = chunk_config["min_chunk_size"]
         
-        logger.info(f"📄 Configuración para {file_extension}: chunk_size={self.chunk_size}, overlap={self.chunk_overlap}, min_size={self.min_chunk_size}")
+        logger.info(f"[INFO] Configuración para {file_extension}: chunk_size={self.chunk_size}, overlap={self.chunk_overlap}, min_size={self.min_chunk_size}")
         
         # Text splitter inteligente con LangChain
         if DEPENDENCIES_AVAILABLE:
@@ -104,7 +104,7 @@ class PDFProcessor:
         
         try:
             filename = os.path.basename(pdf_path)
-            logger.info(f"📄 Procesando PDF: {filename}")
+            logger.info(f"[INFO] Procesando PDF: {filename}")
             
             # 1. Cargar documento con LangChain - CON MANEJO DE ERRORES Y EXTRACCIÓN MEJORADA
             try:
@@ -117,17 +117,17 @@ class PDFProcessor:
                 
                 # Si PyPDF falla, intentar con extracción alternativa
                 if not documents or all(len(doc.page_content.strip()) < 50 for doc in documents):
-                    logger.warning(f"⚠️ Extracción pobre con PyPDF, intentando método alternativo para {filename}")
+                    logger.warning(f"[WARN] Extracción pobre con PyPDF, intentando método alternativo para {filename}")
                     documents = self._extract_with_fallback(pdf_path)
                     
             except Exception as pdf_error:
-                logger.error(f"❌ Error cargando PDF {filename}: {pdf_error}")
+                logger.error(f"[ERROR] Error cargando PDF {filename}: {pdf_error}")
                 # Intentar método de fallback
                 try:
-                    logger.info(f"🔄 Intentando extracción alternativa para {filename}")
+                    logger.info(f"[SYNC] Intentando extracción alternativa para {filename}")
                     documents = self._extract_with_fallback(pdf_path)
                 except Exception as fallback_error:
-                    logger.error(f"❌ Extracción alternativa también falló: {fallback_error}")
+                    logger.error(f"[ERROR] Extracción alternativa también falló: {fallback_error}")
                     return {
                         "success": False,
                         "error": f"Error al cargar PDF: {pdf_error}",
@@ -135,7 +135,7 @@ class PDFProcessor:
                     }
             
             if not documents:
-                logger.warning(f"⚠️ PDF vacío: {filename}")
+                logger.warning(f"[WARN] PDF vacío: {filename}")
                 return {
                     "success": False,
                     "error": "PDF vacío o sin contenido extraíble",
@@ -197,7 +197,7 @@ class PDFProcessor:
                 
                 processed_chunks.append(chunk_data)
             
-            logger.info(f"✅ Procesado: {len(processed_chunks)} chunks de {len(documents)} páginas")
+            logger.info(f"[OK] Procesado: {len(processed_chunks)} chunks de {len(documents)} páginas")
             
             # 5. Estadísticas
             total_chars = sum(len(chunk['text']) for chunk in processed_chunks)
@@ -226,7 +226,7 @@ class PDFProcessor:
             }
             
         except Exception as e:
-            logger.error(f"❌ Error procesando PDF {pdf_path}: {e}")
+            logger.error(f"[ERROR] Error procesando PDF {pdf_path}: {e}")
             return {
                 "success": False,
                 "error": str(e),
@@ -359,7 +359,7 @@ class PDFProcessor:
                             documents.append(doc)
                 
                 if documents:
-                    logger.info(f"✅ Extracción exitosa con pdfplumber: {len(documents)} páginas")
+                    logger.info(f"[OK] Extracción exitosa con pdfplumber: {len(documents)} páginas")
                     return documents
                     
             except ImportError:
@@ -393,7 +393,7 @@ class PDFProcessor:
                                 documents.append(doc)
                 
                 if documents:
-                    logger.info(f"✅ Extracción exitosa con PyPDF2: {len(documents)} páginas")
+                    logger.info(f"[OK] Extracción exitosa con PyPDF2: {len(documents)} páginas")
                     return documents
                     
             except Exception as e:

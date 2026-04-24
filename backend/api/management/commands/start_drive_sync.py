@@ -60,25 +60,25 @@ class Command(BaseCommand):
     
     def _setup_google_drive(self):
         """Ejecuta configuración inicial"""
-        self.stdout.write("🚀 Iniciando configuración de Google Drive...")
+        self.stdout.write("[START] Iniciando configuración de Google Drive...")
         
         try:
             from setup_google_drive import setup_google_drive
             success = setup_google_drive()
             
             if success:
-                self.stdout.write(self.style.SUCCESS('✅ Configuración completada'))
+                self.stdout.write(self.style.SUCCESS('[OK] Configuración completada'))
             else:
-                self.stdout.write(self.style.ERROR('❌ Error en configuración'))
+                self.stdout.write(self.style.ERROR('[ERROR] Error en configuración'))
                 
         except ImportError:
-            self.stdout.write(self.style.ERROR('❌ Módulo setup_google_drive no encontrado'))
+            self.stdout.write(self.style.ERROR('[ERROR] Módulo setup_google_drive no encontrado'))
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ Error: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Error: {e}'))
     
     def _sync_once(self):
         """Ejecuta sincronización única"""
-        self.stdout.write("🔄 Iniciando sincronización única...")
+        self.stdout.write("[SYNC] Iniciando sincronización única...")
         
         try:
             from google_drive_sync import GoogleDriveSync, create_sync_config
@@ -88,13 +88,13 @@ class Command(BaseCommand):
             load_dotenv()
             
             if not os.getenv("GOOGLE_DRIVE_ENABLED", "false").lower() == "true":
-                self.stdout.write(self.style.WARNING('⚠️ Google Drive sync deshabilitado'))
+                self.stdout.write(self.style.WARNING('[WARN] Google Drive sync deshabilitado'))
                 return
             
             config = create_sync_config()
             
             if not config.drive_folder_id:
-                self.stdout.write(self.style.ERROR('❌ GOOGLE_DRIVE_FOLDER_ID no configurado'))
+                self.stdout.write(self.style.ERROR('[ERROR] GOOGLE_DRIVE_FOLDER_ID no configurado'))
                 self.stdout.write('Ejecuta: python manage.py start_drive_sync --action setup')
                 return
             
@@ -103,27 +103,27 @@ class Command(BaseCommand):
             
             # Inicializar API
             if not sync_system.initialize_drive_api():
-                self.stdout.write(self.style.ERROR('❌ Error inicializando Google Drive API'))
+                self.stdout.write(self.style.ERROR('[ERROR] Error inicializando Google Drive API'))
                 return
             
             # Ejecutar sincronización
             stats = sync_system.sync_once()
             
             # Mostrar resultados
-            self.stdout.write(self.style.SUCCESS('✅ Sincronización completada'))
-            self.stdout.write(f"📄 Archivos encontrados: {stats['files_found']}")
-            self.stdout.write(f"📥 Archivos descargados: {stats['files_downloaded']}")
-            self.stdout.write(f"🔄 Archivos procesados: {stats['files_processed']}")
+            self.stdout.write(self.style.SUCCESS('[OK] Sincronización completada'))
+            self.stdout.write(f"[INFO] Archivos encontrados: {stats['files_found']}")
+            self.stdout.write(f"[INFO] Archivos descargados: {stats['files_downloaded']}")
+            self.stdout.write(f"[SYNC] Archivos procesados: {stats['files_processed']}")
             
             if stats['errors'] > 0:
-                self.stdout.write(self.style.WARNING(f"⚠️ Errores: {stats['errors']}"))
+                self.stdout.write(self.style.WARNING(f"[WARN] Errores: {stats['errors']}"))
             
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ Error en sincronización: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Error en sincronización: {e}'))
     
     def _start_daemon(self, interval_minutes):
         """Inicia servicio daemon"""
-        self.stdout.write(f"🚀 Iniciando servicio daemon (cada {interval_minutes} minutos)...")
+        self.stdout.write(f"[START] Iniciando servicio daemon (cada {interval_minutes} minutos)...")
         
         try:
             from google_drive_sync import GoogleDriveSync, create_sync_config
@@ -133,7 +133,7 @@ class Command(BaseCommand):
             load_dotenv()
             
             if not os.getenv("GOOGLE_DRIVE_ENABLED", "false").lower() == "true":
-                self.stdout.write(self.style.ERROR('❌ Google Drive sync deshabilitado'))
+                self.stdout.write(self.style.ERROR('[ERROR] Google Drive sync deshabilitado'))
                 return
             
             config = create_sync_config()
@@ -144,13 +144,13 @@ class Command(BaseCommand):
             
             # Inicializar API
             if not sync_system.initialize_drive_api():
-                self.stdout.write(self.style.ERROR('❌ Error inicializando Google Drive API'))
+                self.stdout.write(self.style.ERROR('[ERROR] Error inicializando Google Drive API'))
                 return
             
             # Iniciar servicio
             sync_system.start_background_sync()
             
-            self.stdout.write(self.style.SUCCESS('✅ Servicio iniciado'))
+            self.stdout.write(self.style.SUCCESS('[OK] Servicio iniciado'))
             self.stdout.write('Presiona Ctrl+C para detener...')
             
             # Mantener vivo
@@ -158,16 +158,16 @@ class Command(BaseCommand):
                 while sync_system.running:
                     time.sleep(10)
             except KeyboardInterrupt:
-                self.stdout.write('\n🔚 Deteniendo servicio...')
+                self.stdout.write('\n[INFO] Deteniendo servicio...')
                 sync_system.stop_background_sync()
-                self.stdout.write(self.style.SUCCESS('✅ Servicio detenido'))
+                self.stdout.write(self.style.SUCCESS('[OK] Servicio detenido'))
             
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ Error: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Error: {e}'))
     
     def _show_status(self):
         """Muestra estado del sistema"""
-        self.stdout.write("📊 ESTADO DEL SISTEMA GOOGLE DRIVE SYNC")
+        self.stdout.write("[STATS] ESTADO DEL SISTEMA GOOGLE DRIVE SYNC")
         self.stdout.write("=" * 50)
         
         try:
@@ -180,19 +180,19 @@ class Command(BaseCommand):
             interval = os.getenv("SYNC_INTERVAL_MINUTES", "30")
             auto_process = os.getenv("AUTO_PROCESS_NEW_FILES", "true").lower() == "true"
             
-            self.stdout.write(f"🔧 Habilitado: {'✅ Sí' if enabled else '❌ No'}")
-            self.stdout.write(f"📁 Carpeta ID: {folder_id if folder_id else '❌ No configurado'}")
+            self.stdout.write(f"[CONFIG] Habilitado: {'[OK] Sí' if enabled else '[ERROR] No'}")
+            self.stdout.write(f"[DIR] Carpeta ID: {folder_id if folder_id else '[ERROR] No configurado'}")
             self.stdout.write(f"⏱️ Intervalo: {interval} minutos")
-            self.stdout.write(f"🔄 Auto-proceso: {'✅ Sí' if auto_process else '❌ No'}")
+            self.stdout.write(f"[SYNC] Auto-proceso: {'[OK] Sí' if auto_process else '[ERROR] No'}")
             
             # Verificar archivos
             backend_path = Path(__file__).parent.parent.parent.parent
             creds_path = backend_path / "credentials.json"
             token_path = backend_path / "token.json"
             
-            self.stdout.write(f"\n📋 ARCHIVOS:")
-            self.stdout.write(f"🔑 credentials.json: {'✅ Existe' if creds_path.exists() else '❌ No existe'}")
-            self.stdout.write(f"🎫 token.json: {'✅ Existe' if token_path.exists() else '❌ No existe'}")
+            self.stdout.write(f"\n[LIST] ARCHIVOS:")
+            self.stdout.write(f"[KEY] credentials.json: {'[OK] Existe' if creds_path.exists() else '[ERROR] No existe'}")
+            self.stdout.write(f"[INFO] token.json: {'[OK] Existe' if token_path.exists() else '[ERROR] No existe'}")
             
             # Estado de directorios
             data_dir = backend_path / "data"
@@ -200,10 +200,10 @@ class Command(BaseCommand):
             pdfs_dir = data_dir / "pdfs"
             texts_dir = data_dir / "texts"
             
-            self.stdout.write(f"\n📁 DIRECTORIOS:")
-            self.stdout.write(f"📥 downloads: {'✅' if downloads_dir.exists() else '❌'}")
-            self.stdout.write(f"📄 pdfs: {'✅' if pdfs_dir.exists() else '❌'}")
-            self.stdout.write(f"📝 texts: {'✅' if texts_dir.exists() else '❌'}")
+            self.stdout.write(f"\n[DIR] DIRECTORIOS:")
+            self.stdout.write(f"[INFO] downloads: {'[OK]' if downloads_dir.exists() else '[ERROR]'}")
+            self.stdout.write(f"[INFO] pdfs: {'[OK]' if pdfs_dir.exists() else '[ERROR]'}")
+            self.stdout.write(f"[NOTE] texts: {'[OK]' if texts_dir.exists() else '[ERROR]'}")
             
             # Contar archivos procesados
             processed_file = data_dir / "processed_files.json"
@@ -212,11 +212,11 @@ class Command(BaseCommand):
                 with open(processed_file, 'r') as f:
                     data = json.load(f)
                     processed_count = len(data.get('processed_files', []))
-                    self.stdout.write(f"📊 Archivos procesados: {processed_count}")
+                    self.stdout.write(f"[STATS] Archivos procesados: {processed_count}")
             
             if not enabled:
-                self.stdout.write(f"\n💡 Para habilitar:")
+                self.stdout.write(f"\n[TIP] Para habilitar:")
                 self.stdout.write(f"   python manage.py start_drive_sync --action setup")
             
         except Exception as e:
-            self.stdout.write(self.style.ERROR(f'❌ Error: {e}'))
+            self.stdout.write(self.style.ERROR(f'[ERROR] Error: {e}'))

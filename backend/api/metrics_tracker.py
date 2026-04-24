@@ -48,19 +48,19 @@ class MetricsTracker:
         self.query_text = query_text
         self.user = user
         self.conversation = conversation
-        logger.info(f"📊 Iniciando tracking de métricas para query: {self.query_id[:8]}")
+        logger.info(f"[STATS] Iniciando tracking de métricas para query: {self.query_id[:8]}")
     
     def mark_first_token(self):
         """Marcar cuando se genera el primer token"""
         if self.start_time and not self.first_token_time:
             self.first_token_time = time.time()
             ttft = self.first_token_time - self.start_time
-            logger.debug(f"⚡ Time to First Token: {ttft:.3f}s")
+            logger.debug(f"[FAST] Time to First Token: {ttft:.3f}s")
     
     def start_retrieval(self):
         """Iniciar medición de tiempo de recuperación"""
         self.retrieval_start = time.time()
-        logger.debug(f"🔍 Iniciando recuperación de documentos")
+        logger.debug(f"[SEARCH] Iniciando recuperación de documentos")
     
     def end_retrieval(self, num_documents: int, k: int = 5):
         """Finalizar medición de recuperación"""
@@ -69,19 +69,19 @@ class MetricsTracker:
             self.documents_retrieved = num_documents
             self.top_k = k
             retrieval_time = self.retrieval_end - self.retrieval_start
-            logger.debug(f"✅ Recuperación completada: {num_documents} docs en {retrieval_time:.3f}s")
+            logger.debug(f"[OK] Recuperación completada: {num_documents} docs en {retrieval_time:.3f}s")
     
     def start_generation(self):
         """Iniciar medición de tiempo de generación"""
         self.generation_start = time.time()
-        logger.debug(f"🧠 Iniciando generación de respuesta")
+        logger.debug(f"[BRAIN] Iniciando generación de respuesta")
     
     def end_generation(self):
         """Finalizar medición de generación"""
         if self.generation_start:
             self.generation_end = time.time()
             generation_time = self.generation_end - self.generation_start
-            logger.debug(f"✅ Generación completada en {generation_time:.3f}s")
+            logger.debug(f"[OK] Generación completada en {generation_time:.3f}s")
     
     def set_answer_and_contexts(self, answer: str, contexts: List[str]):
         """
@@ -93,7 +93,7 @@ class MetricsTracker:
         """
         self.answer = answer
         self.contexts = contexts
-        logger.debug(f"📝 Guardado para evaluación: respuesta ({len(answer)} chars) y {len(contexts)} contextos")
+        logger.debug(f"[NOTE] Guardado para evaluación: respuesta ({len(answer)} chars) y {len(contexts)} contextos")
     
     def is_complex_query(self, query_text: str) -> tuple:
         """
@@ -148,7 +148,7 @@ class MetricsTracker:
         """
         try:
             if not self.start_time:
-                logger.warning("⚠️  No se puede guardar métricas: no hay start_time")
+                logger.warning("[WARN]  No se puede guardar métricas: no hay start_time")
                 return None
             
             end_time = time.time()
@@ -191,7 +191,7 @@ class MetricsTracker:
                 top_k=self.top_k
             )
             
-            logger.info(f"✅ Métricas de rendimiento guardadas: {self.query_id[:8]} - {total_latency:.3f}s")
+            logger.info(f"[OK] Métricas de rendimiento guardadas: {self.query_id[:8]} - {total_latency:.3f}s")
             
             # TIMESTAMPS DETALLADOS
             start_timestamp = datetime.fromtimestamp(self.start_time).isoformat()
@@ -217,7 +217,7 @@ class MetricsTracker:
                     tokens_generados = len(self.answer.split())  # Aproximación: palabras como tokens
                     velocidad_procesamiento = tokens_generados / total_latency if total_latency > 0 else 0
                     
-                    logger.info(f"\n🚀 VELOCIDAD DE PROCESAMIENTO:")
+                    logger.info(f"\n[START] VELOCIDAD DE PROCESAMIENTO:")
                     logger.info(f"Tokens generados: {tokens_generados}")
                     logger.info(f"Tiempo total: {total_latency:.4f}s")
                     logger.info(f"Velocidad = tokens / tiempo")
@@ -233,7 +233,7 @@ class MetricsTracker:
                         try:
                             from .ragas_evaluator import RAGASEvaluator
                             
-                            logger.info(f"🔍 Evaluando CALIDAD DE RESPUESTA con RAGAS...")
+                            logger.info(f"[SEARCH] Evaluando CALIDAD DE RESPUESTA con RAGAS...")
                             ragas_evaluator = RAGASEvaluator()
                             ragas_scores = ragas_evaluator.evaluate_response(
                                 question=self.query_text or "",
@@ -247,13 +247,13 @@ class MetricsTracker:
                             answer_relevancy = ragas_scores.get('answer_relevancy', 0.0)
                             context_precision = ragas_scores.get('context_precision', 0.0)
                         except ImportError as e:
-                            logger.warning(f"⚠️ RAGAS no disponible (requiere git): {e}")
+                            logger.warning(f"[WARN] RAGAS no disponible (requiere git): {e}")
                             calidad_respuesta = 0.0
                             faithfulness = 0.0
                             answer_relevancy = 0.0
                             context_precision = 0.0
                         except Exception as e:
-                            logger.warning(f"⚠️ Error en RAGAS (posible cuota excedida): {e}")
+                            logger.warning(f"[WARN] Error en RAGAS (posible cuota excedida): {e}")
                             calidad_respuesta = 0.0
                             faithfulness = 0.0
                             answer_relevancy = 0.0
@@ -283,19 +283,19 @@ class MetricsTracker:
                     # Guardar métricas
                     ragas_metrics = RAGASMetrics.objects.create(**metrics_data)
                     
-                    logger.info(f"\n💾 RESUMEN DE MÉTRICAS GUARDADAS:")
+                    logger.info(f"\n[SAVE] RESUMEN DE MÉTRICAS GUARDADAS:")
                     logger.info(f"   ⏱️  Tiempo de respuesta: {total_latency:.4f}s")
-                    logger.info(f"   🚀 Velocidad de procesamiento: {velocidad_procesamiento:.2f} tokens/s")
-                    logger.info(f"   🎯 Precision@{self.top_k}: {ragas_metrics.precision_at_k:.4f}")
-                    logger.info(f"   🎯 Recall@{self.top_k}: {ragas_metrics.recall_at_k:.4f}\n")
+                    logger.info(f"   [START] Velocidad de procesamiento: {velocidad_procesamiento:.2f} tokens/s")
+                    logger.info(f"   [GOAL] Precision@{self.top_k}: {ragas_metrics.precision_at_k:.4f}")
+                    logger.info(f"   [GOAL] Recall@{self.top_k}: {ragas_metrics.recall_at_k:.4f}\n")
                     
                 except Exception as e:
-                    logger.error(f"❌ Error evaluando métricas personalizadas: {e}", exc_info=True)
+                    logger.error(f"[ERROR] Error evaluando métricas personalizadas: {e}", exc_info=True)
             
             return metrics
             
         except Exception as e:
-            logger.error(f"❌ Error guardando métricas: {e}")
+            logger.error(f"[ERROR] Error guardando métricas: {e}")
             return None
     
     def get_summary(self) -> Dict[str, Any]:
@@ -382,7 +382,7 @@ def get_aggregated_metrics() -> Dict[str, Any]:
         }
         
     except Exception as e:
-        logger.error(f"❌ Error obteniendo métricas agregadas: {e}")
+        logger.error(f"[ERROR] Error obteniendo métricas agregadas: {e}")
         return {
             "tiempoRespuesta": 0,
             "velocidadProcesamiento": 0,

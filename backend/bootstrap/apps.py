@@ -19,7 +19,7 @@ class BootstrapConfig(AppConfig):
         if 'mysql' not in engine:
             return
             
-        print("\n🚀 SISTEMA RAG ASISTENTE - AUTO-CONFIGURACIÓN")
+        print("\n[START] SISTEMA RAG ASISTENTE - AUTO-CONFIGURACIÓN")
         print("=" * 60)
         
         # Ejecutar configuración automática
@@ -31,24 +31,24 @@ class BootstrapConfig(AppConfig):
         try:
             # 1. Configurar base de datos
             if self._setup_database():
-                print("✅ Base de datos configurada")
-            
+                print("[OK] Base de datos configurada")
+
             # 2. Ejecutar migraciones si es necesario
             if self._run_migrations_if_needed():
-                print("✅ Migraciones aplicadas")
-            
+                print("[OK] Migraciones aplicadas")
+
             # 3. Crear superusuario por defecto
             if self._create_default_superuser():
-                print("✅ Superusuario configurado")
-            
+                print("[OK] Superusuario configurado")
+
             print("=" * 60)
-            print("🎉 SISTEMA COMPLETAMENTE CONFIGURADO")
-            print("🌐 Servidor listo en: http://127.0.0.1:8000")
-            print("👤 Admin: admin / admin")
+            print("[DONE] SISTEMA COMPLETAMENTE CONFIGURADO")
+            print("[NET] Servidor listo en: http://127.0.0.1:8000")
+            print("[INFO] Admin: admin / admin")
             print("=" * 60)
-            
+
         except Exception as e:
-            print(f"⚠️ Error en auto-configuración: {e}")
+            print(f"[WARN] Error en auto-configuración: {e}")
     
     def _setup_database(self):
         """Configurar base de datos MySQL"""
@@ -80,10 +80,10 @@ class BootstrapConfig(AppConfig):
             return True
             
         except ImportError:
-            print("⚠️ Instala mysql-connector-python: pip install mysql-connector-python")
+            print("[WARN] Instala mysql-connector-python: pip install mysql-connector-python")
             return False
         except Exception as e:
-            print(f"⚠️ Error MySQL: {e}")
+            print(f"[WARN] Error MySQL: {e}")
             return False
     
     def _run_migrations_if_needed(self):
@@ -99,13 +99,13 @@ class BootstrapConfig(AppConfig):
             plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
             
             if plan:
-                print("🔄 Aplicando migraciones pendientes...")
+                print("[SYNC] Aplicando migraciones pendientes...")
                 call_command('migrate', verbosity=0, interactive=False)
-                
+
             return True
-            
+
         except Exception as e:
-            print(f"⚠️ Error en migraciones: {e}")
+            print(f"[WARN] Error en migraciones: {e}")
             return False
     
     def _create_default_superuser(self):
@@ -127,11 +127,11 @@ class BootstrapConfig(AppConfig):
                 password='admin'
             )
             
-            print("👤 Superusuario 'admin' creado")
+            print("[INFO] Superusuario 'admin' creado")
             return True
-            
+
         except Exception as e:
-            print(f"⚠️ Error creando superusuario: {e}")
+            print(f"[WARN] Error creando superusuario: {e}")
             return False
         import sys
         if any(cmd in sys.argv for cmd in ['migrate', 'makemigrations', 'collectstatic', 'loaddata', 'dumpdata', 'shell']):

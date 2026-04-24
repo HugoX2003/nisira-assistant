@@ -1,9 +1,10 @@
 import React from 'react';
+import { XCircle, AlertTriangle, Info } from 'lucide-react';
 import '../styles/ErrorModal.css';
 
 /**
  * Modal de Error Prominente
- * Muestra mensajes de error específicos con estilo visual llamativo
+ * Muestra mensajes de error especificos con estilo visual llamativo
  */
 function ErrorModal({ message, onClose, type = 'error' }) {
   if (!message) return null;
@@ -11,13 +12,13 @@ function ErrorModal({ message, onClose, type = 'error' }) {
   const getIcon = () => {
     switch (type) {
       case 'error':
-        return '❌';
+        return <XCircle size={48} strokeWidth={1.5} />;
       case 'warning':
-        return '⚠️';
+        return <AlertTriangle size={48} strokeWidth={1.5} />;
       case 'info':
-        return 'ℹ️';
+        return <Info size={48} strokeWidth={1.5} />;
       default:
-        return '❌';
+        return <XCircle size={48} strokeWidth={1.5} />;
     }
   };
 
@@ -28,7 +29,7 @@ function ErrorModal({ message, onClose, type = 'error' }) {
       case 'warning':
         return 'Advertencia';
       case 'info':
-        return 'Información';
+        return 'Informacion';
       default:
         return 'Error';
     }

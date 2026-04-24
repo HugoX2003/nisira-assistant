@@ -32,7 +32,7 @@ class PostgresFileStore:
         self.conn = None
         
         if not PSYCOPG2_AVAILABLE:
-            logger.error("❌ psycopg2 no disponible")
+            logger.error("[ERROR] psycopg2 no disponible")
             return
         
         self._initialize_connection()
@@ -50,16 +50,16 @@ class PostgresFileStore:
                 keepalives_count=5
             )
             self.conn.autocommit = False
-            logger.info("✅ Conectado a PostgreSQL para almacenamiento de archivos")
+            logger.info("[OK] Conectado a PostgreSQL para almacenamiento de archivos")
         except Exception as e:
-            logger.error(f"❌ Error conectando a PostgreSQL: {e}")
+            logger.error(f"[ERROR] Error conectando a PostgreSQL: {e}")
             self.conn = None
     
     def _ensure_connection(self):
         """Verificar y reconectar si es necesario"""
         try:
             if self.conn is None or self.conn.closed:
-                logger.warning("⚠️ Conexión cerrada, reconectando...")
+                logger.warning("[WARN] Conexión cerrada, reconectando...")
                 self._initialize_connection()
                 if self.conn and not self.conn.closed:
                     self._ensure_table_exists()
@@ -70,7 +70,7 @@ class PostgresFileStore:
                 cur.execute("SELECT 1")
             return True
         except Exception as e:
-            logger.warning(f"⚠️ Conexión perdida, reconectando: {e}")
+            logger.warning(f"[WARN] Conexión perdida, reconectando: {e}")
             try:
                 if self.conn:
                     self.conn.close()
@@ -114,10 +114,10 @@ class PostgresFileStore:
                 """)
                 
                 self.conn.commit()
-                logger.info("✅ Tabla document_files lista")
+                logger.info("[OK] Tabla document_files lista")
                 
         except Exception as e:
-            logger.error(f"❌ Error creando tabla document_files: {e}")
+            logger.error(f"[ERROR] Error creando tabla document_files: {e}")
             if self.conn:
                 self.conn.rollback()
     
@@ -149,7 +149,7 @@ class PostgresFileStore:
             UUID del archivo guardado o None si falló
         """
         if not self.is_ready():
-            logger.error("❌ PostgreSQL no está listo")
+            logger.error("[ERROR] PostgreSQL no está listo")
             return None
         
         max_retries = 3
@@ -170,7 +170,7 @@ class PostgresFileStore:
                         
                         if existing:
                             # Actualizar archivo existente
-                            logger.info(f"📝 Actualizando archivo existente: {file_name}")
+                            logger.info(f"[NOTE] Actualizando archivo existente: {file_name}")
                             cur.execute("""
                                 UPDATE document_files 
                                 SET file_content = %s,
@@ -229,11 +229,11 @@ class PostgresFileStore:
                         ))
                     
                     self.conn.commit()
-                    logger.info(f"💾 Archivo guardado en PostgreSQL: {file_name} ({file_size} bytes)")
+                    logger.info(f"[SAVE] Archivo guardado en PostgreSQL: {file_name} ({file_size} bytes)")
                     return file_id
                     
             except Exception as e:
-                logger.error(f"❌ Error guardando archivo {file_name} (intento {attempt+1}/{max_retries}): {e}")
+                logger.error(f"[ERROR] Error guardando archivo {file_name} (intento {attempt+1}/{max_retries}): {e}")
                 if self.conn:
                     try:
                         self.conn.rollback()
@@ -264,7 +264,7 @@ class PostgresFileStore:
             return None
         
         if not file_id and not file_name:
-            logger.error("❌ Debe proporcionar file_id o file_name")
+            logger.error("[ERROR] Debe proporcionar file_id o file_name")
             return None
         
         try:
@@ -304,7 +304,7 @@ class PostgresFileStore:
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo archivo: {e}")
+            logger.error(f"[ERROR] Error obteniendo archivo: {e}")
             return None
     
     def list_files(self, limit: int = 1000, offset: int = 0) -> List[Dict[str, Any]]:
@@ -346,7 +346,7 @@ class PostgresFileStore:
                 return files
                 
         except Exception as e:
-            logger.error(f"❌ Error listando archivos: {e}")
+            logger.error(f"[ERROR] Error listando archivos: {e}")
             return []
     
     def file_exists(self, drive_file_id: str) -> bool:
@@ -376,7 +376,7 @@ class PostgresFileStore:
                     return cur.fetchone()[0]
                     
             except Exception as e:
-                logger.error(f"❌ Error verificando existencia (intento {attempt+1}/{max_retries}): {e}")
+                logger.error(f"[ERROR] Error verificando existencia (intento {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     # Reconectar y reintentar
                     if not self._ensure_connection():
@@ -413,7 +413,7 @@ class PostgresFileStore:
                     return row[0] if row else None
                     
             except Exception as e:
-                logger.error(f"❌ Error obteniendo fecha (intento {attempt+1}/{max_retries}): {e}")
+                logger.error(f"[ERROR] Error obteniendo fecha (intento {attempt+1}/{max_retries}): {e}")
                 if attempt < max_retries - 1:
                     # Reconectar y reintentar
                     if not self._ensure_connection():
@@ -443,12 +443,12 @@ class PostgresFileStore:
                 
                 deleted = cur.rowcount > 0
                 if deleted:
-                    logger.info(f"🗑️  Archivo eliminado: {file_id}")
+                    logger.info(f"[DEL]  Archivo eliminado: {file_id}")
                 
                 return deleted
                 
         except Exception as e:
-            logger.error(f"❌ Error eliminando archivo: {e}")
+            logger.error(f"[ERROR] Error eliminando archivo: {e}")
             if self.conn:
                 self.conn.rollback()
             return False
@@ -498,11 +498,11 @@ class PostgresFileStore:
                 }
                 
         except Exception as e:
-            logger.error(f"❌ Error obteniendo estadísticas: {e}")
+            logger.error(f"[ERROR] Error obteniendo estadísticas: {e}")
             return {"ready": False, "error": str(e)}
     
     def close(self):
         """Cerrar conexión"""
         if self.conn:
             self.conn.close()
-            logger.info("✅ Conexión PostgreSQL cerrada")
+            logger.info("[OK] Conexión PostgreSQL cerrada")
