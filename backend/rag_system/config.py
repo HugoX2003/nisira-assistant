@@ -56,8 +56,8 @@ GOOGLE_DRIVE_CONFIG = {
     "scopes": [
         "https://www.googleapis.com/auth/drive",  # Acceso completo a Drive (necesario para ver archivos existentes)
     ],
-    "sync_folder_name": os.getenv("GOOGLE_DRIVE_FOLDER_NAME", "Prueba RAG"),  # Permitir override
-    "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", "1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8"),  # ID de la carpeta en Drive
+    "sync_folder_name": os.getenv("GOOGLE_DRIVE_FOLDER_NAME", ""),
+    "folder_id": os.getenv("GOOGLE_DRIVE_FOLDER_ID", ""),
     "download_path": str(DOCUMENTS_DIR),  # Directorio local para descargas
     "supported_formats": [".pdf", ".txt", ".docx", ".doc", ".pptx", ".xlsx"],  # Formatos soportados
     "sync_interval": int(os.getenv("GOOGLE_DRIVE_SYNC_INTERVAL", "300")),  # Override via env
@@ -108,10 +108,10 @@ API_CONFIG = {
     "google_api_key": os.getenv("GOOGLE_API_KEY", ""),  # API key para Gemini
     "gemini": {
         "api_key_env": "GOOGLE_API_KEY",
-        "model_name": "gemini-2.0-flash-exp",  # Modelo más reciente
-        "chat_model_name": "gemini-2.0-flash-exp", 
-        "embedding_model": "models/text-embedding-004",
-        "max_tokens": 8192,
+        "model_name": os.getenv("LLM_MODEL_GEMINI", "gemini-2.0-flash-exp"),
+        "chat_model_name": os.getenv("LLM_MODEL_GEMINI", "gemini-2.0-flash-exp"),
+        "embedding_model": os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004"),
+        "max_tokens": int(os.getenv("LLM_MAX_TOKENS", "8192")),
     # NOTE: For RAG responses we prefer to use the RAG-specific
     # temperature defined in the RAG configuration (see RAG_PROMPT_CONFIG
     # below). To avoid accidental divergence between general model
@@ -121,12 +121,12 @@ API_CONFIG = {
         "requests_per_minute": 15,  # Límite gratuito
     },
     "huggingface": {
-        "model_name": "sentence-transformers/all-mpnet-base-v2",  # EL MEJOR MODELO - 768 dimensiones
-        "device": "cpu",  # Cambiar a "cuda" si tienes GPU
-        "max_seq_length": 512,  # Máxima calidad
-        "normalize_embeddings": True,  # Normalizar para mejor similitud coseno
+        "model_name": os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-mpnet-base-v2"),
+        "device": os.getenv("EMBEDDING_DEVICE", "cpu"),
+        "max_seq_length": int(os.getenv("EMBEDDING_MAX_SEQ_LENGTH", "512")),
+        "normalize_embeddings": os.getenv("EMBEDDING_NORMALIZE", "true").lower() == "true",
     },
-    "fallback_embedding": "sentence-transformers/all-mpnet-base-v2"
+    "fallback_embedding": os.getenv("EMBEDDING_MODEL_FALLBACK", "sentence-transformers/all-mpnet-base-v2")
 }
 
 # ===== CHROMADB CONFIGURACIÓN =====
@@ -157,27 +157,27 @@ RAG_CONFIG = {
         "lexical_weight": 0.4,    # Peso de búsqueda lexical (40%)
     },
     "generation": {
-        # CONFIGURACIÓN MULTI-PROVEEDOR LLM
-        "provider": "openrouter",  # Cambiar entre: "google", "openrouter", "groq", "together"
-        
-        # Google Gemini (LÍMITES ESTRICTOS)
+        # Configuracion multi-proveedor LLM. Provider via env LLM_PROVIDER.
+        "provider": os.getenv("LLM_PROVIDER", "openrouter"),
+
+        # Google Gemini
         "google": {
-            "model": "gemini-2.0-flash-exp",
+            "model": os.getenv("LLM_MODEL_GEMINI", "gemini-2.0-flash-exp"),
             "api_key": os.getenv("GOOGLE_API_KEY"),
         },
-        
-        # OpenRouter (RECOMENDADO - MEJORES LÍMITES)
+
+        # OpenRouter
         "openrouter": {
-            "model": "google/gemma-2-9b-it",  # Modelo más rápido y excelente calidad
+            "model": os.getenv("LLM_MODEL_OPENROUTER", "google/gemma-2-9b-it"),
             "api_key": os.getenv("OPENROUTER_API_KEY"),
-            "base_url": "https://openrouter.ai/api/v1",
+            "base_url": os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         },
-        
-        # Groq (ALTERNATIVA RÁPIDA)
+
+        # Groq
         "groq": {
-            "model": "llama-3.3-70b-versatile",
+            "model": os.getenv("LLM_MODEL_GROQ", "llama-3.3-70b-versatile"),
             "api_key": os.getenv("GROQ_API_KEY"),
-            "base_url": "https://api.groq.com/openai/v1",
+            "base_url": os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
         },
         
         "system_prompt": """Eres un asistente académico amigable y experto. Respondes de forma natural, completa y conversacional, como un profesor explicando a un estudiante.

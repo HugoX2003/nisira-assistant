@@ -23,44 +23,46 @@ services:
     source_dir: /backend
     dockerfile_path: backend/Dockerfile
     
-    # ✨ IMPORTANTE: Comandos para habilitar Git LFS y descargar embeddings
+    # IMPORTANTE: comandos para habilitar Git LFS y descargar embeddings
     build_command: |
-      echo "📦 Instalando Git LFS..."
+      echo "[INFO] Instalando Git LFS..."
       apt-get update && apt-get install -y git-lfs
       git lfs install
-      echo "⬇️  Descargando objetos LFS (embeddings precalculados)..."
+      echo "[INFO] Descargando objetos LFS (embeddings precalculados)..."
       git lfs fetch --all
       git lfs checkout
-      echo "✅ Embeddings descargados, listo para build"
+      echo "[OK] Embeddings descargados, listo para build"
     
     # Variables de entorno
     envs:
       - key: DJANGO_SETTINGS_MODULE
         value: core.production_settings
       
+      # Secretos: definir el valor en el dashboard de Digital Ocean App Platform,
+      # NO commitear claves reales en este archivo.
       - key: SECRET_KEY
-        value: H8kL9mN2pQ4rS6tU7vX9yZ1aB3cD5eF7gH9jK1lM3nP5qR7sT9uV
         type: SECRET
-      
+
       - key: DEBUG
         value: "False"
-      
+
       - key: ENABLE_GOOGLE_DRIVE
-        value: "false"  # 🔒 Desactiva Drive en producción (evita warnings)
-      
+        value: "false"
+
       - key: DATABASE_URL
         value: ${db.DATABASE_URL}
-      
+
       - key: OPENROUTER_API_KEY
-        value: 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
         type: SECRET
-      
+
       - key: GOOGLE_API_KEY
-        value: AIzaSyC0V18JMVm8fs3v1BuzBCXOyAITfZuIVw8
         type: SECRET
-      
+
       - key: GOOGLE_DRIVE_FOLDER_ID
-        value: 1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8
+        type: SECRET
+
+      - key: GOOGLE_CREDENTIALS_JSON
+        type: SECRET
       
       - key: PORT
         value: "8000"

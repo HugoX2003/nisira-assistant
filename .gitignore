@@ -125,3 +125,10 @@ simple_reindex.py
 # Ignorar datos locales y BD de vectores
 backend/data/
 backend/chroma_db/
+
+# Resultados de evaluacion / pruebas (regenerables, contienen rutas locales y datos de testing)
+backend/evidence/scalability/scalability_results.json
+backend/evidence/scalability/scalability_results.csv
+backend/evidence/scalability/latency_by_concurrency.json
+backend/evidence/**/results_*.json
+backend/evidence/**/results_*.csv

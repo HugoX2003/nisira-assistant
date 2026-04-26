@@ -82,7 +82,7 @@
 **Durante la inicialización del RAG verás:**
 ```
 🔑 Usando Service Account credentials
-✅ Service Account: nisira-prod-server@nisira-assistance.iam.gserviceaccount.com
+✅ Service Account: nisira-prod-server@tu_project_id.iam.gserviceaccount.com
 📁 Total: X archivos en Google Drive
 ⬇️ Descargando documentos...
 📄 Procesando documentos (PDF → chunks)...

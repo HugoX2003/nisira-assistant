@@ -122,16 +122,16 @@ En el backend, agrega estas variables (click **Edit** en backend > **Environment
 ```bash
 # Django
 DJANGO_SETTINGS_MODULE=core.production_settings
-SECRET_KEY=H8kL9mN2pQ4rS6tU7vX9yZ1aB3cD5eF7gH9jK1lM3nP5qR7sT9uV  # Marcar como SECRET
+SECRET_KEY=tu_secret_key_aqui_generar_uno_largo_y_aleatorio  # Marcar como SECRET
 DEBUG=False
 
 # Database (auto-generada por Digital Ocean)
 DATABASE_URL=${db.DATABASE_URL}
 
 # APIs (marcar como SECRET)
-OPENROUTER_API_KEY=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
-GOOGLE_API_KEY=AIzaSyC0V18JMVm8fs3v1BuzBCXOyAITfZuIVw8
-GOOGLE_DRIVE_FOLDER_ID=1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8
+OPENROUTER_API_KEY=sk-or-v1-tu_openrouter_key_aqui
+GOOGLE_API_KEY=tu_google_api_key_aqui
+GOOGLE_DRIVE_FOLDER_ID=tu_folder_id_aqui
 
 # Gunicorn
 PORT=8000

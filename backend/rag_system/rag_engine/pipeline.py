@@ -183,10 +183,10 @@ class RAGPipeline:
             return
 
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash-exp",
+            model=os.getenv("LLM_MODEL_GEMINI", "gemini-2.0-flash-exp"),
             google_api_key=api_key,
-            temperature=0.7,
-            max_tokens=1024
+            temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+            max_tokens=int(os.getenv("LLM_MAX_TOKENS_RESPONSE", "1024"))
         )
         logger.info("[OK] LLM Google Gemini inicializado")
     

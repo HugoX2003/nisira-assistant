@@ -51,14 +51,14 @@ class RAGASEvaluator:
         try:
             # Configurar Gemini como LLM para RAGAS
             self.llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
+                model=os.getenv("RAGAS_EVALUATOR_MODEL", "gemini-2.0-flash-exp"),
                 google_api_key=self.api_key,
                 temperature=0.0
             )
-            
+
             # Configurar embeddings de Gemini
             self.embeddings = GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004",
+                model=os.getenv("GEMINI_EMBEDDING_MODEL", "models/text-embedding-004"),
                 google_api_key=self.api_key
             )
             

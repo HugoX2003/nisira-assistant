@@ -14,7 +14,7 @@
 ```bash
 # El archivo backend/credentials.json fue actualizado con tu nueva Service Account
 # Tipo: "service_account"
-# Project: "nisira-assistance"
+# Project: "tu_project_id"
 ```
 
 ### 2. Configuración de Buildpacks para Heroku
