@@ -87,4 +87,6 @@ SESSION_COOKIE_SECURE = os.getenv('SESSION_COOKIE_SECURE', 'False').lower() == '
 CSRF_COOKIE_SECURE = os.getenv('CSRF_COOKIE_SECURE', 'False').lower() == 'true'
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
+# SAMEORIGIN permite que el frontend embebido en el mismo dominio (visor PDF, etc.)
+# cargue endpoints en iframes; DENY bloquea cualquier iframe incluso del mismo origen.
+X_FRAME_OPTIONS = 'SAMEORIGIN'

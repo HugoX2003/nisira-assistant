@@ -406,6 +406,20 @@ def serve_document(request, filename: str):
             raise Http404('Error al leer el documento')
 
 
+def _resolve_conversation(user, identifier):
+    """Buscar una conversacion por slug (string) o por id (numerico legacy)."""
+    if identifier is None:
+        return None
+    try:
+        # Si es numerico, asumimos id; si no, asumimos slug.
+        as_str = str(identifier)
+        if as_str.isdigit():
+            return Conversation.objects.get(id=int(as_str), user=user)
+        return Conversation.objects.get(slug=as_str, user=user)
+    except Conversation.DoesNotExist:
+        return None
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_conversations(request):
@@ -414,12 +428,16 @@ def get_conversations(request):
         conversations = (
             Conversation.objects.filter(user=request.user)
             .order_by('-updated_at')
-            .values('id', 'title', 'created_at', 'updated_at')
+            .values('id', 'slug', 'title', 'created_at', 'updated_at')
         )
 
         results = [
             {
-                'id': entry['id'],
+                # Para el frontend, exponemos el slug como 'id' asi las URLs ya
+                # usan el identificador publico. Mantenemos 'numeric_id' por compatibilidad.
+                'id': entry['slug'],
+                'numeric_id': entry['id'],
+                'slug': entry['slug'],
                 'title': entry['title'],
                 'created_at': entry['created_at'].isoformat() if entry['created_at'] else None,
                 'updated_at': entry['updated_at'].isoformat() if entry['updated_at'] else None,
@@ -449,9 +467,11 @@ def create_conversation(request):
             user=request.user,
             title=title
         )
-        
+
         return Response({
-            'id': conversation.id,
+            'id': conversation.slug,
+            'numeric_id': conversation.id,
+            'slug': conversation.slug,
             'title': conversation.title,
             'created_at': conversation.created_at.isoformat(),
             'message': 'Conversación creada exitosamente'
@@ -469,10 +489,16 @@ def create_conversation(request):
 @permission_classes([IsAuthenticated])
 def get_messages(request, conversation_id):
     """
-    Obtener todos los mensajes de una conversación específica
+    Obtener todos los mensajes de una conversación específica.
+    conversation_id puede ser el slug (publico) o el id numerico (legacy).
     """
     try:
-        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+        conversation = _resolve_conversation(request.user, conversation_id)
+        if conversation is None:
+            return Response(
+                {'error': 'Conversación no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         messages = conversation.messages.all().order_by('created_at')
         rating_map = {
             rating.message_id: rating
@@ -495,17 +521,14 @@ def get_messages(request, conversation_id):
             })
         
         return Response({
-            'conversation_id': conversation.id,
+            'conversation_id': conversation.slug,
+            'numeric_id': conversation.id,
+            'slug': conversation.slug,
             'conversation_title': conversation.title,
             'messages': message_data,
             'count': len(message_data)
         })
-        
-    except Conversation.DoesNotExist:
-        return Response(
-            {'error': 'Conversación no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+
     except Exception as e:
         logger.error(f"Error al obtener mensajes: {str(e)}")
         return Response(
@@ -536,15 +559,14 @@ def send_message(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Verificar que la conversación existe y pertenece al usuario
-        try:
-            conversation = Conversation.objects.get(id=conversation_id, user=request.user)
-        except Conversation.DoesNotExist:
+        # Verificar que la conversación existe y pertenece al usuario (acepta slug o id)
+        conversation = _resolve_conversation(request.user, conversation_id)
+        if conversation is None:
             return Response(
                 {'error': 'Conversación no encontrada'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        
+
         # Crear mensaje del usuario
         user_message = Message.objects.create(
             conversation=conversation,
@@ -583,9 +605,11 @@ def send_message(request):
                 'rating': None,
                 'rating_issue_tag': Rating.IssueTag.NONE,
             },
-            'conversation_id': conversation.id
+            'conversation_id': conversation.slug,
+            'numeric_id': conversation.id,
+            'slug': conversation.slug,
         })
-        
+
     except Exception as e:
         logger.error(f"Error al enviar mensaje: {str(e)}")
         return Response(
@@ -622,21 +646,22 @@ def generate_basic_response(user_message: str) -> str:
 @permission_classes([IsAuthenticated])
 def delete_conversation(request, conversation_id):
     """
-    Eliminar una conversación específica
+    Eliminar una conversación específica.
+    conversation_id puede ser slug (publico) o id numerico (legacy).
     """
     try:
-        conversation = Conversation.objects.get(id=conversation_id, user=request.user)
+        conversation = _resolve_conversation(request.user, conversation_id)
+        if conversation is None:
+            return Response(
+                {'error': 'Conversación no encontrada'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         conversation.delete()
-        
+
         return Response({
             'message': 'Conversación eliminada exitosamente'
         })
-        
-    except Conversation.DoesNotExist:
-        return Response(
-            {'error': 'Conversación no encontrada'},
-            status=status.HTTP_404_NOT_FOUND
-        )
+
     except Exception as e:
         logger.error(f"Error al eliminar conversación: {str(e)}")
         return Response(
@@ -1278,11 +1303,10 @@ def rag_enhanced_chat(request):
         if use_rag and is_simple_greeting:
             use_rag = False
         
-        # Obtener o crear conversación
+        # Obtener o crear conversación (conversation_id puede ser slug o id numerico)
         if conversation_id:
-            try:
-                conversation = Conversation.objects.get(id=conversation_id, user=request.user)
-            except Conversation.DoesNotExist:
+            conversation = _resolve_conversation(request.user, conversation_id)
+            if conversation is None:
                 return Response({
                     'error': 'Conversación no encontrada'
                 }, status=status.HTTP_404_NOT_FOUND)
@@ -1380,7 +1404,9 @@ def rag_enhanced_chat(request):
             logger.info(f"[OK] Métricas guardadas para query: {saved_metrics.query_id[:8]}")
         
         return Response({
-            'conversation_id': conversation.id,
+            'conversation_id': conversation.slug,
+            'numeric_id': conversation.id,
+            'slug': conversation.slug,
             'user_message': {
                 'id': user_message.id,
                 'content': user_message.text,

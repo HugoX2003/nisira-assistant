@@ -1,13 +1,22 @@
 # Modelos para guardar el historial de chat
+import secrets
 from django.db import models
 from django.contrib.auth.models import User
 import json
 from django.utils import timezone
 
+
+def _generate_conversation_slug():
+    """Genera un slug aleatorio URL-safe (~11 chars) para URLs publicas de chat."""
+    return secrets.token_urlsafe(8)[:11]
+
+
 # Representa una conversación de chat entre el usuario y el asistente
 class Conversation(models.Model):
     # Usuario dueño de la conversación
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='conversations')
+    # Slug aleatorio para URLs publicas (oculta el ID secuencial)
+    slug = models.CharField(max_length=16, unique=True, db_index=True, default=_generate_conversation_slug)
     # Título de la conversación (puede ser la primera pregunta)
     title = models.CharField(max_length=255, blank=True, default='')
     # Fecha de creación

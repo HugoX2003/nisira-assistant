@@ -74,8 +74,9 @@ urlpatterns = [
     # Gestión de conversaciones
     path("conversations/", get_conversations, name="get_conversations"),
     path("conversations/create/", create_conversation, name="create_conversation"),
-    path("conversations/<int:conversation_id>/messages/", get_messages, name="get_messages"),
-    path("conversations/<int:conversation_id>/delete/", delete_conversation, name="delete_conversation"),
+    # Acepta slug (string aleatorio) o id (numerico legacy); el view resuelve cual es
+    path("conversations/<str:conversation_id>/messages/", get_messages, name="get_messages"),
+    path("conversations/<str:conversation_id>/delete/", delete_conversation, name="delete_conversation"),
     
     # Chat básico
     path("chat/", send_message, name="send_message"),

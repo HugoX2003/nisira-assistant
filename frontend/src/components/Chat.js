@@ -174,8 +174,9 @@ const Loading = () => (
 export default function Chat({ onLogout, user }) {
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  // conversationId viene de la URL /chat/:conversationId (puede ser undefined si estamos en /chat)
-  const activeConv = conversationId ? parseInt(conversationId, 10) : null;
+  // conversationId es el slug aleatorio que viene de la URL /chat/:slug.
+  // Sera undefined si estamos en /chat sin conversacion activa.
+  const activeConv = conversationId || null;
 
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
