@@ -647,23 +647,50 @@ def sync_drive_documents(request):
 @admin_required
 def get_sync_progress(request):
     """
-    Obtener progreso de sincronización de Drive
+    Obtener progreso de sincronizacion de Drive.
+
+    Si el archivo declara status='running' pero el ultimo log es de hace
+    mas de STALE_THRESHOLD_SECONDS, asumimos que el worker murio (OOM, crash,
+    timeout) y reportamos el estado como abortado.
     """
+    STALE_THRESHOLD_SECONDS = 90
+
     try:
-        progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
-        
-        if os.path.exists(progress_file):
-            with open(progress_file, 'r') as f:
-                progress_data = json.load(f)
-                return Response(progress_data)
-        else:
+        progress_file = _sync_progress_file()
+
+        if not os.path.exists(progress_file):
             return Response({
                 'status': 'idle',
-                'message': 'No hay sincronización en progreso',
+                'message': 'No hay sincronizacion en progreso',
                 'progress': 0
             })
+
+        with open(progress_file, 'r') as f:
+            progress_data = json.load(f)
+
+        # Deteccion de staleness: status activo pero sin actualizaciones recientes
+        active_status = progress_data.get('status') in ('running', 'starting')
+        recent_logs = progress_data.get('recent_logs') or []
+        if active_status and recent_logs:
+            try:
+                last_ts = recent_logs[-1].get('timestamp')
+                if last_ts:
+                    last_dt = datetime.fromisoformat(last_ts)
+                    age = (datetime.now() - last_dt).total_seconds()
+                    if age > STALE_THRESHOLD_SECONDS:
+                        progress_data['status'] = 'error'
+                        progress_data['message'] = (
+                            f"Sincronizacion abortada: sin actividad por {int(age)}s "
+                            "(probablemente el worker murio)"
+                        )
+                        # Persistir el estado nuevo para evitar repetir el chequeo
+                        _write_sync_progress(progress_data)
+            except Exception as stale_err:
+                logger.warning(f"[WARN] Error evaluando staleness de sync: {stale_err}")
+
+        return Response(progress_data)
     except Exception as e:
-        logger.error(f"Error obteniendo progreso de sincronización: {e}")
+        logger.error(f"Error obteniendo progreso de sincronizacion: {e}")
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
