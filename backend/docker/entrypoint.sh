@@ -40,13 +40,14 @@ if [ "${INIT_RAG}" = "true" ]; then
   python manage.py rag_manage init || true
 fi
 
-# Limpiar estado de sincronizacion previo (si el contenedor reinicio mientras
-# habia una sync activa, el archivo queda con status 'running' falsamente)
-SYNC_PROGRESS_FILE=/app/data/temp/sync_progress.json
-if [ -f "$SYNC_PROGRESS_FILE" ]; then
-  echo "[INFO] Limpiando estado de sincronizacion residual ($SYNC_PROGRESS_FILE)"
-  rm -f "$SYNC_PROGRESS_FILE"
-fi
+# Limpiar archivos de progreso previos (si el contenedor reinicio mientras
+# habia una operacion activa, los archivos quedan con status 'running' falsamente)
+for PROGRESS_FILE in /app/data/temp/sync_progress.json /app/data/temp/embedding_progress.json; do
+  if [ -f "$PROGRESS_FILE" ]; then
+    echo "[INFO] Limpiando progreso residual: $PROGRESS_FILE"
+    rm -f "$PROGRESS_FILE"
+  fi
+done
 
 # Collect static files
 echo "[INFO] Collecting static files..."

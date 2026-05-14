@@ -896,22 +896,15 @@ def get_embedding_progress(request):
             status=status.HTTP_200_OK  # Cambiado a 200 para evitar errores en frontend
         )
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@admin_required
-def generate_embeddings(request):
-    """
-    Generar embeddings para documentos nuevos
-    Verifica duplicados antes de generar
-    """
-    if not RAG_MODULES_AVAILABLE:
-        return Response(
-            {"error": "Sistema RAG no disponible"},
-            status=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-    
+_embedding_thread_lock = threading.Lock()
+_embedding_thread = None
+
+
+def _run_embedding_generation_in_background():
+    """Ejecuta la generacion de embeddings en thread, actualiza embedding_progress.json."""
+    global _embedding_thread
     try:
-        # Determinar qué vector store usar
+        # Determinar que vector store usar
         from rag_system.config import VECTOR_STORE_CONFIG
         vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
         database_url = VECTOR_STORE_CONFIG.get('database_url')
@@ -929,10 +922,13 @@ def generate_embeddings(request):
         available_files = doc_loader.list_available_files()
         
         if not available_files:
-            return Response(
-                {"error": "No hay archivos disponibles para procesar"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            _save_progress({
+                "status": "error",
+                "total": 0, "current": 0, "current_file": "",
+                "processed": 0, "errors": 0,
+                "logs": ["[ERROR] No hay archivos disponibles para procesar"],
+            })
+            return
         
         pdf_files = [f for f in available_files if f['file_name'].lower().endswith('.pdf')]
         txt_files = [f for f in available_files if f['file_name'].lower().endswith(('.txt', '.md'))]
@@ -1213,26 +1209,71 @@ def generate_embeddings(request):
         
         # Finalizar progreso
         progress["status"] = "completed"
-        progress["logs"].append(f"[DONE] Completado: {len(processed_files)} nuevos, {len(skipped_files)} ya existían, {len(errors)} errores")
-        _save_progress(progress)
-        
-        return Response({
-            "success": True,
-            "processed": len(processed_files),
-            "skipped": len(skipped_files),
-            "errors": len(errors),
-            "processed_files": processed_files,
-            "skipped_files": skipped_files,
-            "error_details": errors,
-            "message": f"[OK] {len(processed_files)} archivos nuevos procesados. {len(skipped_files)} ya existían (omitidos)."
-        })
-        
-    except Exception as e:
-        logger.error(f"Error generando embeddings: {e}")
-        return Response(
-            {"error": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        progress["logs"].append(
+            f"[DONE] Completado: {len(processed_files)} nuevos, "
+            f"{len(skipped_files)} ya existian, {len(errors)} errores"
         )
+        _save_progress(progress)
+
+    except Exception as e:
+        logger.error(f"Error generando embeddings en thread: {e}")
+        try:
+            _save_progress({
+                "status": "error",
+                "total": 0, "current": 0, "current_file": "",
+                "processed": 0, "errors": 1,
+                "logs": [f"[ERROR] {e}"],
+            })
+        except Exception:
+            pass
+    finally:
+        with _embedding_thread_lock:
+            _embedding_thread = None
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@admin_required
+def generate_embeddings(request):
+    """
+    Disparar generacion de embeddings en background.
+
+    Retorna inmediatamente; el cliente hace polling a get_embedding_progress
+    para ver el avance. Evita timeouts de nginx con corpus grandes.
+    """
+    global _embedding_thread
+
+    if not RAG_MODULES_AVAILABLE:
+        return Response(
+            {"error": "Sistema RAG no disponible"},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+
+    with _embedding_thread_lock:
+        if _embedding_thread is not None and _embedding_thread.is_alive():
+            return Response(
+                {"success": False, "error": "Ya hay una generacion en curso"},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        _save_progress({
+            "status": "starting",
+            "total": 0, "current": 0, "current_file": "",
+            "processed": 0, "errors": 0,
+            "logs": ["[INFO] Iniciando generacion de embeddings en background..."],
+        })
+
+        _embedding_thread = threading.Thread(
+            target=_run_embedding_generation_in_background,
+            name="embedding-generation",
+            daemon=True,
+        )
+        _embedding_thread.start()
+
+    return Response({
+        "success": True,
+        "message": "Generacion iniciada en background. Use el endpoint de progreso para seguimiento.",
+    })
 
 
 @api_view(['POST'])
