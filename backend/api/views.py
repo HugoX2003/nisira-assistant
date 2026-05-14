@@ -308,10 +308,14 @@ def serve_document(request, filename: str):
                 
                 if not file_data:
                     raise Http404('Documento no encontrado en PostgreSQL')
-                
+
                 content_type = file_data.get('mime_type', 'application/octet-stream')
-                file_content = file_data.get('content')
-                
+                file_content = file_data.get('file_content')
+
+                if not file_content:
+                    logger.error(f"file_content vacio para UUID {file_uuid}")
+                    raise Http404('Documento sin contenido en PostgreSQL')
+
                 response = HttpResponse(file_content, content_type=content_type)
                 response['Content-Disposition'] = f'inline; filename="{filename}"'
                 return response
