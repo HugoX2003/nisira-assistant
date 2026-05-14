@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import '../styles/AdminPanel.css';
 import QueryMetrics from './QueryMetrics';
 import {
@@ -158,7 +159,16 @@ const TABS = [
 ];
 
 function AdminPanel({ onLogout, user }) {
-  const [activeTab, setActiveTab] = useState('drive');
+  const navigate = useNavigate();
+  const { tabId } = useParams();
+  // tab activa viene de la URL /admin/:tabId. Default a 'drive' si no esta en la URL
+  // o si la URL trae un tab desconocido.
+  const validTabIds = TABS.map(t => t.id);
+  const activeTab = (tabId && validTabIds.includes(tabId)) ? tabId : 'drive';
+  const setActiveTab = useCallback((id) => {
+    navigate(`/admin/${id}`);
+  }, [navigate]);
+
   const [notification, setNotification] = useState(null);
   const [syncProgress, setSyncProgress] = useState(null);
   const [filesRefreshTick, setFilesRefreshTick] = useState(0);

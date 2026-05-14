@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -171,10 +172,14 @@ const Loading = () => (
 
 // Componente principal del Chat
 export default function Chat({ onLogout, user }) {
+  const navigate = useNavigate();
+  const { conversationId } = useParams();
+  // conversationId viene de la URL /chat/:conversationId (puede ser undefined si estamos en /chat)
+  const activeConv = conversationId ? parseInt(conversationId, 10) : null;
+
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState([]);
   const [conversations, setConversations] = useState([]);
-  const [activeConv, setActiveConv] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
@@ -260,7 +265,7 @@ export default function Chat({ onLogout, user }) {
       }]);
 
       if (res.conversation_id && res.conversation_id !== activeConv) {
-        setActiveConv(res.conversation_id);
+        navigate(`/chat/${res.conversation_id}`, { replace: true });
       }
 
       loadConversations();
@@ -279,7 +284,7 @@ export default function Chat({ onLogout, user }) {
   };
 
   const handleNewConversation = () => {
-    setActiveConv(null);
+    navigate('/chat');
     setMessages([]);
     setError(null);
     inputRef.current?.focus();
@@ -291,7 +296,7 @@ export default function Chat({ onLogout, user }) {
     try {
       await deleteConversation(deleteModal);
       if (deleteModal === activeConv) {
-        setActiveConv(null);
+        navigate('/chat');
         setMessages([]);
       }
       loadConversations();
@@ -342,7 +347,7 @@ export default function Chat({ onLogout, user }) {
             <div
               key={c.id}
               className={`conv-item ${c.id === activeConv ? 'active' : ''}`}
-              onClick={() => setActiveConv(c.id)}
+              onClick={() => navigate(`/chat/${c.id}`)}
             >
               <span className="conv-title">{c.title || `Conversacion ${c.id}`}</span>
               <button
