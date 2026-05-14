@@ -16,14 +16,22 @@ from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
 try:
-    from langchain.text_splitter import RecursiveCharacterTextSplitter
+    # En langchain >=0.2 el splitter se movio al paquete langchain-text-splitters.
+    # Probamos primero la ruta nueva y caemos al import viejo para compatibilidad.
+    try:
+        from langchain_text_splitters import RecursiveCharacterTextSplitter
+    except ImportError:
+        from langchain.text_splitter import RecursiveCharacterTextSplitter
     from langchain_community.document_loaders import PyPDFLoader
-    from langchain.schema import Document
+    try:
+        from langchain_core.documents import Document
+    except ImportError:
+        from langchain.schema import Document
     DEPENDENCIES_AVAILABLE = True
 except ImportError as e:
     DEPENDENCIES_AVAILABLE = False
     print(f"[WARN] Dependencias PDF no disponibles: {e}")
-    
+
     # Definir Document como clase simple para evitar errores
     class Document:
         def __init__(self, page_content: str, metadata: dict = None):
