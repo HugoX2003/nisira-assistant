@@ -152,14 +152,27 @@ class PostgresVectorStore:
                     # Parametros: m=32 (conexiones por nodo), ef_construction=128 (calidad en build).
                     # ef_search se ajusta a 200 para garantizar recall@10 >0.95 a escala (10k+).
                     try:
+                        # Verificar si ya existe HNSW
                         cur.execute("""
                             SELECT COUNT(*) FROM pg_indexes
                             WHERE tablename = 'rag_embeddings'
-                            AND indexname IN ('idx_embedding_vector_hnsw', 'idx_embedding_vector')
+                            AND indexname = 'idx_embedding_vector_hnsw'
                         """)
-                        existing_index = cur.fetchone()[0]
+                        hnsw_exists = cur.fetchone()[0] > 0
 
-                        if existing_index == 0:
+                        if not hnsw_exists:
+                            # Borrar indice viejo IVFFlat si existe (legacy)
+                            cur.execute("""
+                                SELECT COUNT(*) FROM pg_indexes
+                                WHERE tablename = 'rag_embeddings'
+                                AND indexname = 'idx_embedding_vector'
+                            """)
+                            old_ivfflat = cur.fetchone()[0] > 0
+                            if old_ivfflat:
+                                logger.info("[CLEAN] Borrando indice IVFFlat legacy antes de crear HNSW...")
+                                cur.execute("DROP INDEX idx_embedding_vector;")
+                                self.conn.commit()
+
                             logger.info("[STATS] Creando indice HNSW (m=32, ef_construction=128)...")
                             cur.execute("""
                                 CREATE INDEX idx_embedding_vector_hnsw
@@ -170,7 +183,7 @@ class PostgresVectorStore:
                             self.conn.commit()
                             logger.info("[OK] Indice HNSW creado")
                         else:
-                            logger.info("[OK] Indice vectorial ya existe")
+                            logger.info("[OK] Indice HNSW ya existe")
 
                         # Ajustar ef_search a nivel de rol (persiste para sesiones nuevas)
                         ef_search = int(os.getenv("HNSW_EF_SEARCH", "200"))
