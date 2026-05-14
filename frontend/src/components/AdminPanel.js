@@ -29,6 +29,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   Database,
+  Terminal,
+  ExternalLink,
 } from 'lucide-react';
 import {
   getDriveFiles, uploadDriveFile, deleteDriveFile, syncDriveDocuments, getSyncProgress,
@@ -75,6 +77,75 @@ const ProgressBar = ({ progress, status, message }) => {
   );
 };
 
+const SyncLogs = ({ logs }) => {
+  const containerRef = React.useRef(null);
+  React.useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [logs]);
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="sync-logs">
+        <div className="sync-logs-header">
+          <Terminal size={14} /> Logs de sincronizacion
+        </div>
+        <div className="sync-logs-empty">Esperando inicio...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="sync-logs">
+      <div className="sync-logs-header">
+        <Terminal size={14} /> Logs de sincronizacion
+      </div>
+      <div className="sync-logs-body" ref={containerRef}>
+        {logs.map((log, i) => {
+          const msg = log.message || '';
+          const cls = msg.includes('[ERROR]') ? 'log-error'
+            : msg.includes('[WARN]') ? 'log-warn'
+            : msg.includes('[OK]') ? 'log-ok'
+            : msg.includes('[SKIP]') ? 'log-skip'
+            : msg.includes('[DOWN]') ? 'log-down'
+            : 'log-info';
+          return (
+            <div key={i} className={`sync-log-line ${cls}`}>
+              <span className="log-time">{(log.timestamp || '').slice(11, 19)}</span>
+              <span className="log-msg">{msg}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const FloatingSyncWidget = ({ syncProgress, onOpen }) => {
+  if (!syncProgress) return null;
+  const { status, progress = 0, current, total, message } = syncProgress;
+  const isActive = status === 'running' || status === 'starting';
+  if (!isActive) return null;
+  return (
+    <button className="floating-sync-widget" onClick={onOpen} title="Ver detalle de sincronizacion">
+      <RefreshCw size={16} className="spin-slow" />
+      <div className="floating-sync-info">
+        <div className="floating-sync-title">
+          Sincronizando Drive ({progress}%)
+        </div>
+        <div className="floating-sync-sub">
+          {current && total ? `${current}/${total}` : (message || 'En progreso...')}
+        </div>
+        <div className="floating-sync-bar">
+          <div className="floating-sync-bar-fill" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+      <ExternalLink size={14} />
+    </button>
+  );
+};
+
 const TABS = [
   { id: 'drive', label: 'Google Drive', Icon: Folder },
   { id: 'embeddings', label: 'Embeddings', Icon: Brain },
@@ -86,11 +157,62 @@ const TABS = [
 function AdminPanel({ onLogout, user }) {
   const [activeTab, setActiveTab] = useState('drive');
   const [notification, setNotification] = useState(null);
+  const [syncProgress, setSyncProgress] = useState(null);
+  const [filesRefreshTick, setFilesRefreshTick] = useState(0);
 
   const notify = useCallback((message, type = 'info') => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 4000);
   }, []);
+
+  // Fetch inicial: si hay una sync corriendo (despues de reload), retomamos
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const prog = await getSyncProgress();
+        if (!cancelled && prog && prog.status) {
+          setSyncProgress(prog);
+        }
+      } catch (e) { /* silencioso */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Polling mientras la sincronizacion este activa
+  useEffect(() => {
+    const status = syncProgress?.status;
+    if (status !== 'running' && status !== 'starting') return;
+    const interval = setInterval(async () => {
+      try {
+        const prog = await getSyncProgress();
+        setSyncProgress(prog);
+        if (prog.status === 'completed') {
+          notify(`Sincronizacion completa: ${prog.downloaded || 0} archivos`, 'success');
+          setFilesRefreshTick(t => t + 1);
+        } else if (prog.status === 'error') {
+          notify(`Error en sincronizacion: ${prog.message || ''}`, 'error');
+        }
+      } catch (e) { /* silencioso */ }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [syncProgress?.status, notify]);
+
+  const handleStartSync = useCallback(async () => {
+    setSyncProgress({ status: 'starting', message: 'Iniciando...', progress: 0, recent_logs: [] });
+    try {
+      const res = await syncDriveDocuments();
+      if (!res.success) {
+        notify(res.error || 'Error iniciando sincronizacion', 'error');
+        setSyncProgress({ status: 'error', message: res.error || 'Error', progress: 0 });
+      }
+    } catch (e) {
+      notify('Error sincronizando', 'error');
+      setSyncProgress({ status: 'error', message: e.message || 'Error', progress: 0 });
+    }
+  }, [notify]);
+
+  const syncActive = syncProgress?.status === 'running' || syncProgress?.status === 'starting';
 
   return (
     <div className="admin-panel">
@@ -117,27 +239,41 @@ function AdminPanel({ onLogout, user }) {
       </nav>
 
       <main className="admin-content">
-        {activeTab === 'drive' && <DriveTab notify={notify} />}
+        {activeTab === 'drive' && (
+          <DriveTab
+            notify={notify}
+            syncProgress={syncProgress}
+            onStartSync={handleStartSync}
+            filesRefreshTick={filesRefreshTick}
+          />
+        )}
         {activeTab === 'embeddings' && <EmbeddingsTab notify={notify} />}
         {activeTab === 'metrics' && <MetricsTab notify={notify} />}
         {activeTab === 'ratings' && <RatingsTab notify={notify} />}
         {activeTab === 'pipeline' && <PipelineTab notify={notify} />}
       </main>
+
+      {activeTab !== 'drive' && syncActive && (
+        <FloatingSyncWidget
+          syncProgress={syncProgress}
+          onOpen={() => setActiveTab('drive')}
+        />
+      )}
     </div>
   );
 }
 
 // ========== TAB: GOOGLE DRIVE ==========
-function DriveTab({ notify }) {
+function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState(null);
   const [uploadFile, setUploadFile] = useState(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [pagination, setPagination] = useState({ totalFiles: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false });
+
+  const syncing = syncProgress?.status === 'running' || syncProgress?.status === 'starting';
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -153,7 +289,7 @@ function DriveTab({ notify }) {
     setLoading(false);
   }, [page, pageSize, search, notify]);
 
-  useEffect(() => { loadFiles(); }, [loadFiles]);
+  useEffect(() => { loadFiles(); }, [loadFiles, filesRefreshTick]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
@@ -189,32 +325,6 @@ function DriveTab({ notify }) {
     setLoading(false);
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncProgress({ status: 'starting', message: 'Iniciando...', progress: 0 });
-    try {
-      const res = await syncDriveDocuments();
-      if (res.success) {
-        const interval = setInterval(async () => {
-          const prog = await getSyncProgress();
-          setSyncProgress({ status: prog.status, message: prog.message, progress: prog.progress || 0 });
-          if (prog.status === 'completed' || prog.status === 'error') {
-            clearInterval(interval);
-            setSyncing(false);
-            if (prog.status === 'completed') {
-              notify(`Sincronizacion completa: ${prog.downloaded || 0} archivos`, 'success');
-              loadFiles();
-            }
-          }
-        }, 1000);
-        setTimeout(() => { clearInterval(interval); setSyncing(false); }, 300000);
-      }
-    } catch (e) {
-      notify('Error sincronizando', 'error');
-      setSyncing(false);
-    }
-  };
-
   const formatSize = (bytes) => {
     if (!bytes) return 'N/A';
     const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -226,12 +336,17 @@ function DriveTab({ notify }) {
     <div className="tab-content">
       <div className="section-header">
         <h2>Gestion de Documentos</h2>
-        <button onClick={handleSync} className="btn-primary" disabled={loading || syncing}>
+        <button onClick={onStartSync} className="btn-primary" disabled={loading || syncing}>
           <RefreshCw size={16} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
         </button>
       </div>
 
-      {syncProgress && <ProgressBar {...syncProgress} />}
+      {syncProgress && (
+        <div className="sync-panel">
+          <ProgressBar {...syncProgress} />
+          <SyncLogs logs={syncProgress.recent_logs} />
+        </div>
+      )}
 
       <div className="card">
         <h3>Subir Documento</h3>

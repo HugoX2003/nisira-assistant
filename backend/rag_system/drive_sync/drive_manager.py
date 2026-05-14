@@ -440,92 +440,115 @@ class GoogleDriveManager:
             logger.error(f"Error obteniendo información del archivo {file_id}: {e}")
             return None
     
-    def sync_documents(self) -> Dict[str, Any]:
+    def sync_documents(self, progress_callback=None) -> Dict[str, Any]:
         """
-        Sincronizar todos los documentos de la carpeta configurada
-        
+        Sincronizar todos los documentos de la carpeta configurada.
+
+        Args:
+            progress_callback: Funcion opcional que recibe kwargs
+                (current, total, current_file, log_message) para reportar
+                progreso a la UI durante el ciclo.
+
         Returns:
-            Resultado de la sincronización
+            Resultado de la sincronizacion
         """
+        def _emit(**kwargs):
+            if progress_callback:
+                try:
+                    progress_callback(**kwargs)
+                except Exception as cb_err:
+                    logger.warning(f"[WARN] progress_callback fallo: {cb_err}")
+
         if not self.service:
             return {
                 "success": False,
                 "error": "Servicio de Google Drive no inicializado"
             }
-        
-        logger.info("[SYNC] Iniciando sincronización de documentos desde Google Drive")
-        logger.info(f"[SAVE] Modo de almacenamiento: {'PostgreSQL (persistente)' if self.use_postgres else 'Filesystem (efímero)'}")
-        
+
+        logger.info("[SYNC] Iniciando sincronizacion de documentos desde Google Drive")
+        logger.info(f"[SAVE] Modo de almacenamiento: {'PostgreSQL (persistente)' if self.use_postgres else 'Filesystem (efimero)'}")
+        _emit(log_message="[SYNC] Listando archivos en Google Drive...")
+
         try:
             # Listar archivos en Drive
             files = self.list_files()
-            
+
             if not files:
+                _emit(current=0, total=0, log_message="[INFO] No hay archivos en la carpeta")
                 return {
                     "success": True,
                     "message": "No se encontraron archivos para sincronizar",
                     "files_processed": 0
                 }
-            
+
+            total = len(files)
+            _emit(current=0, total=total, log_message=f"[INFO] {total} archivos encontrados en Drive")
+
             downloaded_files = []
             skipped_files = []
-            too_large_files = []  # Archivos omitidos por tamaño
+            too_large_files = []  # Archivos omitidos por tamano
             errors = []
-            
-            for file_info in files:
+
+            for idx, file_info in enumerate(files, start=1):
                 file_id = file_info['id']
                 file_name = file_info['name']
                 modified_time = file_info.get('modifiedTime')
-                
+
                 should_download = True
-                
+
                 # Verificar si ya existe
                 if self.use_postgres:
                     # Verificar en PostgreSQL
                     if self.file_store.file_exists(file_id):
-                        # Verificar si necesita actualización
+                        # Verificar si necesita actualizacion
                         stored_mtime = self.file_store.get_file_modified_time(file_id)
-                        
+
                         if stored_mtime and modified_time:
                             drive_mtime = datetime.fromisoformat(
                                 modified_time.replace('Z', '+00:00')
                             )
-                            
+
                             # Comparar sin zona horaria para evitar problemas
                             stored_naive = stored_mtime.replace(tzinfo=None) if stored_mtime.tzinfo else stored_mtime
                             drive_naive = drive_mtime.replace(tzinfo=None) if drive_mtime.tzinfo else drive_mtime
-                            
+
                             if stored_naive >= drive_naive:
                                 should_download = False
                                 skipped_files.append(file_name)
                 else:
                     # Verificar en filesystem
                     local_path = os.path.join(self.download_path, file_name)
-                    
+
                     if os.path.exists(local_path):
-                        # Comparar fechas de modificación
+                        # Comparar fechas de modificacion
                         local_mtime = datetime.fromtimestamp(
-                            os.path.getmtime(local_path), 
+                            os.path.getmtime(local_path),
                             tz=timezone.utc
                         )
-                        
+
                         if modified_time:
                             drive_mtime = datetime.fromisoformat(
                                 modified_time.replace('Z', '+00:00')
                             )
-                            
+
                             if local_mtime >= drive_mtime:
                                 should_download = False
                                 skipped_files.append(file_name)
-                
+
                 if should_download:
+                    _emit(
+                        current=idx - 1,
+                        total=total,
+                        current_file=file_name,
+                        log_message=f"[DOWN] ({idx}/{total}) Descargando: {file_name}",
+                    )
                     downloaded_id = self.download_file(file_id, file_name, modified_time)
-                    
+
                     if downloaded_id == "TOO_LARGE":
-                        # Archivo omitido por tamaño
                         too_large_files.append(file_name)
+                        _emit(current=idx, total=total, current_file=file_name,
+                              log_message=f"[WARN] ({idx}/{total}) Omitido (>50MB): {file_name}")
                     elif downloaded_id:
-                        # Descargado exitosamente
                         downloaded_files.append({
                             "name": file_name,
                             "id": file_id,
@@ -533,9 +556,15 @@ class GoogleDriveManager:
                             "modified_time": modified_time,
                             "storage": "postgres" if self.use_postgres else "filesystem"
                         })
+                        _emit(current=idx, total=total, current_file=file_name,
+                              log_message=f"[OK] ({idx}/{total}) Guardado: {file_name}")
                     else:
-                        # Error al descargar
                         errors.append(f"Error descargando {file_name}")
+                        _emit(current=idx, total=total, current_file=file_name,
+                              log_message=f"[ERROR] ({idx}/{total}) Fallo: {file_name}")
+                else:
+                    _emit(current=idx, total=total, current_file=file_name,
+                          log_message=f"[SKIP] ({idx}/{total}) Ya existe: {file_name}")
             
             result = {
                 "success": True,

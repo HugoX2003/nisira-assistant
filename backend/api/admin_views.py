@@ -503,6 +503,82 @@ def delete_drive_file(request, file_id):
         )
 
 
+def _sync_progress_file():
+    return os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
+
+
+def _read_sync_progress():
+    path = _sync_progress_file()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _write_sync_progress(data):
+    path = _sync_progress_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        json.dump(data, f)
+
+
+def _update_sync_progress(status=None, message=None, progress=None,
+                          current=None, total=None, log_line=None,
+                          downloaded=None):
+    """Actualiza incrementalmente el archivo de progreso de sincronizacion."""
+    data = _read_sync_progress()
+    if 'recent_logs' not in data or not isinstance(data.get('recent_logs'), list):
+        data['recent_logs'] = []
+
+    if status is not None:
+        data['status'] = status
+    if message is not None:
+        data['message'] = message
+    if progress is not None:
+        data['progress'] = progress
+    if current is not None:
+        data['current'] = current
+    if total is not None:
+        data['total'] = total
+    if downloaded is not None:
+        data['downloaded'] = downloaded
+    if log_line:
+        data['recent_logs'].append({
+            'timestamp': datetime.now().isoformat(timespec='seconds'),
+            'message': log_line,
+        })
+        # Conservar solo las ultimas 50 lineas
+        data['recent_logs'] = data['recent_logs'][-50:]
+
+    _write_sync_progress(data)
+
+
+def _make_sync_progress_callback():
+    """Callback que pasamos al drive_manager para que reporte progreso."""
+    def callback(current=None, total=None, current_file=None, log_message=None, status_override=None):
+        progress = None
+        if total:
+            progress = int((current or 0) / total * 100)
+        message = None
+        if current is not None and total is not None:
+            if current_file:
+                message = f"{current}/{total} - {current_file}"
+            else:
+                message = f"{current}/{total}"
+        _update_sync_progress(
+            status=status_override or 'running',
+            message=message,
+            progress=progress,
+            current=current,
+            total=total,
+            log_line=log_message,
+        )
+    return callback
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @admin_required
@@ -515,55 +591,51 @@ def sync_drive_documents(request):
             {"error": "Sistema RAG no disponible"},
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
-    
+
     try:
         drive_manager = GoogleDriveManager()
-        
-        # Inicializar archivo de progreso
-        progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
-        os.makedirs(os.path.dirname(progress_file), exist_ok=True)
-        
-        # Estado inicial
-        with open(progress_file, 'w') as f:
-            json.dump({
-                'status': 'starting',
-                'message': 'Iniciando sincronización...',
-                'progress': 0,
-                'current': 0,
-                'total': 0
-            }, f)
-        
-        result = drive_manager.sync_documents()
-        
+
+        # Estado inicial: reset completo (limpia logs viejos)
+        _write_sync_progress({
+            'status': 'starting',
+            'message': 'Iniciando sincronizacion...',
+            'progress': 0,
+            'current': 0,
+            'total': 0,
+            'recent_logs': [],
+        })
+
+        callback = _make_sync_progress_callback()
+        result = drive_manager.sync_documents(progress_callback=callback)
+
         # Estado final
-        with open(progress_file, 'w') as f:
-            json.dump({
-                'status': 'completed',
-                'message': f"Sincronización completa: {result.get('downloaded', 0)} archivos descargados",
-                'progress': 100,
-                'downloaded': result.get('downloaded', 0)
-            }, f)
-        
+        downloaded = result.get('downloaded', 0)
+        _update_sync_progress(
+            status='completed',
+            message=f"Sincronizacion completa: {downloaded} archivos descargados",
+            progress=100,
+            downloaded=downloaded,
+            log_line=f"[OK] Sincronizacion completa: {downloaded} archivos",
+        )
+
         return Response({
             "success": result.get('success', False),
             "data": result
         })
-        
+
     except Exception as e:
         logger.error(f"Error sincronizando documentos: {e}")
-        
-        # Guardar estado de error
+
         try:
-            progress_file = os.path.join(settings.BASE_DIR, 'data', 'temp', 'sync_progress.json')
-            with open(progress_file, 'w') as f:
-                json.dump({
-                    'status': 'error',
-                    'message': str(e),
-                    'progress': 0
-                }, f)
-        except:
+            _update_sync_progress(
+                status='error',
+                message=str(e),
+                progress=0,
+                log_line=f"[ERROR] {e}",
+            )
+        except Exception:
             pass
-        
+
         return Response(
             {"error": str(e)},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
