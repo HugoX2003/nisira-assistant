@@ -15,8 +15,9 @@ def _generate_conversation_slug():
 class Conversation(models.Model):
     # Usuario dueño de la conversación
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True, related_name='conversations')
-    # Slug aleatorio para URLs publicas (oculta el ID secuencial)
-    slug = models.CharField(max_length=16, unique=True, db_index=True, default=_generate_conversation_slug)
+    # Slug aleatorio para URLs publicas (oculta el ID secuencial).
+    # unique=True ya crea un indice automaticamente; no necesitamos db_index.
+    slug = models.CharField(max_length=16, unique=True, default=_generate_conversation_slug)
     # Título de la conversación (puede ser la primera pregunta)
     title = models.CharField(max_length=255, blank=True, default='')
     # Fecha de creación
