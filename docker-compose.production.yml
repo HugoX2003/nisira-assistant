@@ -38,9 +38,20 @@ services:
       # APIs
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
       GOOGLE_DRIVE_FOLDER_ID: ${GOOGLE_DRIVE_FOLDER_ID}
       GOOGLE_CREDENTIALS_JSON: ${GOOGLE_CREDENTIALS_JSON}
       ENABLE_GOOGLE_DRIVE: ${ENABLE_GOOGLE_DRIVE:-true}
+
+      # LLM (proveedor y modelos configurables)
+      LLM_PROVIDER: ${LLM_PROVIDER:-openrouter}
+      LLM_MODEL_GEMINI: ${LLM_MODEL_GEMINI:-gemini-2.0-flash-exp}
+      LLM_MODEL_OPENROUTER: ${LLM_MODEL_OPENROUTER:-google/gemma-2-9b-it:free}
+      LLM_MODEL_GROQ: ${LLM_MODEL_GROQ:-llama-3.3-70b-versatile}
+      RAGAS_EVALUATOR_MODEL: ${RAGAS_EVALUATOR_MODEL:-gemini-2.0-flash-exp}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-sentence-transformers/all-mpnet-base-v2}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+      HNSW_EF_SEARCH: ${HNSW_EF_SEARCH:-200}
 
       # Security (HTTPS — activar cuando haya certificado SSL)
       SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-False}
