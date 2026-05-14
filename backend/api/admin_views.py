@@ -1050,7 +1050,14 @@ def _run_embedding_generation_in_background():
                                 'metadata': metadata
                             })
                         
-                        # Agregar al vector store (ChromaDB o PostgreSQL según configuración)
+                        # Borrar chunks viejos del mismo archivo si existian (caso: archivo actualizado).
+                        # Esto evita acumular versiones antiguas cuando un PDF cambia de contenido.
+                        if vector_backend == 'postgres' and hasattr(vector_store, 'delete_by_filename'):
+                            old_deleted = vector_store.delete_by_filename(pdf_file)
+                            if old_deleted > 0:
+                                progress["logs"].append(f"   [UPDATE] Sobrescribiendo {old_deleted} chunks viejos de '{pdf_file}'")
+
+                        # Agregar al vector store (ChromaDB o PostgreSQL segun configuracion)
                         logger.info(f"   [SAVE] Llamando a add_documents con {len(documents)} documentos...")
                         logger.info(f"   [SAVE] Vector store type: {type(vector_store).__name__}")
                         storage_result = vector_store.add_documents(
@@ -1058,15 +1065,15 @@ def _run_embedding_generation_in_background():
                             embeddings=embeddings
                         )
                         logger.info(f"   [SAVE] Resultado de almacenamiento: {storage_result}")
-                        
+
                         if not storage_result:
-                            logger.error(f"   [ERROR] FALLÓ el almacenamiento de embeddings para '{pdf_file}'")
+                            logger.error(f"   [ERROR] FALLO el almacenamiento de embeddings para '{pdf_file}'")
                         else:
                             logger.info(f"   [OK] PDF '{pdf_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                         progress["processed"] += 1
                         progress["logs"].append(f"   [OK] Completado: {len(chunks)} chunks")
                         _save_progress(progress)
-                        
+
                         processed_files.append({
                             "name": pdf_file,
                             "chunks": len(chunks),
@@ -1170,6 +1177,12 @@ def _run_embedding_generation_in_background():
                                 'metadata': metadata
                             })
                         
+                        # Borrar chunks viejos del mismo archivo si existian (archivo actualizado)
+                        if vector_backend == 'postgres' and hasattr(vector_store, 'delete_by_filename'):
+                            old_deleted = vector_store.delete_by_filename(txt_file)
+                            if old_deleted > 0:
+                                progress["logs"].append(f"   [UPDATE] Sobrescribiendo {old_deleted} chunks viejos de '{txt_file}'")
+
                         logger.info(f"   [SAVE] Llamando a add_documents con {len(documents)} documentos...")
                         logger.info(f"   [SAVE] Vector store type: {type(vector_store).__name__}")
                         storage_result = vector_store.add_documents(
@@ -1177,15 +1190,15 @@ def _run_embedding_generation_in_background():
                             embeddings=embeddings
                         )
                         logger.info(f"   [SAVE] Resultado de almacenamiento: {storage_result}")
-                        
+
                         if not storage_result:
-                            logger.error(f"   [ERROR] FALLÓ el almacenamiento de embeddings para '{txt_file}'")
+                            logger.error(f"   [ERROR] FALLO el almacenamiento de embeddings para '{txt_file}'")
                         else:
                             logger.info(f"   [OK] TXT '{txt_file}' procesado y ALMACENADO completamente ({len(chunks)} chunks)")
                         progress["processed"] += 1
                         progress["logs"].append(f"   [OK] Completado: {len(chunks)} chunks")
                         _save_progress(progress)
-                        
+
                         processed_files.append({
                             "name": txt_file,
                             "chunks": len(chunks),

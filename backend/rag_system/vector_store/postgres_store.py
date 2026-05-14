@@ -148,33 +148,46 @@ class PostgresVectorStore:
                             logger.error(f"[ERROR] Error migrando datos: {migrate_error}")
                             self.conn.rollback()
                     
-                    # Crear índice IVFFlat (solo si hay suficientes datos)
+                    # Crear indice HNSW (mejor recall + soporte de updates incrementales que IVFFlat)
+                    # Parametros: m=32 (conexiones por nodo), ef_construction=128 (calidad en build).
+                    # ef_search se ajusta a 200 para garantizar recall@10 >0.95 a escala (10k+).
                     try:
-                        # Verificar si ya existe el índice
                         cur.execute("""
-                            SELECT COUNT(*) FROM pg_indexes 
-                            WHERE tablename = 'rag_embeddings' 
-                            AND indexname = 'idx_embedding_vector'
+                            SELECT COUNT(*) FROM pg_indexes
+                            WHERE tablename = 'rag_embeddings'
+                            AND indexname IN ('idx_embedding_vector_hnsw', 'idx_embedding_vector')
                         """)
-                        if cur.fetchone()[0] == 0:
-                            # Crear índice solo si hay más de 1000 filas (recomendación pgvector)
-                            cur.execute("SELECT COUNT(*) FROM rag_embeddings")
-                            row_count = cur.fetchone()[0]
-                            
-                            if row_count > 1000:
-                                logger.info(f"[STATS] Creando índice IVFFlat para {row_count} embeddings...")
-                                cur.execute(f"""
-                                    CREATE INDEX idx_embedding_vector 
-                                    ON rag_embeddings 
-                                    USING ivfflat (embedding_vector vector_cosine_ops)
-                                    WITH (lists = 100);
-                                """)
-                                self.conn.commit()
-                                logger.info("[OK] Índice IVFFlat creado")
-                            else:
-                                logger.info(f"[INFO]  Solo {row_count} embeddings, índice IVFFlat se creará después de 1000+")
+                        existing_index = cur.fetchone()[0]
+
+                        if existing_index == 0:
+                            logger.info("[STATS] Creando indice HNSW (m=32, ef_construction=128)...")
+                            cur.execute("""
+                                CREATE INDEX idx_embedding_vector_hnsw
+                                ON rag_embeddings
+                                USING hnsw (embedding_vector vector_cosine_ops)
+                                WITH (m = 32, ef_construction = 128);
+                            """)
+                            self.conn.commit()
+                            logger.info("[OK] Indice HNSW creado")
+                        else:
+                            logger.info("[OK] Indice vectorial ya existe")
+
+                        # Ajustar ef_search a nivel de rol (persiste para sesiones nuevas)
+                        ef_search = int(os.getenv("HNSW_EF_SEARCH", "200"))
+                        try:
+                            cur.execute(
+                                f"ALTER ROLE CURRENT_USER SET hnsw.ef_search = {ef_search};"
+                            )
+                            self.conn.commit()
+                            # Tambien lo aplicamos a esta sesion (sino solo aplica a las nuevas)
+                            cur.execute(f"SET hnsw.ef_search = {ef_search};")
+                            self.conn.commit()
+                            logger.info(f"[OK] hnsw.ef_search ajustado a {ef_search}")
+                        except Exception as ef_err:
+                            logger.warning(f"[WARN] No se pudo ajustar ef_search: {ef_err}")
+                            self.conn.rollback()
                     except Exception as idx_error:
-                        logger.warning(f"[WARN] No se pudo crear índice IVFFlat: {idx_error}")
+                        logger.warning(f"[WARN] No se pudo crear indice HNSW: {idx_error}")
                         self.conn.rollback()
                 else:
                     # Sin pgvector, usar JSONB
@@ -524,6 +537,40 @@ class PostgresVectorStore:
             logger.error(f"[ERROR] Error listando documentos: {e}")
             return {"success": False, "error": str(e)}
     
+    def delete_by_filename(self, file_name: str) -> int:
+        """
+        Borrar todos los chunks de un archivo por su nombre.
+
+        Util para sobrescribir cuando un documento se actualiza (mismo nombre,
+        contenido distinto): se borran los chunks viejos antes de insertar los nuevos.
+
+        Args:
+            file_name: Nombre del archivo a borrar
+
+        Returns:
+            Numero de chunks borrados (0 si no habia ninguno)
+        """
+        if not self.is_ready():
+            return 0
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM rag_embeddings WHERE metadata->>'file_name' = %s",
+                    (file_name,)
+                )
+                deleted = cur.rowcount
+                self.conn.commit()
+                if deleted:
+                    logger.info(f"[CLEAN] {deleted} chunks viejos borrados para '{file_name}'")
+                return deleted
+        except Exception as e:
+            logger.error(f"[ERROR] Error borrando chunks de '{file_name}': {e}")
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+            return 0
+
     def check_document_exists(self, file_name: str, file_hash: str = None) -> bool:
         """
         Verificar si un documento ya tiene embeddings
