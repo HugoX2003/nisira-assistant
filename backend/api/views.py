@@ -285,10 +285,37 @@ def custom_login(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])
 def serve_document(request, filename: str):
-    """Servir documentos almacenados en BD (PostgreSQL) o directorio (filesystem)."""
+    """Servir documentos almacenados en BD (PostgreSQL) o directorio (filesystem).
+
+    Autenticacion: acepta JWT por header Authorization: Bearer <token> o por
+    query param ?token=<token>. Lo segundo es necesario porque los iframes
+    de PDF no pueden enviar headers custom (no podemos meter Authorization
+    en un iframe src), y queremos que el visor del navegador respete el
+    fragmento #page=N para navegar a la pagina referenciada.
+    """
     from .models import UploadedDocument
+    from rest_framework_simplejwt.authentication import JWTAuthentication
+
+    # Validar autenticacion manual (acepta header o query param)
+    auth = JWTAuthentication()
+    raw_token = None
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+    if auth_header.startswith('Bearer '):
+        raw_token = auth_header[7:]
+    else:
+        raw_token = request.GET.get('token')
+
+    if not raw_token:
+        return Response({'error': 'Autenticacion requerida'}, status=status.HTTP_401_UNAUTHORIZED)
+
+    try:
+        validated = auth.get_validated_token(raw_token)
+        auth.get_user(validated)  # asegura que existe y esta activo
+    except Exception as e:
+        logger.warning(f"Token invalido en serve_document: {e}")
+        return Response({'error': 'Token invalido o expirado'}, status=status.HTTP_401_UNAUTHORIZED)
     
     # Primero buscar en la base de datos
     try:

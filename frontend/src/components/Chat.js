@@ -60,50 +60,29 @@ const Sources = ({ sources, onOpenPdf }) => {
 };
 
 // Componente del visor de PDF lateral
+// Usamos URL directa (no blob) para que el visor de PDF del navegador
+// respete el fragmento #page=N y abra en la pagina referenciada.
+// El token JWT va por query param porque iframe src no permite headers custom.
 const PdfViewer = ({ source, onClose }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const loadPdf = async () => {
-      setLoading(true);
-      setError(null);
+    setError(null);
 
-      const baseUrl = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
-      const token = localStorage.getItem('token');
+    const baseUrl = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
+    const token = localStorage.getItem('token');
 
-      if (!token || !source?.file_name) {
-        setError('No se puede cargar el documento');
-        setLoading(false);
-        return;
-      }
+    if (!token || !source?.file_name) {
+      setError('No se puede cargar el documento');
+      return;
+    }
 
-      try {
-        const url = `${baseUrl}/api/documents/${encodeURIComponent(source.file_name)}/`;
-        const res = await fetch(url, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        if (!res.ok) throw new Error('Error al cargar');
-
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-
-        const pageParam = source.page ? `#page=${source.page}` : '';
-        setPdfUrl(objectUrl + pageParam);
-      } catch (e) {
-        setError('Error al cargar el documento');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadPdf();
-
-    return () => {
-      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
-    };
+    const fileNamePart = encodeURIComponent(source.file_name);
+    const tokenPart = encodeURIComponent(token);
+    const pageFragment = source.page ? `#page=${source.page}` : '';
+    const url = `${baseUrl}/api/documents/${fileNamePart}/?token=${tokenPart}${pageFragment}`;
+    setPdfUrl(url);
   }, [source]);
 
   return (
@@ -130,9 +109,8 @@ const PdfViewer = ({ source, onClose }) => {
       )}
 
       <div className="pdf-content">
-        {loading && <div className="pdf-loading">Cargando documento...</div>}
         {error && <div className="pdf-error">{error}</div>}
-        {pdfUrl && !loading && (
+        {pdfUrl && !error && (
           <iframe
             src={pdfUrl}
             title="Documento PDF"
