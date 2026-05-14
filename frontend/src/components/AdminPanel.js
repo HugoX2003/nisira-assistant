@@ -77,7 +77,7 @@ const ProgressBar = ({ progress, status, message }) => {
   );
 };
 
-const SyncLogs = ({ logs }) => {
+const SyncLogs = ({ logs, title = 'Logs de sincronizacion' }) => {
   const containerRef = React.useRef(null);
   React.useEffect(() => {
     if (containerRef.current) {
@@ -89,7 +89,7 @@ const SyncLogs = ({ logs }) => {
     return (
       <div className="sync-logs">
         <div className="sync-logs-header">
-          <Terminal size={14} /> Logs de sincronizacion
+          <Terminal size={14} /> {title}
         </div>
         <div className="sync-logs-empty">Esperando inicio...</div>
       </div>
@@ -99,20 +99,23 @@ const SyncLogs = ({ logs }) => {
   return (
     <div className="sync-logs">
       <div className="sync-logs-header">
-        <Terminal size={14} /> Logs de sincronizacion
+        <Terminal size={14} /> {title}
       </div>
       <div className="sync-logs-body" ref={containerRef}>
         {logs.map((log, i) => {
-          const msg = log.message || '';
+          // Soporta dos formatos: string plano o {timestamp, message}
+          const msg = typeof log === 'string' ? log : (log.message || '');
+          const ts = typeof log === 'string' ? '' : (log.timestamp || '');
           const cls = msg.includes('[ERROR]') ? 'log-error'
             : msg.includes('[WARN]') ? 'log-warn'
             : msg.includes('[OK]') ? 'log-ok'
             : msg.includes('[SKIP]') ? 'log-skip'
             : msg.includes('[DOWN]') ? 'log-down'
+            : msg.includes('[BRAIN]') || msg.includes('[SAVE]') ? 'log-down'
             : 'log-info';
           return (
             <div key={i} className={`sync-log-line ${cls}`}>
-              <span className="log-time">{(log.timestamp || '').slice(11, 19)}</span>
+              {ts && <span className="log-time">{ts.slice(11, 19)}</span>}
               <span className="log-msg">{msg}</span>
             </div>
           );
@@ -425,29 +428,58 @@ function EmbeddingsTab({ notify }) {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
-  const handleGenerate = async () => {
-    if (!window.confirm('Generar embeddings? Esto puede tardar varios minutos.')) return;
-    setLoading(true);
-    setProgress({ status: 'starting', logs: ['Iniciando...'] });
+  // Fetch inicial: si hay una generacion en curso (despues de reload), retomarla
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const p = await getEmbeddingProgress();
+        if (!cancelled && p && (p.status === 'running' || p.status === 'starting')) {
+          setProgress(p);
+        }
+      } catch (e) { /* silencioso */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Polling mientras la generacion este activa
+  useEffect(() => {
+    const s = progress?.status;
+    if (s !== 'running' && s !== 'starting') return;
     const interval = setInterval(async () => {
       try {
         const p = await getEmbeddingProgress();
         setProgress(p);
-        if (p.status === 'completed' || p.status === 'idle') clearInterval(interval);
-      } catch (e) {}
-    }, 1000);
+        if (p.status === 'completed') {
+          notify(`Generacion completa: ${p.processed || 0} archivos procesados`, 'success');
+          loadStatus();
+        } else if (p.status === 'error') {
+          const lastLog = p.logs && p.logs.length > 0 ? p.logs[p.logs.length - 1] : '';
+          notify(`Error generando: ${p.message || lastLog || 'desconocido'}`, 'error');
+        }
+      } catch (e) { /* silencioso */ }
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [progress?.status, notify, loadStatus]);
+
+  const handleGenerate = async () => {
+    if (!window.confirm('Generar embeddings? Esto puede tardar varias horas para corpus grandes.')) return;
+    setProgress({
+      status: 'starting',
+      total: 0, current: 0, current_file: '',
+      processed: 0, errors: 0,
+      logs: ['[INFO] Iniciando...'],
+    });
     try {
       const res = await generateEmbeddings();
-      clearInterval(interval);
-      if (res.success) {
-        notify(`${res.processed} archivos procesados`, 'success');
-        loadStatus();
+      if (!res.success) {
+        notify(res.error || 'Error iniciando generacion', 'error');
+        setProgress({ status: 'error', message: res.error || 'Error', logs: [`[ERROR] ${res.error || 'Error'}`] });
       }
     } catch (e) {
       notify('Error generando', 'error');
+      setProgress({ status: 'error', message: e.message, logs: [`[ERROR] ${e.message || 'Error'}`] });
     }
-    setProgress(null);
-    setLoading(false);
   };
 
   const handleVerify = async () => {
@@ -476,6 +508,16 @@ function EmbeddingsTab({ notify }) {
     setLoading(false);
   };
 
+  const generationActive = progress?.status === 'running' || progress?.status === 'starting';
+  const generationProgress = progress?.total > 0
+    ? Math.round(((progress.current || 0) / progress.total) * 100)
+    : 0;
+  const progressMessage = generationActive
+    ? (progress.current_file
+        ? `${progress.current || 0}/${progress.total || 0} - ${progress.current_file}`
+        : (progress.logs && progress.logs.length > 0 ? progress.logs[progress.logs.length - 1] : 'Iniciando...'))
+    : (progress?.message || '');
+
   return (
     <div className="tab-content">
       <div className="info-box">
@@ -493,35 +535,35 @@ function EmbeddingsTab({ notify }) {
       <div className="section-header">
         <h2>Gestion de Embeddings</h2>
         <div className="btn-group">
-          <button onClick={handleVerify} className="btn-secondary" disabled={loading}>
+          <button onClick={handleVerify} className="btn-secondary" disabled={loading || generationActive}>
             <Search size={16} /> Verificar
           </button>
-          <button onClick={handleClear} className="btn-danger" disabled={loading}>
+          <button onClick={handleClear} className="btn-danger" disabled={loading || generationActive}>
             <Trash2 size={16} /> Limpiar
           </button>
-          <button onClick={handleGenerate} className="btn-primary" disabled={loading}>
-            <Zap size={16} /> Generar
+          <button onClick={handleGenerate} className="btn-primary" disabled={loading || generationActive}>
+            <Zap size={16} /> {generationActive ? 'Generando...' : 'Generar'}
           </button>
         </div>
       </div>
 
-      {loading && progress ? (
-        <div className="loading">
-          <div className="spinner" />
-          <h3><Hourglass size={18} /> Generando Embeddings</h3>
-          {progress.total > 0 && (
-            <>
-              <p>{progress.current} / {progress.total} archivos</p>
-              <ProgressBar progress={(progress.current / progress.total) * 100} status="syncing" message={progress.current_file || ''} />
-            </>
-          )}
+      {progress && (
+        <div className="sync-panel">
+          <ProgressBar
+            progress={generationProgress}
+            status={progress.status === 'starting' ? 'running' : progress.status}
+            message={progressMessage}
+          />
+          <SyncLogs logs={progress.logs} title="Logs de embeddings" />
         </div>
-      ) : loading ? <Loading text="Procesando..." /> : status ? (
+      )}
+
+      {loading && !generationActive ? <Loading text="Cargando..." /> : status ? (
         <div className="stats-grid">
           <StatCard title="Colecciones" value={status.total_collections || 0} icon={<BookOpen size={20} />} />
           <StatCard title="Fragmentos" value={status.total_documents || 0} subtitle="Chunks generados" icon={<Puzzle size={20} />} />
         </div>
-      ) : <Empty>Sin informacion</Empty>}
+      ) : !progress ? <Empty>Sin informacion</Empty> : null}
     </div>
   );
 }
