@@ -13,6 +13,7 @@ import logging
 import os
 import json
 import hashlib
+import threading
 from datetime import datetime
 from typing import Dict, Any
 
@@ -579,21 +580,66 @@ def _make_sync_progress_callback():
     return callback
 
 
+_sync_thread_lock = threading.Lock()
+_sync_thread = None
+
+
+def _run_sync_in_background():
+    """Ejecuta la sincronizacion completa en un thread; actualiza el archivo de progreso."""
+    global _sync_thread
+    try:
+        drive_manager = GoogleDriveManager()
+        callback = _make_sync_progress_callback()
+        result = drive_manager.sync_documents(progress_callback=callback)
+        downloaded = result.get('downloaded', 0)
+        _update_sync_progress(
+            status='completed',
+            message=f"Sincronizacion completa: {downloaded} archivos descargados",
+            progress=100,
+            downloaded=downloaded,
+            log_line=f"[OK] Sincronizacion completa: {downloaded} archivos",
+        )
+    except Exception as e:
+        logger.error(f"Error en thread de sincronizacion: {e}")
+        try:
+            _update_sync_progress(
+                status='error',
+                message=str(e),
+                progress=0,
+                log_line=f"[ERROR] {e}",
+            )
+        except Exception:
+            pass
+    finally:
+        with _sync_thread_lock:
+            _sync_thread = None
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @admin_required
 def sync_drive_documents(request):
     """
-    Sincronizar documentos de Google Drive
+    Disparar sincronizacion de Google Drive en background.
+
+    Retorna inmediatamente; el cliente debe hacer polling a get_sync_progress
+    para ver el avance. Esto evita timeouts de nginx/gunicorn cuando la
+    sincronizacion dura mas que el timeout configurado.
     """
+    global _sync_thread
+
     if not RAG_MODULES_AVAILABLE:
         return Response(
             {"error": "Sistema RAG no disponible"},
             status=status.HTTP_503_SERVICE_UNAVAILABLE
         )
 
-    try:
-        drive_manager = GoogleDriveManager()
+    with _sync_thread_lock:
+        if _sync_thread is not None and _sync_thread.is_alive():
+            return Response(
+                {"success": False, "error": "Ya hay una sincronizacion en curso"},
+                status=status.HTTP_409_CONFLICT,
+            )
 
         # Estado inicial: reset completo (limpia logs viejos)
         _write_sync_progress({
@@ -605,41 +651,17 @@ def sync_drive_documents(request):
             'recent_logs': [],
         })
 
-        callback = _make_sync_progress_callback()
-        result = drive_manager.sync_documents(progress_callback=callback)
-
-        # Estado final
-        downloaded = result.get('downloaded', 0)
-        _update_sync_progress(
-            status='completed',
-            message=f"Sincronizacion completa: {downloaded} archivos descargados",
-            progress=100,
-            downloaded=downloaded,
-            log_line=f"[OK] Sincronizacion completa: {downloaded} archivos",
+        _sync_thread = threading.Thread(
+            target=_run_sync_in_background,
+            name="drive-sync",
+            daemon=True,
         )
+        _sync_thread.start()
 
-        return Response({
-            "success": result.get('success', False),
-            "data": result
-        })
-
-    except Exception as e:
-        logger.error(f"Error sincronizando documentos: {e}")
-
-        try:
-            _update_sync_progress(
-                status='error',
-                message=str(e),
-                progress=0,
-                log_line=f"[ERROR] {e}",
-            )
-        except Exception:
-            pass
-
-        return Response(
-            {"error": str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    return Response({
+        "success": True,
+        "message": "Sincronizacion iniciada en background. Use el endpoint de progreso para seguimiento.",
+    })
 
 
 @api_view(['GET'])
