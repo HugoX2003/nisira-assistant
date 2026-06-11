@@ -766,12 +766,16 @@ class RAGPipeline:
         if self.llm:
             try:
                 prompt = (
-                    "Tu tarea es reescribir una pregunta de chat para que sea una consulta "
-                    "de búsqueda autónoma y completa, incorporando el tema de la pregunta anterior.\n\n"
-                    f"Pregunta anterior del usuario: {last_user}\n"
-                    f"Nueva pregunta (puede ser incompleta o referencial): {question}\n\n"
-                    "Escribe ÚNICAMENTE la consulta de búsqueda reformulada, sin comillas, "
-                    "sin explicaciones, en español, máximo 20 palabras."
+                    "Combina las dos preguntas siguientes en una sola consulta de búsqueda "
+                    "completa y autónoma, usando el contenido literal de ambas.\n\n"
+                    "Ejemplos:\n"
+                    "  P1: ¿Qué es Samba?  P2: ¿Y cómo se instala?  → cómo se instala Samba\n"
+                    "  P1: Explica el módulo de facturación de NISIRA  P2: ¿Cuáles son sus reportes?  "
+                    "→ reportes del módulo de facturación de NISIRA\n\n"
+                    f"P1: {last_user}\n"
+                    f"P2: {question}\n\n"
+                    "Responde SOLO con la consulta combinada, sin comillas, sin explicaciones, "
+                    "en español, máximo 20 palabras."
                 )
                 response = self.llm.invoke(prompt)
                 reformulated = (
