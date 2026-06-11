@@ -708,74 +708,120 @@ Responde en español de forma natural y completa:"""
                 "error": str(e)
             }
     
+    # Señales que indican una consulta técnica/académica real
+    _TECHNICAL_SIGNALS = re.compile(
+        r'\b('
+        r'define|definici[oó]n|concepto|significado|explicar?|describe|qu[eé]\s+es|c[oó]mo\s+(funciona|se\s+\w+|hacer)|'
+        r'iso|ley|decreto|norma|reglamento|proceso|procedimiento|gesti[oó]n|control|riesgo|'
+        r'auditor[ií]a|m[oó]dulo|factura|contabilidad|inventario|planilla|remuneraci[oó]n|'
+        r'comprobante|asiento|cuenta|balance|presupuesto|orden|compra|venta|cliente|proveedor|'
+        r'config|instala|desplieg|manual|gu[ií]a|tutorial|paso|instruccion|'
+        r'seg[uú]n|conforme|indica|establece|menciona|'
+        r'cu[aá]l|cu[aá]ndo|d[oó]nde|por\s+qu[eé]|cuanto'
+        r')',
+        re.IGNORECASE,
+    )
+
     def _is_trivial_query(self, question: str) -> bool:
         """
-        Detecta saludos, agradecimientos y preguntas demasiado cortas o genéricas
-        que no requieren búsqueda en documentos.
+        Detecta saludos, agradecimientos y mensajes sin contexto técnico que no
+        requieren búsqueda en documentos.
+
+        Lógica en tres niveles:
+        1. Menos de 3 palabras → siempre trivial.
+        2. Coincide con un patrón conversacional explícito (multilingüe) → trivial.
+        3. Consulta corta (≤ 6 palabras) sin ninguna señal técnica ni signo de
+           pregunta → probablemente conversacional, tratar como trivial.
         """
         q = question.strip().lower()
-
-        # Menos de 3 tokens con contenido real → siempre trivial
         words = re.findall(r'\b\w+\b', q)
+
+        # Nivel 1: muy corta
         if len(words) < 3:
             return True
 
-        # Patrones conversacionales explícitos
+        # Nivel 2: patrones conversacionales explícitos (ES / EN / PT / FR)
         trivial_patterns = [
-            r'^(hola|hi|hey|hello|buenas|saludos)\b',
-            r'^buenos?\s+(días|tardes|noches)\b',
-            r'^(gracias|muchas gracias|thanks?|thank you)\b',
-            r'^(ok|okay|bien|perfecto|entendido|claro)\b',
-            r'^(cómo estás|como estas|cómo te encuentras)',
-            r'^(cómo te llamas|como te llamas|quién eres|quien eres|qué eres|que eres)',
-            r'^(ayuda|help)\s*$',
-            r'^(qué puedes hacer|que puedes hacer|para qué sirves|para que sirves)',
+            r'^(hola|hi|hey|hello|ola|buenas|saludos|buen\s+d[ií]a)\b',
+            r'^buenos?\s+(d[ií]as?|tardes?|noches?)\b',
+            r'^(gracias|muchas\s+gracias|thanks?|thank\s+you|merci|danke|obrigad[oa])\b',
+            r'^(ok|okay|okey|bien|perfecto|entendido|claro|de\s+acuerdo|listo|genial|excelente|dale)\b',
+            r'(c[oó]mo\s+(te\s+(llamas|va|encuentras)|est[aá]s?))',
+            r'(qui[eé]n\s+eres|qu[eé]\s+eres|who\s+are\s+you|what\s+are\s+you)',
+            r'(qu[eé]\s+puedes\s+(hacer|ayudar|decirme)|para\s+qu[eé]\s+sirves|what\s+can\s+you\s+do)',
+            r'^(ayuda|help|ayúdame|ayudame|socorro)\s*$',
+            r'^(buen[ao]s?|mal|regular|m[aá]s\s+o\s+menos)\s*$',
+            r'^(s[ií]|no|nada|ninguno|ninguna)\s*$',
         ]
-
         for pattern in trivial_patterns:
             if re.search(pattern, q):
+                return True
+
+        # Nivel 3: consulta corta sin señales técnicas ni signo de pregunta
+        if len(words) <= 6 and '?' not in question:
+            if not self._TECHNICAL_SIGNALS.search(q):
                 return True
 
         return False
 
     def _handle_trivial_query(self, question: str) -> Dict[str, Any]:
         """
-        Responde directamente con el LLM en modo conversacional,
-        sin ejecutar búsqueda en el vector store.
+        Responde directamente con el LLM en modo conversacional (sin RAG).
+        El prompt instruye al modelo a presentarse como NISIRA Assistant y
+        mencionar su especialidad en documentación de NISIRA ERP.
         """
         answer = None
 
         if self.llm:
             try:
                 prompt = (
-                    "Eres NISIRA Assistant, un asistente académico amigable. "
-                    "El usuario te envió un mensaje conversacional o saludo, "
-                    "no una consulta sobre documentos.\n\n"
+                    "Eres NISIRA Assistant, el asistente virtual especializado en la "
+                    "documentación del sistema ERP NISIRA. Tu función es ayudar a los "
+                    "usuarios a consultar manuales, guías, procesos y módulos de NISIRA "
+                    "(contabilidad, inventario, facturación, planillas, compras, ventas, etc.).\n\n"
+                    "El usuario te acaba de enviar un mensaje conversacional o saludo, "
+                    "no una consulta técnica sobre documentos.\n\n"
                     f"Mensaje del usuario: {question}\n\n"
-                    "Responde de forma breve y natural en español. "
-                    "Puedes mencionar que estás especializado en responder preguntas "
-                    "sobre documentos académicos. No uses Markdown ni listas."
+                    "Instrucciones:\n"
+                    "- Responde de forma breve, cálida y natural en español.\n"
+                    "- Preséntate como NISIRA Assistant si es un saludo inicial.\n"
+                    "- Menciona que puedes ayudar con consultas sobre la documentación "
+                    "y los módulos del sistema NISIRA.\n"
+                    "- Invita al usuario a hacer su pregunta.\n"
+                    "- No uses Markdown, negritas ni listas. Máximo 3 oraciones."
                 )
                 response = self.llm.invoke(prompt)
                 answer = response.content if hasattr(response, 'content') else str(response)
             except Exception as e:
                 logger.warning(f"LLM falló en consulta trivial: {e}")
 
-        # Fallback sin LLM
+        # Fallback estático si el LLM no está disponible
         if not answer:
             q = question.strip().lower()
-            if re.search(r'\b(hola|hi|hey|buenos|saludos|hello)\b', q):
-                answer = ("¡Hola! Soy NISIRA Assistant. Estoy aquí para ayudarte a encontrar "
-                          "información en los documentos académicos disponibles. "
-                          "¿Qué deseas consultar?")
-            elif re.search(r'\b(gracias|thanks?)\b', q):
-                answer = "¡De nada! Si tienes más preguntas sobre los documentos, aquí estoy."
-            elif re.search(r'\b(quién|quien|qué eres|que eres)\b', q):
-                answer = ("Soy NISIRA Assistant, un asistente de búsqueda académica. "
-                          "Respondo preguntas basándome en los documentos cargados en el sistema.")
+            if re.search(r'\b(hola|hi|hey|hello|ola|buenos|saludos|buen\s+d[ií]a)\b', q):
+                answer = (
+                    "¡Hola! Soy NISIRA Assistant, tu asistente para consultas sobre el "
+                    "sistema ERP NISIRA. Puedo ayudarte a encontrar información en los "
+                    "manuales, guías y documentación de los módulos de NISIRA. "
+                    "¿En qué te puedo ayudar?"
+                )
+            elif re.search(r'\b(gracias|thanks?|obrigad)\b', q):
+                answer = (
+                    "¡Con gusto! Si tienes más consultas sobre el sistema NISIRA, "
+                    "aquí estaré para ayudarte."
+                )
+            elif re.search(r'\b(qui[eé]n|qu[eé]\s+eres|who|what\s+are)\b', q):
+                answer = (
+                    "Soy NISIRA Assistant, el asistente virtual especializado en la "
+                    "documentación del ERP NISIRA. Respondo consultas sobre módulos, "
+                    "procesos y guías del sistema. ¿Qué deseas consultar?"
+                )
             else:
-                answer = ("Para ayudarte mejor, ¿podrías hacerme una pregunta más específica "
-                          "sobre los temas académicos que te interesan?")
+                answer = (
+                    "Soy NISIRA Assistant, especializado en documentación del sistema NISIRA. "
+                    "Para ayudarte mejor, ¿podrías hacerme una consulta específica sobre "
+                    "algún módulo o proceso del sistema?"
+                )
 
         logger.info(f"Consulta trivial respondida directamente: '{question[:60]}'")
         return {
