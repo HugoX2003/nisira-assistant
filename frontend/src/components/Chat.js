@@ -155,8 +155,10 @@ export default function Chat({ onLogout, user }) {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
+  // matchMedia usa el mismo motor que CSS; evita diferencias con window.innerWidth
+  // (scrollbar nativa, zoom del SO, DevTools device mode, etc.)
+  const [isMobile, setIsMobile] = useState(!window.matchMedia('(min-width: 769px)').matches);
+  const [sidebarOpen, setSidebarOpen] = useState(window.matchMedia('(min-width: 769px)').matches);
   const [deleteModal, setDeleteModal] = useState(null);
   const [ratingBusy, setRatingBusy] = useState({});
   const [pdfSource, setPdfSource] = useState(null);
@@ -189,15 +191,17 @@ export default function Chat({ onLogout, user }) {
     setTimeout(scrollToBottom, 100);
   }, [scrollTrigger, scrollToBottom]);
 
-  // Sincroniza sidebar y flag isMobile al redimensionar la ventana
+  // Sincroniza sidebar e isMobile cuando el viewport cruza el breakpoint 769px.
+  // matchMedia 'change' solo dispara al cruzar el umbral, no en cada pixel.
   useEffect(() => {
-    const onResize = () => {
-      const mobile = window.innerWidth <= 768;
-      setIsMobile(mobile);
-      if (!mobile) setSidebarOpen(true);
+    const mq = window.matchMedia('(min-width: 769px)');
+    const onChange = (e) => {
+      const desktop = e.matches;
+      setIsMobile(!desktop);
+      setSidebarOpen(desktop);
     };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
   }, []);
 
   // ── Conversaciones ───────────────────────────────────────
