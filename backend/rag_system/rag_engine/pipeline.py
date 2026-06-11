@@ -1364,12 +1364,35 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
         # Si el filtro es demasiado estricto (ninguno pasa), devolver al menos el mejor
         final_pool = qualifying if qualifying else diverse_results[:1]
 
+        # 8. SLOT GARANTIZADO para documentos con alta coincidencia de metadatos
+        # Si existe al menos un doc con metadata_boost >= 0.6 que no entró en
+        # final_pool[:top_k], se inserta en la primera posición desplazando al último.
+        HIGH_METADATA_BOOST = 0.6
+        top_slice = final_pool[:top_k]
+        top_ids = {d["id"] for d in top_slice}
+        guaranteed = next(
+            (
+                d for d in all_results
+                if d.get("metadata_boost", 0) >= HIGH_METADATA_BOOST
+                and d["id"] not in top_ids
+            ),
+            None,
+        )
+        if guaranteed is not None:
+            # Reemplaza el último slot con el documento garantizado al frente
+            top_slice = [guaranteed] + top_slice[: max(top_k - 1, 0)]
+            logger.info(
+                f"[SLOT] Doc garantizado por metadata boost "
+                f"({guaranteed.get('metadata_boost', 0):.2f}): "
+                f"{guaranteed.get('metadata', {}).get('source', '?')[:60]}"
+            )
+
         logger.info(
-            f"[OK] Búsqueda híbrida: {len(final_pool)} documentos relevantes "
+            f"[OK] Búsqueda híbrida: {len(top_slice)} documentos relevantes "
             f"(de {len(diverse_results)} candidatos, threshold={min_threshold})"
         )
 
-        return final_pool[:top_k]
+        return top_slice
     
     def _normalize_text(self, text: str) -> str:
         """Normalizar texto quitando acentos"""
