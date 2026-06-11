@@ -247,7 +247,7 @@ export default function Chat({ onLogout, user }) {
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Mensajes ─────────────────────────────────────────────
 
@@ -329,7 +329,7 @@ export default function Chat({ onLogout, user }) {
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Envío de mensaje ─────────────────────────────────────
 
