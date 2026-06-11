@@ -67,6 +67,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .conv-item {
@@ -566,8 +567,10 @@
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
+    top: 0;
+    left: 0;
     z-index: 50;
-    height: 100%;
+    height: 100vh;
   }
   
   .sidebar.hidden {

@@ -155,6 +155,7 @@ export default function Chat({ onLogout, user }) {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768);
   const [deleteModal, setDeleteModal] = useState(null);
   const [ratingBusy, setRatingBusy] = useState({});
@@ -185,6 +186,17 @@ export default function Chat({ onLogout, user }) {
   useEffect(() => {
     setTimeout(scrollToBottom, 100);
   }, [scrollTrigger, scrollToBottom]);
+
+  // Sincroniza sidebar y flag isMobile al redimensionar la ventana
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) setSidebarOpen(true);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   // ── Conversaciones ───────────────────────────────────────
 
@@ -402,7 +414,7 @@ export default function Chat({ onLogout, user }) {
 
   return (
     <div className={`chat-layout ${pdfSource ? 'with-pdf' : ''}`}>
-      {sidebarOpen && window.innerWidth <= 768 && (
+      {sidebarOpen && isMobile && (
         <div className="sidebar-overlay show" onClick={() => setSidebarOpen(false)} />
       )}
 
