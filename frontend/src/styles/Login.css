@@ -71,6 +71,33 @@
   transition: var(--transition);
 }
 
+.password-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-wrapper .form-input {
+  padding-right: 40px;
+}
+
+.btn-show-password {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  transition: color var(--transition);
+}
+
+.btn-show-password:hover {
+  color: var(--text-secondary);
+}
+
 .form-input::placeholder {
   color: var(--text-muted);
 }

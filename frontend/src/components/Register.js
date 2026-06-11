@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Eye, EyeOff } from 'lucide-react';
 import { register } from '../services/api';
 import '../styles/Login.css';
 
@@ -13,6 +13,8 @@ export default function Register({ onRegister, onBackToLogin }) {
     password: '',
     confirmPassword: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -106,30 +108,52 @@ export default function Register({ onRegister, onBackToLogin }) {
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              className="form-input"
-              placeholder="Mínimo 6 caracteres"
-              value={formData.password}
-              onChange={handleChange}
-              disabled={loading}
-            />
+            <div className="password-wrapper">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Mínimo 6 caracteres"
+                value={formData.password}
+                onChange={handleChange}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="btn-show-password"
+                onClick={() => setShowPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
             <label className="form-label" htmlFor="confirmPassword">Confirmar contraseña</label>
-            <input
-              id="confirmPassword"
-              name="confirmPassword"
-              type="password"
-              className="form-input"
-              placeholder="Repite la contraseña"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              disabled={loading}
-            />
+            <div className="password-wrapper">
+              <input
+                id="confirmPassword"
+                name="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Repite la contraseña"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                disabled={loading}
+              />
+              <button
+                type="button"
+                className="btn-show-password"
+                onClick={() => setShowConfirmPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>

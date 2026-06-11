@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot } from 'lucide-react';
+import { Bot, Eye, EyeOff } from 'lucide-react';
 import { login, tokenManager } from '../services/api';
 import '../styles/Login.css';
 
@@ -9,6 +9,7 @@ import '../styles/Login.css';
 export default function Login({ onLogin, onShowRegister }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -66,16 +67,27 @@ export default function Login({ onLogin, onShowRegister }) {
 
           <div className="form-group">
             <label className="form-label" htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              className="form-input"
-              placeholder="Tu contraseña"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-              autoComplete="current-password"
-            />
+            <div className="password-wrapper">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Tu contraseña"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="btn-show-password"
+                onClick={() => setShowPassword(v => !v)}
+                tabIndex={-1}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>
