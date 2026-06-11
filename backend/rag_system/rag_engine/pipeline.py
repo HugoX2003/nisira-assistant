@@ -438,6 +438,12 @@ class RAGPipeline:
             # 1. Detectar si es una consulta sobre citas específicas
             is_citation_query, enhanced_query = self._enhance_citation_query(search_question)
 
+            # top_k adaptativo: consultas con identificador de documento (citas autor+año)
+            # son muy específicas → 3 docs es suficiente y más preciso.
+            # Consultas genéricas → 5 para mayor diversidad temática.
+            top_k = 3 if is_citation_query else 5
+            metrics_payload["counts"]["requested_top_k"] = top_k
+
             # 2. Usar la consulta mejorada para embeddings
             search_query = enhanced_query if is_citation_query else search_question
             embedding_start = perf_counter()

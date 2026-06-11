@@ -25,8 +25,14 @@ if SENTENCE_TRANSFORMERS_AVAILABLE:
     class SentenceTransformerAdapter:
         """Envoltorio mínimo para usar SentenceTransformer como proveedor"""
 
+        _cache: dict = {}  # singleton por nombre de modelo
+
         def __init__(self, model_name: str):
-            self._model = SentenceTransformer(model_name, device='cpu')
+            if model_name not in SentenceTransformerAdapter._cache:
+                logger.info(f"[ST] Cargando SentenceTransformer '{model_name}' por primera vez...")
+                SentenceTransformerAdapter._cache[model_name] = SentenceTransformer(model_name, device='cpu')
+                logger.info(f"[ST] Modelo '{model_name}' cargado y cacheado en memoria.")
+            self._model = SentenceTransformerAdapter._cache[model_name]
 
         def embed_query(self, text: str):  # type: ignore[override]
             return self._model.encode(text, normalize_embeddings=True)
