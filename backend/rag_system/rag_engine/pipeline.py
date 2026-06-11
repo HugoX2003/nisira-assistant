@@ -388,11 +388,12 @@ class RAGPipeline:
     def query(
         self,
         question: str,
-        top_k: int = 8,  # Cambiado de 5 a 8 como nuevo default razonable
+        top_k: int = 8,
         include_generation: bool = True,
-        collect_metrics: bool = False
+        collect_metrics: bool = False,
+        history: Optional[List[Dict[str, str]]] = None,
     ) -> Dict[str, Any]:
-        """Realizar consulta RAG completa con optimización para citas"""
+        """Realizar consulta RAG completa con optimización para citas y memoria conversacional."""
         logger.info(f"Procesando consulta: {question[:100]}...")
         
         if not question.strip():
@@ -503,7 +504,7 @@ class RAGPipeline:
             if include_generation and self.llm:
                 try:
                     generation_start = perf_counter()
-                    prompt = self._create_rag_prompt(question, context)
+                    prompt = self._create_rag_prompt(question, context, history=history)
                     ttft_ms: Optional[float] = None
                     answer_parts: List[str] = []
                     used_streaming = False
@@ -616,45 +617,48 @@ class RAGPipeline:
                 "metrics": metrics_payload if collect_metrics else None
             }
     
-    def _create_rag_prompt(self, question: str, context: str) -> str:
-        """Crear prompt para generación RAG con formato Markdown mejorado"""
-        prompt = f"""Eres un asistente académico amigable y experto. Tu objetivo es dar respuestas completas, naturales y útiles basándote en los documentos disponibles.
+    def _create_rag_prompt(
+        self,
+        question: str,
+        context: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> str:
+        """Crear prompt RAG con memoria conversacional y formato Markdown."""
 
-PREGUNTA DEL USUARIO: {question}
+        # Sección de historial (últimos 6 turnos, ya truncados por el caller)
+        history_section = ""
+        if history:
+            lines = []
+            for msg in history:
+                role = "Usuario" if msg.get("role") == "user" else "Asistente"
+                lines.append(f"{role}: {msg.get('content', '')}")
+            history_section = (
+                "HISTORIAL DE CONVERSACIÓN RECIENTE:\n"
+                + "\n".join(lines)
+                + "\n\n"
+            )
 
-DOCUMENTOS DISPONIBLES:
-{context}
+        prompt = (
+            "Eres NISIRA Assistant, un asistente especializado en la documentación del ERP NISIRA. "
+            "Tu objetivo es dar respuestas completas, naturales y útiles basándote en los documentos disponibles "
+            "y en el contexto de la conversación actual.\n\n"
+            + history_section
+            + f"PREGUNTA ACTUAL: {question}\n\n"
+            "DOCUMENTOS DISPONIBLES:\n"
+            f"{context}\n\n"
+            "REGLAS:\n"
+            "- Usa SOLO los documentos que traten directamente el tema preguntado.\n"
+            "- Si el historial muestra que el usuario ya preguntó algo relacionado, usa ese contexto "
+            "para dar una respuesta más coherente y sin repetir lo ya explicado.\n"
+            "- Si no hay información relevante, dilo honestamente.\n\n"
+            "ESTILO:\n"
+            "- Responde de forma natural y conversacional, como un experto explicando a un colega.\n"
+            "- Usa **negritas** para conceptos clave y > para citas textuales importantes.\n"
+            "- Organiza con párrafos fluidos; evita listas excesivas.\n"
+            "- Al final menciona brevemente las fuentes consultadas.\n\n"
+            "Responde en español de forma natural y completa:"
+        )
 
-[LIST] REGLAS DE RELEVANCIA:
-- SOLO usa documentos que traten DIRECTAMENTE el tema preguntado
-- Si preguntan sobre TEMA X, NO uses documentos de TEMA Y aunque parezcan relacionados
-- Si no hay información relevante, dilo honestamente
-
-[INFO] ESTILO DE RESPUESTA:
-- Responde de forma NATURAL y CONVERSACIONAL, como un profesor explicando a un estudiante
-- NO seas robótico ni telegráfico - desarrolla las ideas con fluidez
-- Explica los conceptos, no solo los menciones
-- Conecta las ideas entre sí para dar contexto
-- Usa un tono amigable pero profesional
-
-[NOTE] ESTRUCTURA SUGERIDA:
-1. **Introducción breve**: Contextualiza el tema en 1-2 oraciones
-2. **Desarrollo**: Explica los puntos principales de forma clara y conectada
-3. **Citas de apoyo**: Incluye citas textuales relevantes entre comillas con la fuente
-4. **Conclusión o resumen** (opcional): Si aplica, cierra con una síntesis
-
-[TIP] EJEMPLO DE BUEN ESTILO:
-En lugar de: "Concepto X. Definición Y. (fuente.pdf)"
-Escribe: "El concepto X es fundamental porque... Según el documento, 'definición textual' (fuente.pdf). Esto significa que en la práctica..."
-
-[GOAL] FORMATO:
-- Usa **negritas** para conceptos clave
-- Usa > para citas textuales importantes
-- Organiza con párrafos fluidos, no listas excesivas
-- Al final menciona las fuentes consultadas
-
-Responde en español de forma natural y completa:"""
-        
         return prompt
     
     def get_system_status(self) -> Dict[str, Any]:
@@ -1269,10 +1273,21 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
             config.get("diversity_threshold", 0.4),
             config.get("max_per_source")
         )
-        
-        logger.info(f"[OK] Búsqueda híbrida completada: {len(diverse_results)} documentos únicos (de {len(all_results)} totales)")
-        
-        return diverse_results[:top_k]
+
+        # 7. FILTRO DE RELEVANCIA MÍNIMA
+        # Descarta documentos con score demasiado bajo para que el número de fuentes
+        # refleje la relevancia real (no siempre top_k documentos).
+        min_threshold = config.get("min_score_threshold", 0.05)
+        qualifying = [d for d in diverse_results if d.get("weighted_score", 0) >= min_threshold]
+        # Si el filtro es demasiado estricto (ninguno pasa), devolver al menos el mejor
+        final_pool = qualifying if qualifying else diverse_results[:1]
+
+        logger.info(
+            f"[OK] Búsqueda híbrida: {len(final_pool)} documentos relevantes "
+            f"(de {len(diverse_results)} candidatos, threshold={min_threshold})"
+        )
+
+        return final_pool[:top_k]
     
     def _normalize_text(self, text: str) -> str:
         """Normalizar texto quitando acentos"""

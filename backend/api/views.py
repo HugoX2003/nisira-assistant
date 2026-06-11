@@ -1348,24 +1348,38 @@ def rag_enhanced_chat(request):
         # [NEW] INICIAR TRACKING DE LA CONSULTA
         tracker.start_query(content, user=request.user, conversation=conversation)
         
+        # Construir historial de los últimos 6 mensajes (excluyendo el actual, ya guardado)
+        history = []
+        if conversation_id:
+            recent = (
+                conversation.messages
+                .exclude(id=user_message.id)
+                .order_by('-created_at')[:6]
+            )
+            history = [
+                {'role': 'user' if m.sender == 'user' else 'assistant', 'content': m.text}
+                for m in reversed(list(recent))
+            ]
+
         # Variable para almacenar las fuentes
         sources = []
-        
+
         # Generar respuesta
         if use_rag:
             # [NEW] INICIAR MEDICIÓN DE RECUPERACIÓN
             tracker.start_retrieval()
-            
+
             # Calcular top_k dinámico basado en complejidad
             adaptive_top_k = calculate_adaptive_top_k(content)
             logger.info(f"[STATS] RAG Chat - top_k adaptativo: {adaptive_top_k}")
-            
+
             # Usar RAG para generar respuesta
             pipeline = RAGPipeline()
             rag_result = pipeline.query(
                 question=content,
                 top_k=adaptive_top_k,
-                include_generation=True
+                include_generation=True,
+                history=history,
             )
             
             # [NEW] FINALIZAR MEDICIÓN DE RECUPERACIÓN

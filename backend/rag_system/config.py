@@ -152,6 +152,7 @@ RAG_CONFIG = {
         "max_context_length": 12000,   # MÁS contexto para mejor comprensión
         "diversity_threshold": 0.4,  # MÁS diversidad en resultados
         "max_per_source": 3,        # Permite múltiples chunks por documento antes de diversificar
+        "min_score_threshold": 0.05, # Score mínimo para incluir un documento como fuente
         "citation_boost": True,   # Boost especial para chunks con citas
         "semantic_weight": 0.6,   # Peso de búsqueda semántica (60%)
         "lexical_weight": 0.4,    # Peso de búsqueda lexical (40%)
