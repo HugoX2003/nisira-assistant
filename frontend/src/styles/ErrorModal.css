@@ -26,13 +26,13 @@
 }
 
 .error-modal {
-  background: #1a1d23;
+  background: #ffffff;
   border: 2px solid #ef4444;
   border-radius: 16px;
   padding: 2.5rem;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   animation: slideUp 0.3s ease;
   text-align: center;
 }
@@ -84,10 +84,10 @@
 
 .error-modal-message {
   font-size: 1.1rem;
-  color: #e4e6eb;
+  color: #374151;
   line-height: 1.6;
   margin: 0 0 2rem 0;
-  background: #242830;
+  background: #f9fafb;
   padding: 1.5rem;
   border-radius: 8px;
   border-left: 4px solid #ef4444;

@@ -15,7 +15,7 @@
 
 .query-metrics-header h2 {
   margin: 0;
-  color: #e0e0e0;
+  color: #111827;
 }
 
 .query-metrics-controls {
@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #b0b0b0;
+  color: #6b7280;
   cursor: pointer;
 }
 
@@ -47,24 +47,24 @@
 }
 
 .stat-card {
-  background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+  background: #eff6ff;
   border-radius: 8px;
   padding: 1.5rem;
   text-align: center;
-  border: 1px solid #3a5a7f;
+  border: 1px solid #bfdbfe;
 }
 
 .stat-value {
   display: block;
   font-size: 2.5rem;
   font-weight: bold;
-  color: #60a5fa;
+  color: #1d4ed8;
   margin-bottom: 0.5rem;
 }
 
 .stat-label {
   display: block;
-  color: #9ca3af;
+  color: #6b7280;
   font-size: 0.9rem;
 }
 
@@ -77,8 +77,8 @@
 }
 
 .query-card {
-  background: linear-gradient(135deg, #1a1a2e 0%, #252538 100%);
-  border: 2px solid #3a3a52;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
   border-radius: 12px;
   padding: 1.5rem;
   cursor: pointer;
@@ -86,14 +86,14 @@
 }
 
 .query-card:hover {
-  border-color: #60a5fa;
+  border-color: #93c5fd;
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(96, 165, 250, 0.2);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
 
 .query-card.selected {
-  border-color: #34d399;
-  background: linear-gradient(135deg, #1e3a2e 0%, #253a38 100%);
+  border-color: #10b981;
+  background: #f0fdf4;
 }
 
 .query-card-header {
@@ -116,19 +116,19 @@
 }
 
 .badge-complex {
-  background: #7c2d12;
-  color: #fbbf24;
-  border: 1px solid #ea580c;
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fb923c;
 }
 
 .badge-simple {
-  background: #14532d;
-  color: #86efac;
-  border: 1px solid #16a34a;
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #4ade80;
 }
 
 .query-text {
-  color: #e0e0e0;
+  color: #374151;
   margin-bottom: 1rem;
   font-size: 0.95rem;
   line-height: 1.5;
@@ -145,7 +145,7 @@
 }
 
 .metric-mini {
-  background: rgba(96, 165, 250, 0.1);
+  background: rgba(59, 130, 246, 0.08);
   padding: 0.5rem;
   border-radius: 6px;
   text-align: center;
@@ -162,7 +162,7 @@
   display: block;
   font-size: 0.95rem;
   font-weight: bold;
-  color: #60a5fa;
+  color: #1d4ed8;
 }
 
 .query-precision-mini {
@@ -176,25 +176,25 @@
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;
-  background: rgba(107, 114, 128, 0.3);
-  color: #d1d5db;
+  background: rgba(107, 114, 128, 0.12);
+  color: #6b7280;
 }
 
 .precision-badge.metric-good {
-  background: rgba(16, 185, 129, 0.3);
-  color: #6ee7b7;
+  background: #dcfce7;
+  color: #15803d;
   border: 1px solid #10b981;
 }
 
 .precision-badge.metric-ok {
-  background: rgba(251, 191, 36, 0.3);
-  color: #fde68a;
+  background: #fef9c3;
+  color: #854d0e;
   border: 1px solid #fbbf24;
 }
 
 .precision-badge.metric-bad {
-  background: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
   border: 1px solid #ef4444;
 }
 
@@ -219,7 +219,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -240,22 +240,22 @@
 }
 
 .query-detail-content {
-  background: #141418;
-  border: 1px solid #2a2a2e;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
   max-width: 900px;
   width: 100%;
   margin: 2rem auto;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
   position: relative;
 }
 
 .query-detail-header {
   position: sticky;
   top: 0;
-  background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #3a5a7f;
+  border-bottom: 1px solid #93c5fd;
   border-radius: 12px 12px 0 0;
   display: flex;
   justify-content: space-between;
@@ -265,7 +265,7 @@
 
 .query-detail-header h3 {
   margin: 0;
-  color: #e0e0e0;
+  color: #1e3a8a;
   font-size: 1.1rem;
 }
 
@@ -298,22 +298,22 @@
 .detail-section {
   margin-bottom: 2rem;
   padding: 1.5rem;
-  background: rgba(96, 165, 250, 0.05);
+  background: rgba(59, 130, 246, 0.04);
   border-radius: 12px;
-  border: 1px solid rgba(96, 165, 250, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.15);
 }
 
 .detail-section h4 {
   margin: 0 0 1rem 0;
-  color: #60a5fa;
+  color: #1d4ed8;
   font-size: 1.25rem;
 }
 
 .query-detail-text {
-  background: rgba(0, 0, 0, 0.3);
+  background: #f9fafb;
   padding: 1rem;
   border-radius: 8px;
-  color: #e0e0e0;
+  color: #374151;
   line-height: 1.6;
   margin-bottom: 1rem;
 }
@@ -326,7 +326,7 @@
 }
 
 .detail-explanation {
-  color: #d1d5db;
+  color: #374151;
   margin: 0.5rem 0;
   line-height: 1.6;
 }
@@ -339,8 +339,8 @@
 }
 
 .metric-detail-card {
-  background: linear-gradient(135deg, #252538 0%, #2a2a3e 100%);
-  border: 2px solid #3a3a52;
+  background: #ffffff;
+  border: 2px solid #e5e7eb;
   border-radius: 12px;
   padding: 1.5rem;
   transition: all 0.3s ease;
@@ -348,72 +348,72 @@
 
 .metric-detail-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px rgba(96, 165, 250, 0.15);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
 
 .metric-detail-card.metric-good {
   border-color: #10b981;
-  background: linear-gradient(135deg, #1e3a2e 0%, #253a38 100%);
+  background: #f0fdf4;
 }
 
 .metric-detail-card.metric-ok {
   border-color: #fbbf24;
-  background: linear-gradient(135deg, #3a2e1e 0%, #3a3425 100%);
+  background: #fffbeb;
 }
 
 .metric-detail-card.metric-bad {
   border-color: #ef4444;
-  background: linear-gradient(135deg, #3a1e1e 0%, #3a2525 100%);
+  background: #fff1f2;
 }
 
 .metric-detail-name {
   font-size: 1.1rem;
   font-weight: 600;
-  color: #e0e0e0;
+  color: #111827;
   margin-bottom: 1rem;
 }
 
 .metric-detail-value {
   font-size: 2.5rem;
   font-weight: bold;
-  color: #60a5fa;
+  color: #1d4ed8;
   margin-bottom: 1rem;
 }
 
 .metric-detail-formula {
-  background: rgba(0, 0, 0, 0.3);
+  background: #f3f4f6;
   padding: 0.75rem;
   border-radius: 6px;
   margin-bottom: 0.75rem;
   font-size: 0.9rem;
-  color: #d1d5db;
+  color: #374151;
 }
 
 .metric-detail-formula strong {
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .metric-detail-formula code {
-  background: rgba(96, 165, 250, 0.2);
+  background: rgba(59, 130, 246, 0.1);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
-  color: #93c5fd;
+  color: #1d4ed8;
   font-family: 'Courier New', monospace;
   font-size: 0.85rem;
 }
 
 .metric-detail-explanation {
-  background: rgba(96, 165, 250, 0.1);
+  background: rgba(59, 130, 246, 0.08);
   padding: 0.75rem;
   border-radius: 6px;
-  color: #93c5fd;
+  color: #1d4ed8;
   font-size: 0.9rem;
   margin-bottom: 0.75rem;
   border-left: 3px solid #60a5fa;
 }
 
 .metric-detail-values {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.06);
   padding: 0.75rem;
   border-radius: 6px;
   margin: 0.75rem 0;
@@ -421,7 +421,7 @@
 }
 
 .metric-detail-values strong {
-  color: #60a5fa;
+  color: #1d4ed8;
   display: block;
   margin-bottom: 0.5rem;
 }
@@ -433,21 +433,21 @@
 }
 
 .metric-detail-values ul li {
-  color: #d1d5db;
+  color: #374151;
   padding: 0.25rem 0;
   font-size: 0.9rem;
 }
 
 .metric-detail-method {
-  background: rgba(107, 114, 128, 0.2);
+  background: rgba(107, 114, 128, 0.08);
   padding: 0.75rem;
   border-radius: 6px;
-  color: #d1d5db;
+  color: #374151;
   font-size: 0.85rem;
 }
 
 .metric-detail-method strong {
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .metric-detail-severity,
@@ -461,22 +461,22 @@
 
 .severity-low,
 .quality-good {
-  background: rgba(16, 185, 129, 0.2);
-  color: #6ee7b7;
+  background: #dcfce7;
+  color: #15803d;
   border: 1px solid #10b981;
 }
 
 .severity-medium,
 .quality-fair {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fde68a;
+  background: #fef9c3;
+  color: #854d0e;
   border: 1px solid #fbbf24;
 }
 
 .severity-high,
 .quality-poor {
-  background: rgba(239, 68, 68, 0.2);
-  color: #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
   border: 1px solid #ef4444;
 }
 
@@ -493,8 +493,8 @@
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid rgba(96, 165, 250, 0.3);
-  border-top-color: #60a5fa;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 1rem;
@@ -509,19 +509,19 @@
   .queries-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .metrics-detail-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .query-detail-modal {
     padding: 1rem;
   }
-  
+
   .query-detail-body {
     padding: 1rem;
   }
-  
+
   .metric-detail-value {
     font-size: 2rem;
   }

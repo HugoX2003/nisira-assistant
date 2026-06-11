@@ -2,15 +2,15 @@
 
 .admin-panel {
   min-height: 100vh;
-  background: var(--bg, #0a0a0b);
-  color: var(--text, #e4e6eb);
+  background: var(--bg, #ffffff);
+  color: var(--text, #111827);
   font-family: system-ui, -apple-system, sans-serif;
 }
 
 /* Header */
 .admin-header {
-  background: var(--surface, #141416);
-  border-bottom: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border-bottom: 1px solid var(--border, #e5e7eb);
   padding: 1rem 2rem;
   display: flex;
   justify-content: space-between;
@@ -29,8 +29,8 @@
 }
 
 .btn-logout {
-  background: var(--surface-hover, #1e1e22);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface-hover, #f0f0f0);
+  border: 1px solid var(--border, #e5e7eb);
   color: var(--text);
   padding: 0.5rem 1rem;
   border-radius: 6px;
@@ -39,7 +39,7 @@
 }
 
 .btn-logout:hover {
-  background: #2a2a2e;
+  background: #e5e7eb;
 }
 
 /* Notificaciones */
@@ -56,15 +56,15 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.notification.success { background: #064e3b; border: 1px solid #10b981; color: #6ee7b7; }
-.notification.error { background: #450a0a; border: 1px solid #ef4444; color: #fca5a5; }
-.notification.warning { background: #451a03; border: 1px solid #f59e0b; color: #fcd34d; }
-.notification.info { background: #1e3a5f; border: 1px solid #3b82f6; color: #93c5fd; }
+.notification.success { background: #dcfce7; border: 1px solid #10b981; color: #15803d; }
+.notification.error { background: #fee2e2; border: 1px solid #ef4444; color: #b91c1c; }
+.notification.warning { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; }
+.notification.info { background: #dbeafe; border: 1px solid #3b82f6; color: #1d4ed8; }
 
 /* Tabs */
 .admin-tabs {
-  background: var(--surface, #141416);
-  border-bottom: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border-bottom: 1px solid var(--border, #e5e7eb);
   display: flex;
   padding: 0 2rem;
   overflow-x: auto;
@@ -82,7 +82,7 @@
   white-space: nowrap;
 }
 
-.tab:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.tab:hover { color: var(--text); background: rgba(0,0,0,0.04); }
 .tab.active { color: var(--primary, #3b82f6); border-bottom-color: var(--primary); }
 
 /* Content */
@@ -130,8 +130,8 @@
 .btn-primary:hover { background: #2563eb; }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.btn-secondary { background: var(--surface-hover, #1e1e22); color: var(--text); border: 1px solid var(--border); }
-.btn-secondary:hover { background: #2a2a2e; }
+.btn-secondary { background: var(--surface-hover, #f0f0f0); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: #e5e7eb; }
 
 .btn-success { background: #10b981; color: white; }
 .btn-success:hover { background: #059669; }
@@ -156,8 +156,8 @@
 }
 
 .btn-toggle {
-  background: var(--surface-hover, #1e1e22);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface-hover, #f0f0f0);
+  border: 1px solid var(--border, #e5e7eb);
   color: var(--muted);
   padding: 0.4rem 0.8rem;
   border-radius: 4px;
@@ -173,8 +173,8 @@
 
 /* Cards */
 .card {
-  background: var(--surface, #141416);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
   padding: 1.25rem;
   margin-bottom: 1rem;
@@ -223,8 +223,8 @@
 }
 
 .stat-card {
-  background: var(--surface, #141416);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
   padding: 1.25rem;
   text-align: center;
@@ -237,8 +237,8 @@
 
 /* Progress */
 .progress-container {
-  background: var(--surface, #141416);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -252,7 +252,7 @@
 }
 
 .progress-bar {
-  background: var(--surface-hover, #1e1e22);
+  background: var(--surface-hover, #f0f0f0);
   border-radius: 4px;
   height: 8px;
   overflow: hidden;
@@ -278,10 +278,10 @@
   margin-bottom: 1.5rem;
 }
 
-.info-box h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #93c5fd; }
+.info-box h3 { margin: 0 0 0.75rem; font-size: 1rem; color: #1d4ed8; }
 .info-box ol { margin: 0; padding-left: 1.25rem; color: var(--text); font-size: 0.9rem; }
 .info-box li { margin-bottom: 0.25rem; }
-.info-note { margin: 0.75rem 0 0; font-size: 0.85rem; color: #6ee7b7; }
+.info-note { margin: 0.75rem 0 0; font-size: 0.85rem; color: #059669; }
 
 /* Upload Form */
 .upload-form {
@@ -315,8 +315,8 @@
 
 .files-controls input,
 .files-controls select {
-  background: var(--surface-hover, #1e1e22);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface-hover, #f0f0f0);
+  border: 1px solid var(--border, #e5e7eb);
   color: var(--text);
   padding: 0.4rem 0.75rem;
   border-radius: 4px;
@@ -335,7 +335,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: var(--surface-hover, #1e1e22);
+  background: var(--surface-hover, #f0f0f0);
   border-radius: 6px;
   padding: 0.75rem 1rem;
 }
@@ -400,8 +400,8 @@
 }
 
 .metric-card {
-  background: var(--surface, #141416);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
   padding: 1.25rem;
 }
@@ -412,7 +412,7 @@
 .metric-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
 
 .metric-bar {
-  background: var(--surface-hover, #1e1e22);
+  background: var(--surface-hover, #f0f0f0);
   border-radius: 4px;
   height: 6px;
   overflow: hidden;
@@ -465,7 +465,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: var(--surface-hover, #1e1e22);
+  background: var(--surface-hover, #f0f0f0);
   padding: 0.6rem 0.75rem;
   border-radius: 6px;
 }
@@ -490,7 +490,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: var(--surface-hover, #1e1e22);
+  background: var(--surface-hover, #f0f0f0);
   padding: 0.6rem 0.75rem;
   border-radius: 6px;
   font-size: 0.85rem;
@@ -512,8 +512,8 @@
   margin-bottom: 1.5rem;
 }
 
-.status-badge.operational { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
-.status-badge.degraded { background: #451a03; color: #fcd34d; border: 1px solid #f59e0b; }
+.status-badge.operational { background: #dcfce7; color: #15803d; border: 1px solid #10b981; }
+.status-badge.degraded { background: #fef3c7; color: #92400e; border: 1px solid #f59e0b; }
 
 .pipeline-grid {
   display: grid;
@@ -522,8 +522,8 @@
 }
 
 .pipeline-card {
-  background: var(--surface, #141416);
-  border: 1px solid var(--border, #2a2a2e);
+  background: var(--surface, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
   border-radius: 8px;
   padding: 1.25rem;
   text-align: center;
@@ -559,8 +559,8 @@
 }
 
 .sync-logs {
-  background: #0b1220;
-  border: 1px solid var(--border, #1f2937);
+  background: #f8fafc;
+  border: 1px solid var(--border, #e2e8f0);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -576,9 +576,9 @@
   padding: 0.5rem 0.75rem;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #cbd5e1;
-  background: #111827;
-  border-bottom: 1px solid #1f2937;
+  color: #374151;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .sync-logs-empty {
@@ -606,7 +606,7 @@
 }
 
 .sync-log-line .log-time {
-  color: #6b7280;
+  color: #9ca3af;
   flex-shrink: 0;
 }
 
@@ -615,12 +615,12 @@
   text-overflow: ellipsis;
 }
 
-.sync-log-line.log-ok .log-msg { color: #34d399; }
-.sync-log-line.log-error .log-msg { color: #f87171; }
-.sync-log-line.log-warn .log-msg { color: #fbbf24; }
+.sync-log-line.log-ok .log-msg { color: #059669; }
+.sync-log-line.log-error .log-msg { color: #dc2626; }
+.sync-log-line.log-warn .log-msg { color: #d97706; }
 .sync-log-line.log-skip .log-msg { color: #9ca3af; }
-.sync-log-line.log-down .log-msg { color: #60a5fa; }
-.sync-log-line.log-info .log-msg { color: #e5e7eb; }
+.sync-log-line.log-down .log-msg { color: #2563eb; }
+.sync-log-line.log-info .log-msg { color: #374151; }
 
 /* === Floating sync widget (mini bottom-right) === */
 .floating-sync-widget {

@@ -3,17 +3,18 @@
    =================================== */
 
 :root {
-  --bg: #0a0a0b;
-  --surface: #141416;
-  --surface-2: #1c1c1f;
-  --border: #2a2a2e;
+  --bg: #ffffff;
+  --surface: #f9fafb;
+  --surface-2: #f3f4f6;
+  --surface-hover: #f0f0f0;
+  --border: #e5e7eb;
   --primary: #3b82f6;
   --primary-hover: #2563eb;
   --success: #22c55e;
   --error: #ef4444;
-  --text: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
   --radius: 8px;
   --transition: 0.2s ease;
 }
