@@ -18,24 +18,23 @@ import {
 import { ragEnhancedChat, getConversations, getMessages, deleteConversation, submitRating } from '../services/api';
 import '../styles/Chat.css';
 
-// Componente para renderizar Markdown
+const PAGE_SIZE = 15;
+
+// Renderiza Markdown
 const Markdown = ({ content }) => (
   <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
 );
 
-// Componente de fuentes con visor integrado
+// Fuentes con visor integrado
 const Sources = ({ sources, onOpenPdf }) => {
   const [open, setOpen] = useState(false);
-
   if (!sources?.length) return null;
-
   return (
     <div className="sources">
       <button className="sources-btn" onClick={() => setOpen(!open)}>
         <BookOpen size={16} /> Fuentes ({sources.length})
         <ChevronDown size={14} className={`sources-arrow ${open ? 'open' : ''}`} />
       </button>
-
       {open && (
         <div className="sources-list">
           {sources.map((s, i) => (
@@ -60,70 +59,46 @@ const Sources = ({ sources, onOpenPdf }) => {
   );
 };
 
-// Componente del visor de PDF lateral
-// Usamos URL directa (no blob) para que el visor de PDF del navegador
-// respete el fragmento #page=N y abra en la pagina referenciada.
-// El token JWT va por query param porque iframe src no permite headers custom.
+// Visor de PDF lateral
 const PdfViewer = ({ source, onClose }) => {
   const [pdfUrl, setPdfUrl] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setError(null);
-
     const baseUrl = (process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
     const token = localStorage.getItem('token');
-
-    if (!token || !source?.file_name) {
-      setError('No se puede cargar el documento');
-      return;
-    }
-
+    if (!token || !source?.file_name) { setError('No se puede cargar el documento'); return; }
     const fileNamePart = encodeURIComponent(source.file_name);
     const tokenPart = encodeURIComponent(token);
     const pageFragment = source.page ? `#page=${source.page}` : '';
-    const url = `${baseUrl}/api/documents/${fileNamePart}/?token=${tokenPart}${pageFragment}`;
-    setPdfUrl(url);
+    setPdfUrl(`${baseUrl}/api/documents/${fileNamePart}/?token=${tokenPart}${pageFragment}`);
   }, [source]);
 
   return (
     <div className="pdf-viewer">
       <div className="pdf-header">
         <div className="pdf-info">
-          <span className="pdf-title">
-            <FileText size={16} /> {source?.file_name}
-          </span>
+          <span className="pdf-title"><FileText size={16} /> {source?.file_name}</span>
           {source?.page && <span className="pdf-page">Pagina {source.page}</span>}
         </div>
-        <button className="pdf-close" onClick={onClose}>
-          <X size={18} />
-        </button>
+        <button className="pdf-close" onClick={onClose}><X size={18} /></button>
       </div>
-
       {source?.content && (
         <div className="pdf-chunk">
-          <div className="chunk-label">
-            <FileText size={14} /> Fragmento referenciado:
-          </div>
+          <div className="chunk-label"><FileText size={14} /> Fragmento referenciado:</div>
           <div className="chunk-text">{source.content}</div>
         </div>
       )}
-
       <div className="pdf-content">
         {error && <div className="pdf-error">{error}</div>}
-        {pdfUrl && !error && (
-          <iframe
-            src={pdfUrl}
-            title="Documento PDF"
-            className="pdf-iframe"
-          />
-        )}
+        {pdfUrl && !error && <iframe src={pdfUrl} title="Documento PDF" className="pdf-iframe" />}
       </div>
     </div>
   );
 };
 
-// Componente de feedback
+// Feedback
 const Feedback = ({ value, onChange, disabled }) => (
   <div className="feedback">
     <button
@@ -143,26 +118,23 @@ const Feedback = ({ value, onChange, disabled }) => (
   </div>
 );
 
-// Componente de mensaje
+// Mensaje individual
 const Message = ({ msg, onRate, ratingBusy, onOpenPdf }) => (
   <div className={`message ${msg.sender}`}>
     <div className="message-text">
       {msg.sender === 'user' ? msg.text : <Markdown content={msg.text || ''} />}
     </div>
-
     {msg.sender === 'bot' && msg.sources?.length > 0 && (
       <Sources sources={msg.sources} onOpenPdf={onOpenPdf} />
     )}
-
     {msg.sender === 'bot' && onRate && (
       <Feedback value={msg.rating} onChange={onRate} disabled={ratingBusy} />
     )}
-
     <div className="message-time">{msg.timestamp}</div>
   </div>
 );
 
-// Componente de carga
+// Indicador de "pensando"
 const Loading = () => (
   <div className="loading">
     Pensando
@@ -170,12 +142,12 @@ const Loading = () => (
   </div>
 );
 
-// Componente principal del Chat
+// ============================================================
+// Componente principal
+// ============================================================
 export default function Chat({ onLogout, user }) {
   const navigate = useNavigate();
   const { conversationId } = useParams();
-  // conversationId es el slug aleatorio que viene de la URL /chat/:slug.
-  // Sera undefined si estamos en /chat sin conversacion activa.
   const activeConv = conversationId || null;
 
   const [message, setMessage] = useState('');
@@ -188,7 +160,22 @@ export default function Chat({ onLogout, user }) {
   const [ratingBusy, setRatingBusy] = useState({});
   const [pdfSource, setPdfSource] = useState(null);
 
+  // Paginación — conversaciones
+  const [convPage, setConvPage] = useState(1);
+  const [convHasMore, setConvHasMore] = useState(false);
+  const [convLoadingMore, setConvLoadingMore] = useState(false);
+
+  // Paginación — mensajes
+  const [msgPage, setMsgPage] = useState(1);
+  const [msgHasMore, setMsgHasMore] = useState(false);
+  const [msgLoadingOlder, setMsgLoadingOlder] = useState(false);
+
+  // Trigger explícito para hacer scroll al fondo (solo al enviar/cargar conversación)
+  const [scrollTrigger, setScrollTrigger] = useState(0);
+
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const convListRef = useRef(null);
   const inputRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
@@ -197,45 +184,133 @@ export default function Chat({ onLogout, user }) {
 
   useEffect(() => {
     setTimeout(scrollToBottom, 100);
-  }, [messages, scrollToBottom]);
+  }, [scrollTrigger, scrollToBottom]);
+
+  // ── Conversaciones ───────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
     try {
-      const res = await getConversations();
+      const res = await getConversations(1, PAGE_SIZE);
       setConversations(res.conversations || []);
+      setConvPage(1);
+      setConvHasMore(res.has_more || false);
     } catch (e) {
       console.error('Error cargando conversaciones:', e);
     }
   }, []);
 
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+  useEffect(() => { loadConversations(); }, [loadConversations]);
 
+  const loadMoreConversations = useCallback(async () => {
+    if (convLoadingMore || !convHasMore) return;
+    setConvLoadingMore(true);
+    try {
+      const nextPage = convPage + 1;
+      const res = await getConversations(nextPage, PAGE_SIZE);
+      setConversations(prev => [...prev, ...(res.conversations || [])]);
+      setConvPage(nextPage);
+      setConvHasMore(res.has_more || false);
+    } catch (e) {
+      console.error('Error cargando más conversaciones:', e);
+    } finally {
+      setConvLoadingMore(false);
+    }
+  }, [convLoadingMore, convHasMore, convPage]);
+
+  // Scroll hacia abajo en el sidebar → cargar más conversaciones
+  useEffect(() => {
+    const el = convListRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
+        loadMoreConversations();
+      }
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [loadMoreConversations]);
+
+  // ── Mensajes ─────────────────────────────────────────────
+
+  // Carga los últimos PAGE_SIZE mensajes al abrir una conversación
   useEffect(() => {
     if (!activeConv) {
       setMessages([]);
+      setMsgHasMore(false);
+      setMsgPage(1);
       return;
     }
-
-    const loadMessages = async () => {
+    const load = async () => {
       try {
-        const res = await getMessages(activeConv);
-        setMessages((res.messages || []).map(m => ({
-          id: m.id,
-          text: m.content || '',
-          sender: m.is_user ? 'user' : 'bot',
-          timestamp: new Date(m.timestamp).toLocaleTimeString(),
-          sources: m.sources || [],
-          rating: m.rating
-        })));
+        const res = await getMessages(activeConv, 1, PAGE_SIZE);
+        setMessages(
+          (res.messages || []).map(m => ({
+            id: m.id,
+            text: m.content || '',
+            sender: m.is_user ? 'user' : 'bot',
+            timestamp: new Date(m.timestamp).toLocaleTimeString(),
+            sources: m.sources || [],
+            rating: m.rating,
+          }))
+        );
+        setMsgPage(1);
+        setMsgHasMore(res.has_more || false);
+        setScrollTrigger(v => v + 1);
       } catch (e) {
         console.error('Error cargando mensajes:', e);
       }
     };
-
-    loadMessages();
+    load();
   }, [activeConv]);
+
+  // Carga mensajes más antiguos (prepend) preservando la posición de scroll
+  const loadOlderMessages = useCallback(async () => {
+    if (msgLoadingOlder || !msgHasMore || !activeConv) return;
+    setMsgLoadingOlder(true);
+
+    const container = messagesContainerRef.current;
+    const prevScrollHeight = container?.scrollHeight || 0;
+
+    try {
+      const nextPage = msgPage + 1;
+      const res = await getMessages(activeConv, nextPage, PAGE_SIZE);
+      const older = (res.messages || []).map(m => ({
+        id: m.id,
+        text: m.content || '',
+        sender: m.is_user ? 'user' : 'bot',
+        timestamp: new Date(m.timestamp).toLocaleTimeString(),
+        sources: m.sources || [],
+        rating: m.rating,
+      }));
+      setMessages(prev => [...older, ...prev]);
+      setMsgPage(nextPage);
+      setMsgHasMore(res.has_more || false);
+
+      // Restaurar posición de scroll después del prepend
+      requestAnimationFrame(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+      });
+    } catch (e) {
+      console.error('Error cargando mensajes anteriores:', e);
+    } finally {
+      setMsgLoadingOlder(false);
+    }
+  }, [msgLoadingOlder, msgHasMore, activeConv, msgPage]);
+
+  // Scroll hacia arriba en el área de mensajes → cargar más antiguos
+  useEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      if (el.scrollTop <= 50) loadOlderMessages();
+    };
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [loadOlderMessages]);
+
+  // ── Envío de mensaje ─────────────────────────────────────
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -245,7 +320,7 @@ export default function Chat({ onLogout, user }) {
       id: Date.now(),
       text: message.trim(),
       sender: 'user',
-      timestamp: new Date().toLocaleTimeString()
+      timestamp: new Date().toLocaleTimeString(),
     };
 
     setMessages(prev => [...prev, userMsg]);
@@ -262,8 +337,10 @@ export default function Chat({ onLogout, user }) {
         sender: 'bot',
         timestamp: new Date().toLocaleTimeString(),
         sources: res.sources || [],
-        rating: null
+        rating: null,
       }]);
+
+      setScrollTrigger(v => v + 1);
 
       if (res.conversation_id && res.conversation_id !== activeConv) {
         navigate(`/chat/${res.conversation_id}`, { replace: true });
@@ -274,9 +351,9 @@ export default function Chat({ onLogout, user }) {
       setError(e.message || 'Error al enviar mensaje');
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: 'Lo siento, ocurrio un error. Intenta de nuevo.',
+        text: 'Lo siento, ocurrió un error. Intenta de nuevo.',
         sender: 'bot',
-        timestamp: new Date().toLocaleTimeString()
+        timestamp: new Date().toLocaleTimeString(),
       }]);
     } finally {
       setLoading(false);
@@ -293,7 +370,6 @@ export default function Chat({ onLogout, user }) {
 
   const handleDelete = async () => {
     if (!deleteModal) return;
-
     try {
       await deleteConversation(deleteModal);
       if (deleteModal === activeConv) {
@@ -309,9 +385,7 @@ export default function Chat({ onLogout, user }) {
 
   const handleRate = async (msgId, value) => {
     if (!msgId) return;
-
     setRatingBusy(prev => ({ ...prev, [msgId]: true }));
-
     try {
       const res = await submitRating({ messageId: msgId, value });
       setMessages(prev => prev.map(m =>
@@ -320,13 +394,11 @@ export default function Chat({ onLogout, user }) {
     } catch (e) {
       console.error('Error al calificar:', e);
     } finally {
-      setRatingBusy(prev => {
-        const next = { ...prev };
-        delete next[msgId];
-        return next;
-      });
+      setRatingBusy(prev => { const next = { ...prev }; delete next[msgId]; return next; });
     }
   };
+
+  // ── Render ───────────────────────────────────────────────
 
   return (
     <div className={`chat-layout ${pdfSource ? 'with-pdf' : ''}`}>
@@ -343,7 +415,7 @@ export default function Chat({ onLogout, user }) {
           </button>
         </div>
 
-        <div className="conversations">
+        <div className="conversations" ref={convListRef}>
           {conversations.map(c => (
             <div
               key={c.id}
@@ -359,6 +431,11 @@ export default function Chat({ onLogout, user }) {
               </button>
             </div>
           ))}
+          {convLoadingMore && (
+            <div className="conv-load-more">
+              <div className="dots"><span></span><span></span><span></span></div>
+            </div>
+          )}
         </div>
 
         <div className="sidebar-footer">
@@ -379,18 +456,20 @@ export default function Chat({ onLogout, user }) {
         {error && (
           <div className="error-banner">
             <AlertTriangle size={16} /> {error}
-            <button onClick={() => setError(null)}>
-              <X size={16} />
-            </button>
+            <button onClick={() => setError(null)}><X size={16} /></button>
           </div>
         )}
 
-        <div className="messages">
-          {messages.length === 0 && !loading && (
+        <div className="messages" ref={messagesContainerRef}>
+          {msgLoadingOlder && (
+            <div className="msg-load-older">
+              <div className="dots"><span></span><span></span><span></span></div>
+            </div>
+          )}
+
+          {messages.length === 0 && !loading && !msgLoadingOlder && (
             <div className="welcome">
-              <div className="welcome-icon">
-                <Bot size={64} strokeWidth={1.5} />
-              </div>
+              <div className="welcome-icon"><Bot size={64} strokeWidth={1.5} /></div>
               <h2>Hola! Soy NISIRA Assistant</h2>
               <p>Tu asistente inteligente. Preguntame lo que necesites.</p>
             </div>
@@ -442,20 +521,14 @@ export default function Chat({ onLogout, user }) {
             <h3>Eliminar conversacion?</h3>
             <p>Esta accion no se puede deshacer.</p>
             <div className="modal-actions">
-              <button className="btn btn-secondary" onClick={() => setDeleteModal(null)}>
-                Cancelar
-              </button>
-              <button className="btn btn-danger" onClick={handleDelete}>
-                Eliminar
-              </button>
+              <button className="btn btn-secondary" onClick={() => setDeleteModal(null)}>Cancelar</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Eliminar</button>
             </div>
           </div>
         </div>
       )}
 
-      {pdfSource && (
-        <PdfViewer source={pdfSource} onClose={() => setPdfSource(null)} />
-      )}
+      {pdfSource && <PdfViewer source={pdfSource} onClose={() => setPdfSource(null)} />}
     </div>
   );
 }

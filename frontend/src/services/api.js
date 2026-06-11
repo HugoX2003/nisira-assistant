@@ -367,28 +367,20 @@ export async function semanticSearch(query, options = {}) {
 // FUNCIONES DE CONVERSACIONES
 // ================================
 
-export async function getConversations() {
+export async function getConversations(page = 1, size = 15) {
   try {
-    const cacheKey = 'conversations';
-    const cachedResult = getCachedResponse(cacheKey);
-    
-    if (cachedResult) {
-      return cachedResult;
-    }
-
-    const response = await api.get('/api/conversations/');
-    const result = response.data;
-    
-    setCachedResponse(cacheKey, result);
-    return result;
+    const response = await api.get('/api/conversations/', { params: { page, size } });
+    return response.data;
   } catch (error) {
     handleApiError(error, 'obtener conversaciones');
   }
 }
 
-export async function getMessages(conversationId) {
+export async function getMessages(conversationId, page = 1, size = 15) {
   try {
-    const response = await api.get(`/api/conversations/${conversationId}/messages/`);
+    const response = await api.get(`/api/conversations/${conversationId}/messages/`, {
+      params: { page, size },
+    });
     return response.data;
   } catch (error) {
     handleApiError(error, 'obtener mensajes');

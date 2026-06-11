@@ -423,18 +423,21 @@ def _resolve_conversation(user, identifier):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_conversations(request):
-    """Listar conversaciones del usuario autenticado."""
+    """Listar conversaciones del usuario con paginación (page, size)."""
     try:
-        conversations = (
+        page = max(1, int(request.query_params.get('page', 1)))
+        size = min(100, max(1, int(request.query_params.get('size', 15))))
+        offset = (page - 1) * size
+
+        qs = (
             Conversation.objects.filter(user=request.user)
             .order_by('-updated_at')
-            .values('id', 'slug', 'title', 'created_at', 'updated_at')
         )
+        total = qs.count()
+        entries = qs.values('id', 'slug', 'title', 'created_at', 'updated_at')[offset:offset + size]
 
         results = [
             {
-                # Para el frontend, exponemos el slug como 'id' asi las URLs ya
-                # usan el identificador publico. Mantenemos 'numeric_id' por compatibilidad.
                 'id': entry['slug'],
                 'numeric_id': entry['id'],
                 'slug': entry['slug'],
@@ -442,11 +445,17 @@ def get_conversations(request):
                 'created_at': entry['created_at'].isoformat() if entry['created_at'] else None,
                 'updated_at': entry['updated_at'].isoformat() if entry['updated_at'] else None,
             }
-            for entry in conversations
+            for entry in entries
         ]
 
-        return Response({'count': len(results), 'conversations': results})
-    except Exception as exc:  # pragma: no cover (defensivo)
+        return Response({
+            'conversations': results,
+            'page': page,
+            'size': size,
+            'total': total,
+            'has_more': (offset + size) < total,
+        })
+    except Exception as exc:
         logger.exception("Error obteniendo conversaciones")
         return Response(
             {'error': 'Error al obtener las conversaciones'},
@@ -489,8 +498,9 @@ def create_conversation(request):
 @permission_classes([IsAuthenticated])
 def get_messages(request, conversation_id):
     """
-    Obtener todos los mensajes de una conversación específica.
-    conversation_id puede ser el slug (publico) o el id numerico (legacy).
+    Obtener mensajes de una conversación con paginación.
+    page=1 devuelve los 15 más recientes en orden cronológico ascendente.
+    page=2 devuelve los 15 anteriores a esos, también en orden ascendente.
     """
     try:
         conversation = _resolve_conversation(request.user, conversation_id)
@@ -499,18 +509,25 @@ def get_messages(request, conversation_id):
                 {'error': 'Conversación no encontrada'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        messages = conversation.messages.all().order_by('created_at')
+
+        page = max(1, int(request.query_params.get('page', 1)))
+        size = min(100, max(1, int(request.query_params.get('size', 15))))
+        offset = (page - 1) * size
+
+        # Ordenar por más reciente para paginar, luego revertir para orden cronológico
+        qs = conversation.messages.all().order_by('-created_at')
+        total = qs.count()
+        messages_page = list(qs[offset:offset + size])
+        messages_page.reverse()
+
+        message_ids = [m.id for m in messages_page]
         rating_map = {
-            rating.message_id: rating
-            for rating in Rating.objects.filter(
-                message_id__in=messages.values_list('id', flat=True),
-                user=request.user,
-            )
+            r.message_id: r
+            for r in Rating.objects.filter(message_id__in=message_ids, user=request.user)
         }
-        
-        message_data = []
-        for msg in messages:
-            message_data.append({
+
+        message_data = [
+            {
                 'id': msg.id,
                 'content': msg.text,
                 'is_user': msg.sender == 'user',
@@ -518,15 +535,20 @@ def get_messages(request, conversation_id):
                 'sources': msg.sources,
                 'rating': rating_map.get(msg.id).value if rating_map.get(msg.id) else None,
                 'rating_issue_tag': rating_map.get(msg.id).issue_tag if rating_map.get(msg.id) else None,
-            })
-        
+            }
+            for msg in messages_page
+        ]
+
         return Response({
             'conversation_id': conversation.slug,
             'numeric_id': conversation.id,
             'slug': conversation.slug,
             'conversation_title': conversation.title,
             'messages': message_data,
-            'count': len(message_data)
+            'page': page,
+            'size': size,
+            'total': total,
+            'has_more': (offset + size) < total,
         })
 
     except Exception as e:

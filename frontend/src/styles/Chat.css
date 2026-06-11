@@ -367,6 +367,19 @@
   color: white;
 }
 
+/* PAGINACIÓN */
+.conv-load-more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 6px;
+}
+
+.msg-load-older {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
 /* LOADING */
 .loading {
   display: flex;
