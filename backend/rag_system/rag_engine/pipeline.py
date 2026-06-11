@@ -404,7 +404,11 @@ class RAGPipeline:
         # Detectar si el usuario pregunta por los documentos disponibles
         if self._is_document_list_query(question):
             return self._handle_document_list_query()
-        
+
+        # Detectar saludos o consultas demasiado generales sin contexto académico
+        if self._is_trivial_query(question):
+            return self._handle_trivial_query(question)
+
         # Preparar estructura opcional de métricas
         metrics_payload: Dict[str, Any] = {
             "latency_ms": {
@@ -704,6 +708,85 @@ Responde en español de forma natural y completa:"""
                 "error": str(e)
             }
     
+    def _is_trivial_query(self, question: str) -> bool:
+        """
+        Detecta saludos, agradecimientos y preguntas demasiado cortas o genéricas
+        que no requieren búsqueda en documentos.
+        """
+        q = question.strip().lower()
+
+        # Menos de 3 tokens con contenido real → siempre trivial
+        words = re.findall(r'\b\w+\b', q)
+        if len(words) < 3:
+            return True
+
+        # Patrones conversacionales explícitos
+        trivial_patterns = [
+            r'^(hola|hi|hey|hello|buenas|saludos)\b',
+            r'^buenos?\s+(días|tardes|noches)\b',
+            r'^(gracias|muchas gracias|thanks?|thank you)\b',
+            r'^(ok|okay|bien|perfecto|entendido|claro)\b',
+            r'^(cómo estás|como estas|cómo te encuentras)',
+            r'^(cómo te llamas|como te llamas|quién eres|quien eres|qué eres|que eres)',
+            r'^(ayuda|help)\s*$',
+            r'^(qué puedes hacer|que puedes hacer|para qué sirves|para que sirves)',
+        ]
+
+        for pattern in trivial_patterns:
+            if re.search(pattern, q):
+                return True
+
+        return False
+
+    def _handle_trivial_query(self, question: str) -> Dict[str, Any]:
+        """
+        Responde directamente con el LLM en modo conversacional,
+        sin ejecutar búsqueda en el vector store.
+        """
+        answer = None
+
+        if self.llm:
+            try:
+                prompt = (
+                    "Eres NISIRA Assistant, un asistente académico amigable. "
+                    "El usuario te envió un mensaje conversacional o saludo, "
+                    "no una consulta sobre documentos.\n\n"
+                    f"Mensaje del usuario: {question}\n\n"
+                    "Responde de forma breve y natural en español. "
+                    "Puedes mencionar que estás especializado en responder preguntas "
+                    "sobre documentos académicos. No uses Markdown ni listas."
+                )
+                response = self.llm.invoke(prompt)
+                answer = response.content if hasattr(response, 'content') else str(response)
+            except Exception as e:
+                logger.warning(f"LLM falló en consulta trivial: {e}")
+
+        # Fallback sin LLM
+        if not answer:
+            q = question.strip().lower()
+            if re.search(r'\b(hola|hi|hey|buenos|saludos|hello)\b', q):
+                answer = ("¡Hola! Soy NISIRA Assistant. Estoy aquí para ayudarte a encontrar "
+                          "información en los documentos académicos disponibles. "
+                          "¿Qué deseas consultar?")
+            elif re.search(r'\b(gracias|thanks?)\b', q):
+                answer = "¡De nada! Si tienes más preguntas sobre los documentos, aquí estoy."
+            elif re.search(r'\b(quién|quien|qué eres|que eres)\b', q):
+                answer = ("Soy NISIRA Assistant, un asistente de búsqueda académica. "
+                          "Respondo preguntas basándome en los documentos cargados en el sistema.")
+            else:
+                answer = ("Para ayudarte mejor, ¿podrías hacerme una pregunta más específica "
+                          "sobre los temas académicos que te interesan?")
+
+        logger.info(f"Consulta trivial respondida directamente: '{question[:60]}'")
+        return {
+            "success": True,
+            "question": question,
+            "answer": answer,
+            "relevant_documents": [],
+            "sources": [],
+            "trivial_query": True,
+        }
+
     def _is_document_list_query(self, question: str) -> bool:
         """
         Detecta si el usuario está preguntando por los documentos disponibles.
