@@ -1311,7 +1311,7 @@ Actualmente tengo **{total_docs} documentos** almacenados, divididos en **{total
                     query_words = [w for w in self._normalize_text(query_lower).split() if len(w) > 3]
                     for word in query_words:
                         if word in self._normalize_text(source_name):
-                            metadata_boost += 0.3  # Boost por cada palabra que coincide
+                            metadata_boost += 0.8  # Boost por cada palabra que coincide
                     
                     # Score final: combinar score original con boost
                     base_score = doc.get('similarity_score', 0.5)
