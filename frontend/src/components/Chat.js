@@ -178,6 +178,8 @@ export default function Chat({ onLogout, user }) {
   const messagesContainerRef = useRef(null);
   const convListRef = useRef(null);
   const inputRef = useRef(null);
+  const loadMoreConvsRef = useRef(null);
+  const loadOlderMsgsRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -229,18 +231,23 @@ export default function Chat({ onLogout, user }) {
     }
   }, [convLoadingMore, convHasMore, convPage]);
 
+  // Mantiene el ref siempre apuntando a la versión actual
+  useEffect(() => { loadMoreConvsRef.current = loadMoreConversations; }, [loadMoreConversations]);
+
   // Scroll hacia abajo en el sidebar → cargar más conversaciones
+  // El listener se attacha UNA SOLA VEZ para evitar que el cleanup/re-subscribe
+  // en cada cambio de estado descarte eventos de scroll en pleno vuelo.
   useEffect(() => {
     const el = convListRef.current;
     if (!el) return;
     const onScroll = () => {
       if (el.scrollTop + el.clientHeight >= el.scrollHeight - 20) {
-        loadMoreConversations();
+        loadMoreConvsRef.current?.();
       }
     };
-    el.addEventListener('scroll', onScroll);
+    el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [loadMoreConversations]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Mensajes ─────────────────────────────────────────────
 
@@ -311,16 +318,18 @@ export default function Chat({ onLogout, user }) {
     }
   }, [msgLoadingOlder, msgHasMore, activeConv, msgPage]);
 
+  useEffect(() => { loadOlderMsgsRef.current = loadOlderMessages; }, [loadOlderMessages]);
+
   // Scroll hacia arriba en el área de mensajes → cargar más antiguos
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
     const onScroll = () => {
-      if (el.scrollTop <= 50) loadOlderMessages();
+      if (el.scrollTop <= 50) loadOlderMsgsRef.current?.();
     };
-    el.addEventListener('scroll', onScroll);
+    el.addEventListener('scroll', onScroll, { passive: true });
     return () => el.removeEventListener('scroll', onScroll);
-  }, [loadOlderMessages]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Envío de mensaje ─────────────────────────────────────
 
