@@ -430,15 +430,20 @@ class RAGPipeline:
         overall_start = perf_counter()
 
         try:
+            # 0. REFORMULACIÓN CONTEXTUAL con historial
+            # Si la pregunta es referencial ("¿Y cómo se instala?") y hay historial,
+            # se reescribe para incorporar el tema del turno anterior antes de buscar.
+            search_question = self._reformulate_with_history(question, history)
+
             # 1. Detectar si es una consulta sobre citas específicas
-            is_citation_query, enhanced_query = self._enhance_citation_query(question)
-            
+            is_citation_query, enhanced_query = self._enhance_citation_query(search_question)
+
             # 2. Usar la consulta mejorada para embeddings
-            search_query = enhanced_query if is_citation_query else question
+            search_query = enhanced_query if is_citation_query else search_question
             embedding_start = perf_counter()
             query_embedding = self.embedding_manager.create_embedding(search_query)
             metrics_payload["latency_ms"]["embedding"] = round((perf_counter() - embedding_start) * 1000, 3)
-            
+
             if query_embedding is None:
                 metrics_payload["latency_ms"]["total"] = round((perf_counter() - overall_start) * 1000, 3)
                 return {
@@ -446,15 +451,15 @@ class RAGPipeline:
                     "error": "No se pudo crear embedding de la consulta",
                     "metrics": metrics_payload if collect_metrics else None
                 }
-            
-            # 2. BÚSQUEDA HÍBRIDA SÚPER AGRESIVA
+
+            # 3. BÚSQUEDA HÍBRIDA
             retrieval_start = perf_counter()
-            relevant_docs = self._hybrid_search(question, enhanced_query, query_embedding, top_k)
+            relevant_docs = self._hybrid_search(search_question, enhanced_query, query_embedding, top_k)
             retrieval_end = perf_counter()
             metrics_payload["latency_ms"]["retrieval"] = round((retrieval_end - retrieval_start) * 1000, 3)
-            
-            # 2.5 FILTRAR DOCUMENTOS POR RELEVANCIA TEMÁTICA
-            relevant_docs = self._filter_by_topic_relevance(question, relevant_docs)
+
+            # 3.5 FILTRAR DOCUMENTOS POR RELEVANCIA TEMÁTICA
+            relevant_docs = self._filter_by_topic_relevance(search_question, relevant_docs)
             
             if not relevant_docs:
                 metrics_payload["counts"]["retrieved_documents"] = 0
@@ -712,6 +717,79 @@ class RAGPipeline:
                 "error": str(e)
             }
     
+    # Indicadores de que la pregunta hace referencia al contexto anterior
+    _REFERENTIAL_SIGNALS = re.compile(
+        r'(?:'
+        r'^(y|pero|además|también|ahora|entonces|asimismo)\b'           # conectores al inicio
+        r'|^¿?(y\s+)?(cómo|cuándo|dónde|por\s+qué|cuál|cuáles)\s+(se|lo|la|los|las|es|son|fue|hay)\b'
+        r'|\b(esto|eso|ese|esa|aquel|aquella|dicho|mencionado|mismo|misma)\b'  # demostrativos
+        r'|\b(instalar(lo)?|configurar(lo)?|usar(lo)?|implementar(lo)?|aplicar(lo)?)\b'  # verbos + pronombre
+        r')',
+        re.IGNORECASE,
+    )
+
+    def _needs_reformulation(self, question: str, history: Optional[List[Dict[str, str]]]) -> bool:
+        """Devuelve True si la pregunta necesita contexto del historial para ser buscable."""
+        if not history:
+            return False
+        q = question.strip()
+        words = re.findall(r'\b\w+\b', q.lower())
+        # Pregunta muy corta sin tema explícito
+        if len(words) < 4:
+            return True
+        # Contiene señales referenciales
+        if self._REFERENTIAL_SIGNALS.search(q):
+            return True
+        return False
+
+    def _reformulate_with_history(
+        self,
+        question: str,
+        history: Optional[List[Dict[str, str]]],
+    ) -> str:
+        """
+        Reescribe la query de búsqueda incorporando el tema del último turno del usuario.
+        Usa el LLM para reformular; cae a un fallback simple si no está disponible.
+        Devuelve `question` sin cambios si no es necesario reformular.
+        """
+        if not self._needs_reformulation(question, history):
+            return question
+
+        # Tomar solo el último mensaje del usuario del historial
+        last_user = next(
+            (m["content"] for m in reversed(history) if m.get("role") == "user"),
+            None,
+        )
+        if not last_user:
+            return question
+
+        if self.llm:
+            try:
+                prompt = (
+                    "Tu tarea es reescribir una pregunta de chat para que sea una consulta "
+                    "de búsqueda autónoma y completa, incorporando el tema de la pregunta anterior.\n\n"
+                    f"Pregunta anterior del usuario: {last_user}\n"
+                    f"Nueva pregunta (puede ser incompleta o referencial): {question}\n\n"
+                    "Escribe ÚNICAMENTE la consulta de búsqueda reformulada, sin comillas, "
+                    "sin explicaciones, en español, máximo 20 palabras."
+                )
+                response = self.llm.invoke(prompt)
+                reformulated = (
+                    response.content if hasattr(response, "content") else str(response)
+                ).strip().strip('"').strip("'")
+                if reformulated and len(reformulated) < 250:
+                    logger.info(
+                        f"[MEMORY] Query reformulada: '{question}' → '{reformulated}'"
+                    )
+                    return reformulated
+            except Exception as e:
+                logger.warning(f"LLM falló en reformulación de query: {e}")
+
+        # Fallback: añadir el tema del turno anterior como contexto extra
+        fallback = f"{question} {last_user}"
+        logger.info(f"[MEMORY] Query reformulada (fallback): '{fallback}'")
+        return fallback
+
     # Señales que indican una consulta técnica/académica real
     _TECHNICAL_SIGNALS = re.compile(
         r'\b('
