@@ -11,11 +11,14 @@
 /* SIDEBAR */
 .sidebar {
   width: 260px;
+  height: 100vh;
   background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
 .sidebar.hidden {

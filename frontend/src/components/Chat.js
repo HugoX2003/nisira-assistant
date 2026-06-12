@@ -212,6 +212,21 @@ export default function Chat({ onLogout, user }) {
       setConversations(res.conversations || []);
       setConvPage(1);
       setConvHasMore(res.has_more || false);
+
+      // Si el contenedor no tiene overflow después de cargar la primera página
+      // (lista corta que no llena el sidebar), no habrá evento scroll; disparar
+      // la carga directamente cuando el usuario haga scroll o cuando detectemos
+      // que cabe todo. Guardamos has_more en el ref para que el listener lo vea.
+      if (res.has_more) {
+        requestAnimationFrame(() => {
+          const el = convListRef.current;
+          if (el && el.scrollHeight <= el.clientHeight) {
+            // Todo el contenido cabe: no hay scroll posible, pero hay más páginas.
+            // El listener no puede disparar, así que forzamos carga inmediata.
+            loadMoreConvsRef.current?.();
+          }
+        });
+      }
     } catch (e) {
       console.error('Error cargando conversaciones:', e);
     }
