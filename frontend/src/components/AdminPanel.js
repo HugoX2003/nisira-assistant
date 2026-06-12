@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import '../styles/AdminPanel.css';
 import QueryMetrics from './QueryMetrics';
@@ -32,6 +32,7 @@ import {
   Database,
   Terminal,
   ExternalLink,
+  X,
 } from 'lucide-react';
 import {
   getDriveFiles, uploadDriveFile, deleteDriveFile, syncDriveDocuments, getSyncProgress,
@@ -279,8 +280,7 @@ function AdminPanel({ onLogout, user }) {
 // ========== TAB: GOOGLE DRIVE ==========
 function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
   const [files, setFiles] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [uploadFile, setUploadFile] = useState(null);
+  const [filesLoading, setFilesLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -289,7 +289,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
   const syncing = syncProgress?.status === 'running' || syncProgress?.status === 'starting';
 
   const loadFiles = useCallback(async () => {
-    setLoading(true);
+    setFilesLoading(true);
     try {
       const res = await getDriveFiles(page, pageSize, search);
       if (res.success) {
@@ -297,35 +297,16 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
         setPagination(res.pagination || {});
       }
     } catch (e) {
-      notify('Error cargando archivos', 'error');
+      notify('Error cargando archivos de Drive', 'error');
     }
-    setLoading(false);
+    setFilesLoading(false);
   }, [page, pageSize, search, notify]);
 
   useEffect(() => { loadFiles(); }, [loadFiles, filesRefreshTick]);
 
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (!uploadFile) return notify('Selecciona un archivo', 'warning');
-    setLoading(true);
-    try {
-      const res = await uploadDriveFile(uploadFile);
-      if (res.success) {
-        notify('Archivo subido', 'success');
-        setUploadFile(null);
-        loadFiles();
-      } else {
-        notify(res.error || 'Error', 'error');
-      }
-    } catch (e) {
-      notify('Error subiendo', 'error');
-    }
-    setLoading(false);
-  };
-
   const handleDelete = async (id, name) => {
     if (!window.confirm(`Eliminar "${name}"?`)) return;
-    setLoading(true);
+    setFilesLoading(true);
     try {
       const res = await deleteDriveFile(id);
       if (res.success) {
@@ -335,7 +316,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
     } catch (e) {
       notify('Error eliminando', 'error');
     }
-    setLoading(false);
+    setFilesLoading(false);
   };
 
   const formatSize = (bytes) => {
@@ -349,7 +330,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
     <div className="tab-content">
       <div className="section-header">
         <h2>Gestion de Documentos</h2>
-        <button onClick={onStartSync} className="btn-primary" disabled={loading || syncing}>
+        <button onClick={onStartSync} className="btn-primary" disabled={filesLoading || syncing}>
           <RefreshCw size={16} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
         </button>
       </div>
@@ -361,15 +342,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
         </div>
       )}
 
-      <div className="card">
-        <h3>Subir Documento</h3>
-        <form onSubmit={handleUpload} className="upload-form">
-          <input type="file" accept=".pdf,.txt,.md,.doc,.docx" onChange={(e) => setUploadFile(e.target.files[0])} />
-          <button type="submit" className="btn-success" disabled={!uploadFile || loading}>
-            <Upload size={16} /> Subir
-          </button>
-        </form>
-      </div>
+      <UploadCard onUploaded={loadFiles} />
 
       <div className="card">
         <div className="files-header">
@@ -387,7 +360,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
           </div>
         </div>
 
-        {loading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
+        {filesLoading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
           <>
             <div className="files-grid">
               {files.map(file => (
@@ -399,7 +372,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
                     <h4>{file.name}</h4>
                     <p>{formatSize(file.size)} - {new Date(file.modifiedTime).toLocaleDateString()}</p>
                   </div>
-                  <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={loading}>
+                  <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={filesLoading}>
                     <Trash2 size={16} />
                   </button>
                 </div>
@@ -415,6 +388,129 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+// ========== UPLOAD CARD ==========
+function UploadCard({ onUploaded }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const ALLOWED = ['.pdf', '.txt', '.md', '.doc', '.docx'];
+
+  const formatSize = (bytes) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const pickFile = (file) => {
+    if (!file) return;
+    const ext = `.${file.name.split('.').pop().toLowerCase()}`;
+    if (!ALLOWED.includes(ext)) {
+      setUploadResult({ type: 'error', message: `Tipo no permitido. Acepta: ${ALLOWED.join(', ')}` });
+      return;
+    }
+    setSelectedFile(file);
+    setUploadResult(null);
+  };
+
+  const clearFile = (e) => {
+    e?.stopPropagation();
+    setSelectedFile(null);
+    setUploadResult(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    pickFile(e.dataTransfer.files[0]);
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || uploading) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const res = await uploadDriveFile(selectedFile);
+      if (res.success) {
+        const msg = res.processing === 'background'
+          ? `"${selectedFile.name}" guardado. Embeddings generándose en segundo plano.`
+          : `"${selectedFile.name}" subido exitosamente.`;
+        setUploadResult({ type: 'success', message: msg });
+        clearFile();
+        onUploaded?.();
+      } else {
+        setUploadResult({ type: 'error', message: res.error || 'Error al subir el archivo.' });
+      }
+    } catch (err) {
+      setUploadResult({ type: 'error', message: err.message || 'Error de conexión.' });
+    }
+    setUploading(false);
+  };
+
+  return (
+    <div className="card upload-card">
+      <h3><Upload size={16} /> Subir Documento</h3>
+
+      <div
+        className={`drop-zone${dragging ? ' dragging' : ''}${selectedFile ? ' has-file' : ''}`}
+        onDrop={handleDrop}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onClick={() => { if (!selectedFile) fileInputRef.current?.click(); }}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !selectedFile) { e.preventDefault(); fileInputRef.current?.click(); } }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.md,.doc,.docx"
+          onChange={(e) => pickFile(e.target.files[0])}
+          style={{ display: 'none' }}
+        />
+
+        {selectedFile ? (
+          <div className="drop-zone-file">
+            <FileText size={28} className="drop-file-icon" />
+            <div className="drop-file-info">
+              <span className="drop-file-name">{selectedFile.name}</span>
+              <span className="drop-file-size">{formatSize(selectedFile.size)}</span>
+            </div>
+            <button className="btn-remove-file" onClick={clearFile} title="Quitar archivo">
+              <X size={15} />
+            </button>
+          </div>
+        ) : (
+          <div className="drop-zone-empty">
+            <Upload size={32} className="drop-icon" />
+            <p className="drop-title">Arrastra tu archivo aquí o haz clic para seleccionar</p>
+            <p className="drop-hint">PDF, TXT, MD, DOC, DOCX — máx. 50 MB</p>
+          </div>
+        )}
+      </div>
+
+      {uploadResult && (
+        <div className={`upload-result ${uploadResult.type}`}>
+          {uploadResult.type === 'success' ? <CheckCircle size={15} /> : <XCircle size={15} />}
+          <span>{uploadResult.message}</span>
+        </div>
+      )}
+
+      {selectedFile && (
+        <button className="btn-upload-submit" onClick={handleUpload} disabled={uploading}>
+          {uploading
+            ? <><span className="spinner-sm" /> Subiendo...</>
+            : <><Upload size={16} /> Subir documento</>}
+        </button>
+      )}
     </div>
   );
 }

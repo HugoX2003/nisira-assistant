@@ -900,6 +900,172 @@ _embedding_thread_lock = threading.Lock()
 _embedding_thread = None
 
 
+def _process_single_file_in_background(file_path: str, file_name: str, file_content: bytes = None, mime_type: str = None):
+    """
+    Thread target: procesa un único archivo subido y almacena sus embeddings en el
+    vector store configurado (pgvector o ChromaDB). Actualiza embedding_progress.json.
+    """
+    logger.info(f"[BG] Iniciando procesamiento en background: {file_name}")
+    _save_progress({
+        "status": "running",
+        "total": 1, "current": 0,
+        "current_file": file_name,
+        "processed": 0, "errors": 0,
+        "logs": [f"[INFO] Procesando '{file_name}'..."],
+    })
+    try:
+        from rag_system.config import VECTOR_STORE_CONFIG
+        vector_backend = VECTOR_STORE_CONFIG.get('backend', 'postgres')
+        database_url = VECTOR_STORE_CONFIG.get('database_url')
+        file_ext = os.path.splitext(file_name)[1].lower()
+
+        # Guardar en PostgresFileStore para acceso via DocumentLoader en producción
+        if file_content and vector_backend == 'postgres' and database_url:
+            try:
+                from rag_system.storage.postgres_file_store import PostgresFileStore
+                file_store = PostgresFileStore(database_url)
+                file_store.save_file(file_name, file_content, mime_type=mime_type)
+                logger.info(f"[OK] '{file_name}' guardado en PostgresFileStore")
+            except Exception as e:
+                logger.warning(f"[WARN] No se pudo guardar en PostgresFileStore: {e}")
+
+        # Inicializar vector store según configuración
+        if vector_backend == 'postgres' and database_url:
+            from rag_system.vector_store.postgres_store import PostgresVectorStore
+            vector_store = PostgresVectorStore(database_url)
+            if not vector_store.is_ready():
+                _save_progress({
+                    "status": "error",
+                    "total": 1, "current": 1, "current_file": file_name,
+                    "processed": 0, "errors": 1,
+                    "logs": [f"[ERROR] PostgreSQL no disponible para '{file_name}'"],
+                })
+                return
+        else:
+            vector_store = ChromaManager()
+
+        embedding_manager = EmbeddingManager()
+        file_hash = calculate_file_hash(file_path)
+
+        # Verificar si ya fue procesado
+        if vector_backend == 'postgres':
+            already_processed = vector_store.check_document_exists(file_name, file_hash)
+        else:
+            already_processed = check_file_already_processed(vector_store, file_hash, file_name)
+
+        if already_processed:
+            logger.info(f"   ⏭️  Archivo ya procesado, saltando: {file_name}")
+            _save_progress({
+                "status": "completed",
+                "total": 1, "current": 1, "current_file": file_name,
+                "processed": 0, "errors": 0,
+                "logs": [f"   ⏭️  '{file_name}' ya existe en embeddings, saltando"],
+            })
+            return
+
+        # Procesar según tipo de archivo
+        if file_ext == '.pdf':
+            pdf_processor = PDFProcessor()
+            logger.info(f"   [SEARCH] Extrayendo texto del PDF...")
+            result = pdf_processor.process_pdf(file_path)
+            if not result.get('success') or not result.get('chunks'):
+                _save_progress({
+                    "status": "error",
+                    "total": 1, "current": 1, "current_file": file_name,
+                    "processed": 0, "errors": 1,
+                    "logs": [f"[ERROR] No se pudieron extraer chunks de '{file_name}'"],
+                })
+                return
+            chunks = result['chunks']
+            doc_type = 'pdf'
+        elif file_ext in ('.txt', '.md'):
+            text_processor = TextProcessor()
+            logger.info(f"   [SEARCH] Extrayendo texto...")
+            chunks = text_processor.process_text_file(file_path)
+            if not chunks:
+                _save_progress({
+                    "status": "error",
+                    "total": 1, "current": 1, "current_file": file_name,
+                    "processed": 0, "errors": 1,
+                    "logs": [f"[ERROR] No se pudo procesar el texto de '{file_name}'"],
+                })
+                return
+            doc_type = 'text'
+        else:
+            _save_progress({
+                "status": "error",
+                "total": 1, "current": 1, "current_file": file_name,
+                "processed": 0, "errors": 1,
+                "logs": [f"[ERROR] Formato no soportado para embeddings: {file_ext}"],
+            })
+            return
+
+        logger.info(f"   [INFO] {len(chunks)} chunks extraídos de '{file_name}'")
+
+        # Preparar textos y metadatas
+        texts = []
+        metadatas = []
+        base_metadata = {
+            "source": file_name, "type": doc_type,
+            "file_name": file_name, "file_hash": file_hash,
+        }
+        for chunk in chunks:
+            if isinstance(chunk, str):
+                texts.append(chunk)
+                metadatas.append(dict(base_metadata))
+            elif isinstance(chunk, dict):
+                texts.append(chunk.get('text', str(chunk)))
+                meta = dict(chunk.get('metadata') or {})
+                meta.update(base_metadata)
+                metadatas.append(meta)
+            else:
+                texts.append(str(chunk))
+                metadatas.append(dict(base_metadata))
+
+        # Generar embeddings
+        logger.info(f"   [BRAIN] Generando embeddings para {len(texts)} chunks...")
+        embeddings = embedding_manager.create_embeddings_batch(texts)
+        logger.info(f"   [OK] Embeddings generados")
+
+        documents = [{'text': t, 'metadata': m} for t, m in zip(texts, metadatas)]
+
+        # Borrar chunks previos del mismo archivo (actualización)
+        if vector_backend == 'postgres' and hasattr(vector_store, 'delete_by_filename'):
+            old_deleted = vector_store.delete_by_filename(file_name)
+            if old_deleted > 0:
+                logger.info(f"   [UPDATE] Eliminados {old_deleted} chunks previos de '{file_name}'")
+
+        # Almacenar en vector store
+        logger.info(f"   [SAVE] Almacenando {len(documents)} docs en {vector_backend} ({type(vector_store).__name__})...")
+        storage_result = vector_store.add_documents(documents=documents, embeddings=embeddings)
+
+        if storage_result:
+            logger.info(f"[OK] '{file_name}' procesado: {len(chunks)} chunks en {vector_backend}")
+            _save_progress({
+                "status": "completed",
+                "total": 1, "current": 1, "current_file": file_name,
+                "processed": 1, "errors": 0,
+                "logs": [f"[OK] '{file_name}': {len(chunks)} chunks almacenados en {vector_backend}"],
+            })
+        else:
+            logger.error(f"[ERROR] Fallo al almacenar embeddings de '{file_name}'")
+            _save_progress({
+                "status": "error",
+                "total": 1, "current": 1, "current_file": file_name,
+                "processed": 0, "errors": 1,
+                "logs": [f"[ERROR] Fallo al almacenar embeddings de '{file_name}' en {vector_backend}"],
+            })
+
+    except Exception as e:
+        logger.error(f"[BG] Excepción procesando '{file_name}': {e}", exc_info=True)
+        _save_progress({
+            "status": "error",
+            "total": 1, "current": 1, "current_file": file_name,
+            "processed": 0, "errors": 1,
+            "logs": [f"[ERROR] Excepción: {str(e)[:200]}"],
+        })
+
+
 def _run_embedding_generation_in_background():
     """Ejecuta la generacion de embeddings en thread, actualiza embedding_progress.json."""
     global _embedding_thread
