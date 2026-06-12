@@ -343,7 +343,8 @@ def upload_to_drive(request):
             })
         
         # Subir a Drive
-        result = drive_manager.upload_file(temp_path, file_name)
+        folder_id = os.environ.get('GOOGLE_DRIVE_FOLDER_ID')
+        result = drive_manager.upload_file(temp_path, file_name, folder_id=folder_id)
         
         if result:
             # También guardar localmente
