@@ -624,9 +624,25 @@ class GoogleDriveManager:
             return None
         
         try:
-            target_folder = folder_id or self.folder_id
+            # Resolver carpeta destino: parámetro > instancia > env var en tiempo de ejecución
+            # Se re-lee el env var en cada llamada para evitar problemas de orden de inicialización
+            # en producción (Railway/Docker) donde las env vars pueden llegar después del import.
+            target_folder = (
+                folder_id
+                or self.folder_id
+                or os.getenv('GOOGLE_DRIVE_FOLDER_ID', '')
+            )
+
+            if not target_folder:
+                logger.error(
+                    "[ERROR] No se puede subir a Drive: GOOGLE_DRIVE_FOLDER_ID no está configurado. "
+                    "Comparte una carpeta de tu Google Drive personal con el Service Account "
+                    "y agrega su ID a la variable de entorno GOOGLE_DRIVE_FOLDER_ID."
+                )
+                return None
+
             upload_name = file_name or os.path.basename(file_path)
-            
+
             # Determinar tipo MIME
             mime_types = {
                 '.pdf': 'application/pdf',
@@ -635,11 +651,12 @@ class GoogleDriveManager:
                 '.doc': 'application/msword',
                 '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
             }
-            
+
             file_ext = os.path.splitext(file_path)[1].lower()
             mime_type = mime_types.get(file_ext, 'application/octet-stream')
-            
-            # Metadatos del archivo
+
+            # Metadatos del archivo — parents apunta a la carpeta compartida del usuario,
+            # nunca al root del Service Account (que no tiene almacenamiento propio).
             file_metadata = {
                 'name': upload_name,
                 'parents': [target_folder]
