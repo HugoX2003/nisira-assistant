@@ -934,8 +934,8 @@ def _process_single_file_in_background(file_path: str, file_name: str, file_cont
         elif file_ext in ('.txt', '.md'):
             text_processor = TextProcessor()
             logger.info(f"   [SEARCH] Extrayendo texto...")
-            chunks = text_processor.process_text_file(file_path)
-            if not chunks:
+            result = text_processor.process_document(file_path)
+            if not result.get('success') or not result.get('chunks'):
                 _save_progress({
                     "status": "error",
                     "total": 1, "current": 1, "current_file": file_name,
@@ -943,6 +943,7 @@ def _process_single_file_in_background(file_path: str, file_name: str, file_cont
                     "logs": [f"[ERROR] No se pudo procesar el texto de '{file_name}'"],
                 })
                 return
+            chunks = result['chunks']
             doc_type = 'text'
         else:
             _save_progress({
@@ -1247,8 +1248,9 @@ def _run_embedding_generation_in_background():
                     
                     # Procesar texto
                     logger.info(f"   [SEARCH] Extrayendo texto...")
-                    chunks = text_processor.process_text_file(file_path)
-                    
+                    txt_result = text_processor.process_document(file_path)
+                    chunks = txt_result.get('chunks') if txt_result.get('success') else None
+
                     if chunks:
                         logger.info(f"   [INFO]  {len(chunks)} chunks extraídos")
                         # Preparar textos y metadatas
