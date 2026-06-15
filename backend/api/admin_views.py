@@ -222,6 +222,33 @@ def list_drive_files(request):
         )
 
 
+def _launch_embedding_background(file_path: str, file_name: str, file_ext: str) -> None:
+    """Lanza _process_single_file_in_background en un thread daemon y retorna inmediatamente."""
+    mime_map = {
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.md': 'text/markdown',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }
+    file_mime = mime_map.get(file_ext, 'application/octet-stream')
+
+    try:
+        with open(file_path, 'rb') as fh:
+            file_content_bytes = fh.read()
+    except Exception as e:
+        logger.error(f"[ERROR] No se pudo leer '{file_name}' para embeddings: {e}")
+        file_content_bytes = None
+
+    bg_thread = threading.Thread(
+        target=_process_single_file_in_background,
+        args=(file_path, file_name, file_content_bytes, file_mime),
+        daemon=True,
+    )
+    bg_thread.start()
+    logger.info(f"[BG] Thread de embeddings lanzado para: {file_name}")
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @admin_required
@@ -281,65 +308,16 @@ def upload_to_drive(request):
             shutil.move(temp_path, final_path)
             
             logger.warning(f"[WARN] Drive no autenticado. Archivo guardado solo localmente: {file_name}")
-            
-            # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
-            try:
-                logger.info(f"[SYNC] Iniciando procesamiento automático del archivo: {file_name}")
-                
-                from rag_system.rag_engine.pipeline import RAGPipeline
-                pipeline = RAGPipeline()
-                
-                # Procesar el documento
-                process_result = pipeline.process_document(final_path)
-                
-                if process_result['success']:
-                    chunks = process_result['chunks']
-                    logger.info(f"[INFO] Documento procesado: {len(chunks)} chunks generados")
-                    
-                    # Generar embeddings
-                    chunk_texts = [chunk['text'] for chunk in chunks]
-                    embeddings = pipeline.embedding_manager.create_embeddings_batch(chunk_texts)
-                    
-                    # Filtrar chunks válidos
-                    valid_chunks = []
-                    valid_embeddings = []
-                    for chunk, embedding in zip(chunks, embeddings):
-                        if embedding is not None:
-                            valid_chunks.append(chunk)
-                            valid_embeddings.append(embedding)
-                    
-                    logger.info(f"[INFO] Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
-                    
-                    # Almacenar en ChromaDB
-                    if valid_chunks:
-                        storage_success = pipeline.chroma_manager.add_documents(
-                            valid_chunks,
-                            valid_embeddings
-                        )
-                        
-                        if storage_success:
-                            logger.info(f"[OK] Archivo procesado y embeddings almacenados: {file_name}")
-                            return Response({
-                                "success": True,
-                                "message": f"Archivo '{file_name}' guardado localmente y procesado exitosamente",
-                                "file_name": file_name,
-                                "file_path": final_path,
-                                "drive_uploaded": False,
-                                "processed": True,
-                                "chunks_created": len(valid_chunks),
-                                "embeddings_generated": len(valid_embeddings)
-                            })
-                    
-            except Exception as e:
-                logger.error(f"[ERROR] Error en procesamiento automático: {e}")
-            
+
+            _launch_embedding_background(final_path, file_name, file_ext)
+
             return Response({
                 "success": True,
-                "message": f"Archivo '{file_name}' guardado localmente (Drive no disponible)",
+                "message": f"Archivo '{file_name}' guardado. Procesando embeddings en segundo plano.",
                 "file_name": file_name,
                 "file_path": final_path,
                 "drive_uploaded": False,
-                "processed": False
+                "processing": "background",
             })
         
         # Subir a Drive
@@ -359,65 +337,17 @@ def upload_to_drive(request):
                 os.remove(temp_path)
             
             logger.info(f"[OK] Archivo subido a Drive y guardado localmente: {file_name}")
-            
-            # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
-            # Usa _process_single_file_in_background para soportar PostgreSQL y ChromaDB
-            try:
-                logger.info(f"[SYNC] Iniciando procesamiento automático del archivo: {file_name}")
 
-                mime_map = {
-                    '.pdf': 'application/pdf',
-                    '.txt': 'text/plain',
-                    '.md': 'text/markdown',
-                    '.doc': 'application/msword',
-                    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                }
-                file_mime = mime_map.get(file_ext, 'application/octet-stream')
-
-                with open(final_path, 'rb') as fh:
-                    file_content_bytes = fh.read()
-
-                # Ejecutar sincrónicamente para verificar resultado antes de responder
-                _process_single_file_in_background(final_path, file_name, file_content_bytes, file_mime)
-
-                # Verificar resultado en el archivo de progreso
-                try:
-                    progress_path = os.path.join(settings.BASE_DIR, 'data', 'temp', 'embedding_progress.json')
-                    with open(progress_path, 'r') as pf:
-                        progress_data = json.load(pf)
-                    embedding_ok = (
-                        progress_data.get('status') == 'completed' and
-                        progress_data.get('processed', 0) > 0
-                    )
-                except Exception:
-                    embedding_ok = False
-
-                if embedding_ok:
-                    logger.info(f"[OK] Archivo procesado y embeddings almacenados: {file_name}")
-                    return Response({
-                        "success": True,
-                        "message": f"Archivo '{file_name}' subido, sincronizado y procesado exitosamente",
-                        "file_name": file_name,
-                        "file_id": result.get('id'),
-                        "file_path": final_path,
-                        "drive_uploaded": True,
-                        "processed": True,
-                    })
-
-                logger.warning(f"[WARN] Archivo subido pero embeddings no confirmados: {file_name}")
-
-            except Exception as e:
-                logger.error(f"[ERROR] Error en procesamiento automático: {e}")
+            _launch_embedding_background(final_path, file_name, file_ext)
 
             return Response({
                 "success": True,
-                "message": f"Archivo '{file_name}' subido correctamente a Drive",
+                "message": f"Archivo '{file_name}' subido a Drive. Procesando embeddings en segundo plano.",
                 "file_name": file_name,
                 "file_id": result.get('id'),
                 "file_path": final_path,
                 "drive_uploaded": True,
-                "processed": False,
-                "warning": "Archivo subido pero no se pudo procesar automáticamente"
+                "processing": "background",
             })
         else:
             # Si falla la subida a Drive, guardar solo localmente
@@ -429,64 +359,15 @@ def upload_to_drive(request):
 
             logger.error(f"[ERROR] Error subiendo a Drive. Archivo guardado localmente: {file_name}")
 
-            # PROCESAR AUTOMÁTICAMENTE EL ARCHIVO Y GENERAR EMBEDDINGS
-            try:
-                logger.info(f"[SYNC] Iniciando procesamiento automático del archivo: {file_name}")
-
-                from rag_system.rag_engine.pipeline import RAGPipeline
-                pipeline = RAGPipeline()
-
-                # Procesar el documento
-                process_result = pipeline.process_document(final_path)
-
-                if process_result['success']:
-                    chunks = process_result['chunks']
-                    logger.info(f"[INFO] Documento procesado: {len(chunks)} chunks generados")
-
-                    # Generar embeddings
-                    chunk_texts = [chunk['text'] for chunk in chunks]
-                    embeddings = pipeline.embedding_manager.create_embeddings_batch(chunk_texts)
-
-                    # Filtrar chunks válidos
-                    valid_chunks = []
-                    valid_embeddings = []
-                    for chunk, embedding in zip(chunks, embeddings):
-                        if embedding is not None:
-                            valid_chunks.append(chunk)
-                            valid_embeddings.append(embedding)
-
-                    logger.info(f"[INFO] Embeddings generados: {len(valid_embeddings)}/{len(chunks)}")
-
-                    # Almacenar en ChromaDB
-                    if valid_chunks:
-                        storage_success = pipeline.chroma_manager.add_documents(
-                            valid_chunks,
-                            valid_embeddings
-                        )
-
-                        if storage_success:
-                            logger.info(f"[OK] Archivo procesado y embeddings almacenados: {file_name}")
-                            return Response({
-                                "success": True,
-                                "message": f"Archivo '{file_name}' guardado localmente (error en Drive) y procesado exitosamente",
-                                "file_name": file_name,
-                                "file_path": final_path,
-                                "drive_uploaded": False,
-                                "processed": True,
-                                "chunks_created": len(valid_chunks),
-                                "embeddings_generated": len(valid_embeddings)
-                            })
-
-            except Exception as e:
-                logger.error(f"[ERROR] Error en procesamiento automático: {e}")
+            _launch_embedding_background(final_path, file_name, file_ext)
 
             return Response({
                 "success": True,
-                "message": f"Archivo '{file_name}' guardado localmente (error subiendo a Drive)",
+                "message": f"Archivo '{file_name}' guardado localmente (error en Drive). Procesando embeddings en segundo plano.",
                 "file_name": file_name,
                 "file_path": final_path,
                 "drive_uploaded": False,
-                "processed": False
+                "processing": "background",
             })
         
     except Exception as e:
