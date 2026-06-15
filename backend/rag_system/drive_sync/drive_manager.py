@@ -88,24 +88,52 @@ class GoogleDriveManager:
         self._initialize_service()
     
     def _initialize_service(self):
-        """Inicializar el servicio de Google Drive con Service Account"""
+        """Inicializar el servicio de Google Drive.
+        Prioridad: 1) OAuth2 env vars  2) token.json  3) Service Account / OAuth file
+        """
         if not GOOGLE_APIS_AVAILABLE:
             logger.error("Google APIs no están disponibles. Instalar google-api-python-client")
             return False
-        
+
         try:
+            # 1. PRIORIDAD MÁXIMA: OAuth2 desde variables de entorno.
+            #    Usar el refresh_token del usuario personal evita storageQuotaExceeded
+            #    (las Service Accounts tienen 0 bytes de cuota propia).
+            oauth_client_id = os.getenv('GOOGLE_OAUTH_CLIENT_ID')
+            oauth_client_secret = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET')
+            oauth_refresh_token = os.getenv('GOOGLE_OAUTH_REFRESH_TOKEN')
+
+            if oauth_client_id and oauth_client_secret and oauth_refresh_token:
+                try:
+                    logger.info("[KEY] Usando OAuth2 desde variables de entorno (usuario personal)")
+                    creds = Credentials(
+                        token=None,
+                        refresh_token=oauth_refresh_token,
+                        token_uri='https://oauth2.googleapis.com/token',
+                        client_id=oauth_client_id,
+                        client_secret=oauth_client_secret,
+                        scopes=GOOGLE_DRIVE_CONFIG['scopes'],
+                    )
+                    creds.refresh(Request())
+                    self.credentials = creds
+                    self.service = build('drive', 'v3', credentials=self.credentials)
+                    logger.info("[OK] Servicio inicializado con OAuth2 env vars (cuota personal activa)")
+                    return True
+                except Exception as e:
+                    logger.warning(f"[WARN] OAuth2 via env vars falló: {e}. Intentando con credenciales de archivo...")
+
             credentials_path = GOOGLE_DRIVE_CONFIG['credentials_path']
-            
+
             if not os.path.exists(credentials_path):
                 logger.error(f"[ERROR] Archivo de credenciales no encontrado: {credentials_path}")
                 return False
-            
+
             # Cargar credenciales
             with open(credentials_path, 'r', encoding='utf-8') as f:
                 cred_data = json.load(f)
-            
-            # 1. Intentar usar Token de Usuario (OAuth2) - PRIORIDAD para evitar problemas de cuota
-            # Las Service Accounts tienen 0 quota, así que preferimos usar el token del usuario si existe
+
+            # 2. Token de usuario desde archivo token.json
+            # Las Service Accounts tienen 0 quota, así que preferimos el token del usuario si existe
             if os.path.exists(self.token_path):
                 try:
                     logger.info(f"[KEY] Cargando token de usuario desde: {self.token_path}")
@@ -131,7 +159,7 @@ class GoogleDriveManager:
                 except Exception as e:
                     logger.warning(f"[WARN] Error cargando token de usuario: {e}. Intentando con Service Account...")
 
-            # 2. Si no hay token válido, usar Service Account
+            # 3. Si no hay token válido, usar Service Account
             if 'type' in cred_data and cred_data['type'] == 'service_account':
                 logger.info(" Usando Service Account credentials")
                 creds = service_account.Credentials.from_service_account_file(

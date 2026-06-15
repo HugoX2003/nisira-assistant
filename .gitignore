@@ -132,3 +132,6 @@ backend/evidence/scalability/scalability_results.csv
 backend/evidence/scalability/latency_by_concurrency.json
 backend/evidence/**/results_*.json
 backend/evidence/**/results_*.csv
+
+client_secret_2_*.json
+get_token.py
