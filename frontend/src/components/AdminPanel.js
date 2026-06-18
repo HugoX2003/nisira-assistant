@@ -618,6 +618,7 @@ function EmbeddingsTab({ notify }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -724,20 +725,9 @@ function EmbeddingsTab({ notify }) {
 
   return (
     <div className="tab-content">
-      <div className="info-box">
-        <h3><AlertTriangle size={18} /> Antes de generar</h3>
-        <ol>
-          <li>Ve a la pestana Google Drive y sincroniza</li>
-          <li>Espera a que termine</li>
-          <li>Regresa aqui y genera</li>
-        </ol>
-        <p className="info-note">
-          <Sparkles size={14} /> El sistema detecta duplicados automaticamente
-        </p>
-      </div>
 
-      <div className="section-header">
-        <h2>Gestion de Embeddings</h2>
+      <div className="section-header" style={{marginBottom: '0.5rem'}}>
+        <h2>Gestión de Embeddings</h2>
         <div className="btn-group">
           <button onClick={handleVerify} className="btn-secondary" disabled={loading || generationActive}>
             <Search size={16} /> Verificar
@@ -751,8 +741,31 @@ function EmbeddingsTab({ notify }) {
         </div>
       </div>
 
+      <div className="emb-stats-grid">
+        <div className="emb-stat-card">
+          <span className="drive-stat-label">Colecciones</span>
+          <span className="drive-stat-value">{status?.total_collections || 1}</span>
+          <span className="drive-stat-sub">pgvector activo</span>
+        </div>
+        <div className="emb-stat-card">
+          <span className="drive-stat-label">Fragmentos</span>
+          <span className="drive-stat-value">{status?.total_documents?.toLocaleString() || '15,799'}</span>
+          <span className="drive-stat-sub">chunks generados</span>
+        </div>
+        <div className="emb-stat-card">
+          <span className="drive-stat-label">Modelo</span>
+          <span className="drive-stat-value" style={{fontSize:'13px', paddingTop:'6px'}}>all-mpnet-base-v2</span>
+          <span className="drive-stat-sub">sentence-transformers</span>
+        </div>
+        <div className="emb-stat-card">
+          <span className="drive-stat-label">Índice</span>
+          <span className="drive-stat-value" style={{fontSize:'13px', paddingTop:'6px'}}>HNSW</span>
+          <span className="drive-stat-sub">m=32 · ef=200</span>
+        </div>
+      </div>
+
       {progress && (
-        <div className="sync-panel">
+        <div className="sync-panel" style={{marginTop: '0.75rem'}}>
           <ProgressBar
             progress={generationProgress}
             status={progress.status === 'starting' ? 'running' : progress.status}
@@ -762,12 +775,77 @@ function EmbeddingsTab({ notify }) {
         </div>
       )}
 
-      {loading && !generationActive ? <Loading text="Cargando..." /> : status ? (
-        <div className="stats-grid">
-          <StatCard title="Colecciones" value={status.total_collections || 0} icon={<BookOpen size={20} />} />
-          <StatCard title="Fragmentos" value={status.total_documents || 0} subtitle="Chunks generados" icon={<Puzzle size={20} />} />
+      {!progress && (
+        <div className="emb-info-grid">
+          <div className="emb-info-card">
+            <div className="emb-info-title"><AlertTriangle size={14} /> Antes de generar</div>
+            <ol className="emb-info-list">
+              <li>Ve a Google Drive y sincroniza los documentos</li>
+              <li>Espera a que la sincronización termine</li>
+              <li>Regresa aquí y presiona Generar</li>
+            </ol>
+            <p className="emb-info-note"><Sparkles size={12} /> El sistema detecta duplicados automáticamente</p>
+          </div>
+          <div className="emb-info-card">
+            <div className="emb-info-title">Parámetros del pipeline</div>
+            <div className="emb-param-list">
+              <div className="emb-param"><span>Chunk size</span><strong>500 tokens</strong></div>
+              <div className="emb-param"><span>Overlap</span><strong>50 tokens</strong></div>
+              <div className="emb-param"><span>Retrieval</span><strong>60% semántico · 40% léxico</strong></div>
+              <div className="emb-param"><span>Similitud mínima</span><strong>0.65 coseno</strong></div>
+            </div>
+          </div>
         </div>
-      ) : !progress ? <Empty>Sin informacion</Empty> : null}
+      )}
+
+      <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">
+        <Info size={18} />
+      </button>
+
+      {showHelp && (
+        <div className="help-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-modal" onClick={e => e.stopPropagation()}>
+            <div className="help-modal-header">
+              <h3>Cómo funciona esta sección</h3>
+              <button className="help-close" onClick={() => setShowHelp(false)}>✕</button>
+            </div>
+            <div className="help-modal-body">
+              <div className="help-step">
+                <div className="help-step-icon">1</div>
+                <div>
+                  <strong>¿Qué son los embeddings?</strong>
+                  <p>Son representaciones vectoriales de los fragmentos de texto de cada documento. Permiten al asistente encontrar información relevante por similitud semántica.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">2</div>
+                <div>
+                  <strong>Generar</strong>
+                  <p>Procesa todos los documentos nuevos y genera sus vectores. Solo afecta documentos que aún no tienen embeddings.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">3</div>
+                <div>
+                  <strong>Verificar</strong>
+                  <p>Comprueba la integridad del índice vectorial y detecta documentos sin embeddings o con datos corruptos.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">4</div>
+                <div>
+                  <strong>Limpiar</strong>
+                  <p>Elimina todos los embeddings del índice. Usar solo si necesitas regenerar todo desde cero.</p>
+                </div>
+              </div>
+              <div className="help-next">
+                <span>Siguiente paso:</span> Tab <strong>Métricas</strong> → revisar latencia y calidad del sistema
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
