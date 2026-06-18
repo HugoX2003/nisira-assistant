@@ -231,11 +231,20 @@ function AdminPanel({ onLogout, user }) {
   return (
     <div className="admin-panel">
       <header className="admin-header">
-        <div>
-          <h1><Shield size={22} /> Panel de Administracion</h1>
-          <p>Usuario: {user?.username || 'admin'}</p>
+        <div className="admin-brand">
+          <img src="/nisira.png" alt="NISIRA" className="admin-logo" />
+          <div className="admin-brand-text">
+            <span className="admin-brand-name">NISIRA Assistant</span>
+            <span className="admin-brand-sub">Panel de administración</span>
+          </div>
         </div>
-        <button onClick={onLogout} className="btn-logout">Cerrar Sesion</button>
+        <div className="admin-header-right">
+          <div className="admin-user-badge">
+            <div className="admin-avatar">{user?.username?.[0]?.toUpperCase() || 'A'}</div>
+            <span>{user?.username || 'admin'}</span>
+          </div>
+          <button className="admin-logout-btn" onClick={onLogout}>Cerrar sesión</button>
+        </div>
       </header>
 
       <Notification notification={notification} />
