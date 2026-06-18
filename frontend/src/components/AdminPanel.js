@@ -624,6 +624,7 @@ function EmbeddingsTab({ notify }) {
   const [driveFileNames, setDriveFileNames] = useState(new Set());
   const [filesLoading, setFilesLoading] = useState(false);
   const [showFilesView, setShowFilesView] = useState(false);
+  const [filterOrphans, setFilterOrphans] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -861,14 +862,30 @@ function EmbeddingsTab({ notify }) {
                 <span className="emb-files-legend">
                   <span className="legend-dot orphan"></span> No existe en Drive
                 </span>
-                <button className="emb-back-btn" onClick={() => setShowFilesView(false)}>
+                <button
+                  className={`emb-back-btn ${filterOrphans ? 'emb-filter-active' : ''}`}
+                  onClick={() => setFilterOrphans(v => !v)}
+                >
+                  {filterOrphans ? 'Ver todos' : (
+                    <>
+                      Solo sin Drive
+                      {driveFileNames.size > 0 && (() => {
+                        const count = processedFiles.filter(f => !driveFileNames.has(f.file_name)).length;
+                        return count > 0 ? <span className="emb-orphan-count">{count}</span> : null;
+                      })()}
+                    </>
+                  )}
+                </button>
+                <button className="emb-back-btn" onClick={() => { setShowFilesView(false); setFilterOrphans(false); }}>
                   ← Volver
                 </button>
               </div>
             </div>
             {filesLoading ? <Loading /> : (
               <div className="emb-files-list">
-                {processedFiles.map((file, i) => {
+                {processedFiles.filter(file =>
+                  !filterOrphans || (driveFileNames.size > 0 && !driveFileNames.has(file.file_name))
+                ).map((file, i) => {
                   const isOrphan = driveFileNames.size > 0 && !driveFileNames.has(file.file_name);
                   return (
                     <div key={i} className={`emb-file-row ${isOrphan ? 'orphan' : ''}`}>
@@ -912,28 +929,28 @@ function EmbeddingsTab({ notify }) {
                 <div className="help-step-icon">1</div>
                 <div>
                   <strong>¿Qué son los embeddings?</strong>
-                  <p>Son representaciones vectoriales de los fragmentos de texto de cada documento. Permiten al asistente encontrar información relevante por similitud semántica.</p>
+                  <p>Son representaciones vectoriales de los fragmentos de texto de cada documento. Permiten al asistente encontrar información relevante por similitud semántica, almacenados en un índice HNSW en pgvector.</p>
                 </div>
               </div>
               <div className="help-step">
                 <div className="help-step-icon">2</div>
                 <div>
                   <strong>Generar</strong>
-                  <p>Procesa todos los documentos nuevos y genera sus vectores. Solo afecta documentos que aún no tienen embeddings.</p>
+                  <p>Procesa todos los documentos nuevos y genera sus vectores. El sistema detecta duplicados automáticamente: solo indexa archivos que aún no tienen embeddings.</p>
                 </div>
               </div>
               <div className="help-step">
                 <div className="help-step-icon">3</div>
                 <div>
-                  <strong>Verificar</strong>
-                  <p>Comprueba la integridad del índice vectorial y detecta documentos sin embeddings o con datos corruptos.</p>
+                  <strong>Ver documentos indexados</strong>
+                  <p>Lista todos los archivos con embeddings generados. Los marcados en rojo como <em>Sin archivo en Drive</em> son huérfanos: existen en el índice pero ya no están en la carpeta de Drive. Puedes eliminar sus embeddings individualmente con el botón de papelera.</p>
                 </div>
               </div>
               <div className="help-step">
                 <div className="help-step-icon">4</div>
                 <div>
-                  <strong>Limpiar</strong>
-                  <p>Elimina todos los embeddings del índice. Usar solo si necesitas regenerar todo desde cero.</p>
+                  <strong>Verificar y Limpiar</strong>
+                  <p><em>Verificar</em> comprueba la integridad del índice vectorial. <em>Limpiar</em> elimina todos los embeddings del índice — usar solo si necesitas regenerar todo desde cero.</p>
                 </div>
               </div>
               <div className="help-next">

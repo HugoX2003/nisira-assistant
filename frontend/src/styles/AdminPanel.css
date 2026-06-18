@@ -1346,7 +1346,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: 300px;
+  max-height: 420px;
 }
 
 .emb-files-header {
@@ -1400,6 +1400,31 @@
 
 .emb-back-btn:hover {
   background: var(--surface, #f9fafb);
+}
+
+.emb-filter-active {
+  background: rgba(226, 75, 74, 0.1);
+  border-color: #E24B4A;
+  color: #A32D2D;
+}
+
+.emb-filter-active:hover {
+  background: rgba(226, 75, 74, 0.18);
+}
+
+.emb-orphan-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #E24B4A;
+  color: white;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 0 5px;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 4px;
 }
 
 .emb-files-list {
