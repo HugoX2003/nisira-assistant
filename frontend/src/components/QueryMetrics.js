@@ -80,11 +80,11 @@ function QueryMetrics({ showNotification }) {
     return `${seconds.toFixed(2)}s`;
   };
 
-  const getComplexityBadge = (isComplex, score) => {
+  const getComplexityBadge = (isComplex) => {
     if (isComplex) {
-      return <span className="badge badge-complex">Compleja ({(score * 100).toFixed(0)}%)</span>;
+      return <span className="badge badge-complex">Compleja</span>;
     }
-    return <span className="badge badge-simple">Simple ({(score * 100).toFixed(0)}%)</span>;
+    return <span className="badge badge-simple">Simple</span>;
   };
 
   const getMetricColor = (value, metric) => {
@@ -158,7 +158,7 @@ function QueryMetrics({ showNotification }) {
                   <span className="query-timestamp">
                     {new Date(query.timestamp).toLocaleString()}
                   </span>
-                  {getComplexityBadge(query.is_complex, query.complexity_score)}
+                  {getComplexityBadge(query.is_complex)}
                 </div>
 
                 <div className="query-text">
@@ -180,16 +180,6 @@ function QueryMetrics({ showNotification }) {
                   </div>
                 </div>
 
-                {query.precision && (
-                  <div className="query-precision-mini">
-                    <span className={`precision-badge ${getMetricColor(query.precision.precision_at_k, 'precision')}`}>
-                      P: {(query.precision.precision_at_k * 100).toFixed(0)}%
-                    </span>
-                    <span className={`precision-badge ${getMetricColor(query.precision.recall_at_k, 'recall')}`}>
-                      R: {(query.precision.recall_at_k * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -240,11 +230,6 @@ function QueryMetrics({ showNotification }) {
                         <span><Clock size={14} /> {new Date(queryDetail.timestamp).toLocaleString()}</span>
                         <span><Hash size={14} /> {queryDetail.query_id.substring(0, 8)}</span>
                       </div>
-                    </div>
-
-                    <div className="detail-section">
-                      <h4><BarChart3 size={16} /> 3 Metricas Finales (RAGAS + Gemini)</h4>
-                      <p className="detail-subtitle">Evaluacion con RAGAS usando Gemini API</p>
                     </div>
 
                     {queryDetail.tiempo_respuesta && (
