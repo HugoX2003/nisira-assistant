@@ -7,6 +7,8 @@ como Google Gemini y Hugging Face para crear vectores de documentos.
 """
 
 import os
+os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+os.environ.setdefault('HF_DATASETS_OFFLINE', '1')
 import logging
 from typing import List, Dict, Any, Optional, Union
 import asyncio
@@ -30,6 +32,8 @@ if SENTENCE_TRANSFORMERS_AVAILABLE:
         def __init__(self, model_name: str):
             if model_name not in SentenceTransformerAdapter._cache:
                 logger.info(f"[ST] Cargando SentenceTransformer '{model_name}' por primera vez...")
+                os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+                os.environ.setdefault('HF_DATASETS_OFFLINE', '1')
                 SentenceTransformerAdapter._cache[model_name] = SentenceTransformer(model_name, device='cpu')
                 logger.info(f"[ST] Modelo '{model_name}' cargado y cacheado en memoria.")
             self._model = SentenceTransformerAdapter._cache[model_name]
