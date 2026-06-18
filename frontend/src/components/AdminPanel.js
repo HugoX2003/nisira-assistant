@@ -393,29 +393,37 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
             <Search size={14} />
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar archivo..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             />
           </div>
         </div>
         {filesLoading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
-          <div className="files-grid">
-            {files.slice(0, 8).map(file => (
-              <div key={file.id} className="file-card">
-                <span className="file-icon">
-                  {file.mimeType?.includes('pdf') ? <FileText size={16} /> : <FileEdit size={16} />}
-                </span>
-                <div className="file-info">
-                  <h4>{file.name}</h4>
-                  <p>{formatSize(file.size)} · {new Date(file.modifiedTime).toLocaleDateString()}</p>
+          <>
+            <div className="files-grid">
+              {files.slice(0, 8).map(file => (
+                <div key={file.id} className="file-card">
+                  <span className="file-icon">
+                    {file.mimeType?.includes('pdf') ? <FileText size={16} /> : <FileEdit size={16} />}
+                  </span>
+                  <div className="file-info">
+                    <h4>{file.name}</h4>
+                    <p>{formatSize(file.size)} · {new Date(file.modifiedTime).toLocaleDateString()}</p>
+                  </div>
+                  <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={filesLoading}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
-                <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={filesLoading}>
-                  <Trash2 size={14} />
-                </button>
+              ))}
+            </div>
+            {pagination.totalFiles > 8 && !search && (
+              <div className="files-scroll-hint">
+                <Search size={12} />
+                Usa el buscador para encontrar archivos específicos entre los {pagination.totalFiles} documentos
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

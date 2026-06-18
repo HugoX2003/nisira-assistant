@@ -1032,7 +1032,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  max-height: 200px;
+  max-height: 320px;
 }
 
 .drive-files-section .files-header {
@@ -1075,4 +1075,16 @@
 
 .section-header {
   margin-bottom: 0.25rem !important;
+}
+
+.files-scroll-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #f9fafb);
+  flex-shrink: 0;
 }
