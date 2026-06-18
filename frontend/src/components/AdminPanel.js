@@ -970,6 +970,7 @@ function MetricsTab({ notify }) {
   const [metrics, setMetrics] = useState({ latenciaTotal: 0, reduccionTiempo: 0, calidadRespuesta: 0, totalQueries: 0 });
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('summary');
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadMetrics = useCallback(async () => {
     setLoading(true);
@@ -986,14 +987,14 @@ function MetricsTab({ notify }) {
 
   return (
     <div className="tab-content">
-      <div className="section-header">
-        <h2><BarChart3 size={20} /> Metricas del Sistema</h2>
+      <div className="section-header" style={{marginBottom: '0.5rem'}}>
+        <h2>Métricas del Sistema</h2>
         <div className="btn-group">
           <button className={`btn-toggle ${view === 'summary' ? 'active' : ''}`} onClick={() => setView('summary')}>
             <TrendingUp size={16} /> Resumen
           </button>
           <button className={`btn-toggle ${view === 'detailed' ? 'active' : ''}`} onClick={() => setView('detailed')}>
-            <Search size={16} /> Detalle
+            <Search size={16} /> Consultas
           </button>
           {view === 'summary' && (
             <button onClick={loadMetrics} className="btn-secondary" disabled={loading}>
@@ -1005,30 +1006,97 @@ function MetricsTab({ notify }) {
 
       {view === 'detailed' ? <QueryMetrics showNotification={notify} /> : loading ? <Loading /> : (
         <>
-          <p className="metrics-subtitle">Consultas analizadas: <strong>{metrics.totalQueries}</strong></p>
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <span className="metric-icon"><Clock size={20} /></span>
-              <h4>Latencia Total</h4>
-              <p className="metric-value">{metrics.latenciaTotal.toFixed(4)}s</p>
-              <div className="metric-bar"><div style={{ width: `${Math.min((metrics.latenciaTotal / 10) * 100, 100)}%` }} /></div>
-              <p className="metric-label">Tiempo promedio de respuesta</p>
+          <div className="metrics-summary-info">
+            <span>Consultas registradas: <strong>{metrics.totalQueries}</strong></span>
+            {metrics.totalQueries === 0 && (
+              <span className="metrics-empty-hint">Las métricas se registran automáticamente con cada consulta al asistente</span>
+            )}
+          </div>
+
+          <div className="met-stats-grid">
+            <div className="met-stat-card">
+              <span className="drive-stat-label">Latencia promedio</span>
+              <span className="met-stat-value">
+                {metrics.totalQueries === 0 ? '—' : `${metrics.latenciaTotal.toFixed(2)}s`}
+              </span>
+              <span className="drive-stat-sub">tiempo total de respuesta</span>
             </div>
-            <div className="metric-card">
-              <span className="metric-icon"><Rocket size={20} /></span>
-              <h4>Velocidad</h4>
-              <p className="metric-value">{metrics.reduccionTiempo.toFixed(2)} tok/s</p>
-              <div className="metric-bar"><div style={{ width: `${Math.min((metrics.reduccionTiempo / 50) * 100, 100)}%` }} /></div>
-              <p className="metric-label">Tokens por segundo</p>
+            <div className="met-stat-card">
+              <span className="drive-stat-label">Velocidad</span>
+              <span className="met-stat-value">
+                {metrics.totalQueries === 0 ? '—' : `${metrics.reduccionTiempo.toFixed(2)} tok/s`}
+              </span>
+              <span className="drive-stat-sub">tokens generados por segundo</span>
             </div>
-            <div className="metric-card">
-              <span className="metric-icon"><Sparkles size={20} /></span>
-              <h4>Calidad (RAGAS)</h4>
-              <p className="metric-value">{(metrics.calidadRespuesta * 100).toFixed(1)}%</p>
-              <div className="metric-bar"><div style={{ width: `${metrics.calidadRespuesta * 100}%` }} /></div>
-              <p className="metric-label">Score compuesto</p>
+            <div className="met-stat-card">
+              <span className="drive-stat-label">Calidad RAGAS</span>
+              <span className="met-stat-value">
+                {metrics.totalQueries === 0 ? '—' : metrics.calidadRespuesta > 0 ? `${(metrics.calidadRespuesta * 100).toFixed(1)}%` : 'N/D'}
+              </span>
+              <span className="drive-stat-sub">evaluación automática deshabilitada</span>
             </div>
           </div>
+
+          <div className="met-info-grid">
+            <div className="met-info-card">
+              <div className="emb-info-title">Métricas registradas</div>
+              <div className="emb-param-list">
+                <div className="emb-param"><span>Latencia Total</span><strong>end_time - start_time</strong></div>
+                <div className="emb-param"><span>Velocidad</span><strong>tokens / tiempo_total</strong></div>
+                <div className="emb-param"><span>TTFT</span><strong>tiempo al primer token</strong></div>
+                <div className="emb-param"><span>Docs recuperados</span><strong>chunks por consulta</strong></div>
+              </div>
+            </div>
+            <div className="met-info-card">
+              <div className="emb-info-title">Clasificación de consultas</div>
+              <div className="emb-param-list">
+                <div className="emb-param"><span>Compleja</span><strong>recupera documentos del corpus</strong></div>
+                <div className="emb-param"><span>Simple</span><strong>saludo o fuera de dominio</strong></div>
+                <div className="emb-param"><span>Ver detalle</span><strong>tab "Consultas" → clic en consulta</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">
+            <Info size={18} />
+          </button>
+
+          {showHelp && (
+            <div className="help-overlay" onClick={() => setShowHelp(false)}>
+              <div className="help-modal" onClick={e => e.stopPropagation()}>
+                <div className="help-modal-header">
+                  <h3>Cómo funciona esta sección</h3>
+                  <button className="help-close" onClick={() => setShowHelp(false)}>✕</button>
+                </div>
+                <div className="help-modal-body">
+                  <div className="help-step">
+                    <div className="help-step-icon">1</div>
+                    <div>
+                      <strong>Resumen</strong>
+                      <p>Muestra promedios agregados de todas las consultas: latencia, velocidad de generación y calidad. Se actualiza automáticamente con cada nueva consulta al asistente.</p>
+                    </div>
+                  </div>
+                  <div className="help-step">
+                    <div className="help-step-icon">2</div>
+                    <div>
+                      <strong>Consultas</strong>
+                      <p>Lista cada consulta individual con su latencia, velocidad y documentos recuperados. Haz clic en una consulta para ver el desglose completo de métricas.</p>
+                    </div>
+                  </div>
+                  <div className="help-step">
+                    <div className="help-step-icon">3</div>
+                    <div>
+                      <strong>Consultas complejas vs simples</strong>
+                      <p>Una consulta es compleja cuando el sistema recupera documentos del corpus para responderla. Las simples son saludos o preguntas fuera del dominio de NISIRA.</p>
+                    </div>
+                  </div>
+                  <div className="help-next">
+                    <span>Siguiente paso:</span> Tab <strong>Calificaciones</strong> → revisar feedback de usuarios
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

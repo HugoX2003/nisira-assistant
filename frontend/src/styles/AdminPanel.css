@@ -1494,3 +1494,57 @@
   opacity: 1;
   color: #E24B4A;
 }
+
+/* ========== METRICS TAB ========== */
+.metrics-summary-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 0.75rem;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.metrics-empty-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.met-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 0.75rem;
+}
+
+.met-stat-card {
+  background: var(--bg, #ffffff);
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.met-stat-value {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.2;
+  padding-top: 2px;
+}
+
+.met-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.met-info-card {
+  background: var(--bg, #ffffff);
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
