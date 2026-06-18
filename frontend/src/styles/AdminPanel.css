@@ -733,14 +733,14 @@
 
 /* === Sync panel (progress bar + logs) === */
 .sync-panel {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 0.5rem;
-  margin: 0.5rem 0;
+  margin: 0;
 }
 
 @media (max-width: 900px) {
-  .sync-panel { grid-template-columns: 1fr; }
+  .sync-panel { flex-direction: column; }
 }
 
 .sync-logs {
@@ -1068,4 +1068,21 @@
   font-size: 13px;
   color: var(--text-secondary);
   padding: 0.5rem 0;
+}
+
+.sync-logs-body {
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.drive-stats-grid {
+  margin-bottom: 0.5rem;
+}
+
+.drive-middle-row {
+  margin-bottom: 0.5rem;
+}
+
+.section-header {
+  margin-bottom: 0.25rem !important;
 }
