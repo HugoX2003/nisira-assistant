@@ -228,18 +228,15 @@ export async function getRatingMetrics() {
 }
 
 export const getProcessedFiles = async () => {
-  const res = await fetchWithAuth('/api/admin/embeddings/processed/');
-  return res.json();
+  return fetchWithAuth('/api/admin/embeddings/processed/');
 };
 
 export const deleteDocumentEmbeddings = async (fileName) => {
-  const res = await fetchWithAuth(`/api/admin/embeddings/delete/${encodeURIComponent(fileName)}/`, {
+  return fetchWithAuth(`/api/admin/embeddings/delete/${encodeURIComponent(fileName)}/`, {
     method: 'DELETE',
   });
-  return res.json();
 };
 
 export const getAllDriveFiles = async () => {
-  const res = await fetchWithAuth('/api/admin/drive/files/?page=1&pageSize=9999');
-  return res.json();
+  return fetchWithAuth('/api/admin/drive/files/?page=1&pageSize=9999');
 };
