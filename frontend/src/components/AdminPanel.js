@@ -365,34 +365,43 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
         </button>
       </div>
 
-      {syncProgress && (
-        <div className="sync-panel">
-          <ProgressBar {...syncProgress} />
-          <SyncLogs logs={syncProgress.recent_logs} />
+      <div className="drive-middle-row">
+        <div>
+          {syncProgress && (
+            <div className="sync-panel" style={{margin: 0}}>
+              <ProgressBar {...syncProgress} />
+              <SyncLogs logs={syncProgress.recent_logs} />
+            </div>
+          )}
+          {!syncProgress && (
+            <div className="card" style={{marginBottom: 0}}>
+              <div className="sync-idle-msg">
+                <RefreshCw size={14} /> Sin sincronización activa
+              </div>
+            </div>
+          )}
         </div>
-      )}
+        <div className="drive-upload-compact">
+          <UploadCard onUploaded={loadFiles} />
+        </div>
+      </div>
 
-      <UploadCard onUploaded={loadFiles} />
-
-      <div className="card">
+      <div className="drive-files-section">
         <div className="files-header">
           <h3>Archivos recientes ({pagination.totalFiles} en total)</h3>
-          <div className="files-controls">
-            <div className="search-input">
-              <Search size={14} />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              />
-            </div>
+          <div className="search-input">
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            />
           </div>
         </div>
-
         {filesLoading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
           <div className="files-grid">
-            {files.slice(0, 5).map(file => (
+            {files.slice(0, 8).map(file => (
               <div key={file.id} className="file-card">
                 <span className="file-icon">
                   {file.mimeType?.includes('pdf') ? <FileText size={16} /> : <FileEdit size={16} />}
