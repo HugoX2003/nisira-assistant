@@ -172,8 +172,9 @@ class MetricsTracker:
             else:
                 generation_time = total_latency - retrieval_time
             
-            # Clasificar complejidad
-            is_complex, complexity_score = self.is_complex_query(self.query_text or "")
+            # Clasificación basada en documentos recuperados
+            is_complex = self.documents_retrieved > 0
+            complexity_score = 1.0 if is_complex else 0.0
             
             # Crear registro de métricas de rendimiento
             metrics = QueryMetrics.objects.create(
