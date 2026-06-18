@@ -358,7 +358,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
         </div>
       </div>
 
-      <div className="section-header">
+      <div className="section-header" style={{marginBottom: '0.25rem'}}>
         <h2>Sincronizacion</h2>
         <button onClick={onStartSync} className="btn-primary" disabled={filesLoading || syncing}>
           <RefreshCw size={16} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
@@ -376,46 +376,37 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
 
       <div className="card">
         <div className="files-header">
-          <h3>Archivos ({pagination.totalFiles})</h3>
+          <h3>Archivos recientes ({pagination.totalFiles} en total)</h3>
           <div className="files-controls">
             <div className="search-input">
               <Search size={14} />
-              <input type="text" placeholder="Buscar..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+              <input
+                type="text"
+                placeholder="Buscar..."
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              />
             </div>
-            <select value={pageSize} onChange={(e) => { setPageSize(+e.target.value); setPage(1); }}>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
           </div>
         </div>
 
         {filesLoading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
-          <>
-            <div className="files-grid">
-              {files.map(file => (
-                <div key={file.id} className="file-card">
-                  <span className="file-icon">
-                    {file.mimeType?.includes('pdf') ? <FileText size={20} /> : <FileEdit size={20} />}
-                  </span>
-                  <div className="file-info">
-                    <h4>{file.name}</h4>
-                    <p>{formatSize(file.size)} - {new Date(file.modifiedTime).toLocaleDateString()}</p>
-                  </div>
-                  <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={filesLoading}>
-                    <Trash2 size={16} />
-                  </button>
+          <div className="files-grid">
+            {files.slice(0, 5).map(file => (
+              <div key={file.id} className="file-card">
+                <span className="file-icon">
+                  {file.mimeType?.includes('pdf') ? <FileText size={16} /> : <FileEdit size={16} />}
+                </span>
+                <div className="file-info">
+                  <h4>{file.name}</h4>
+                  <p>{formatSize(file.size)} · {new Date(file.modifiedTime).toLocaleDateString()}</p>
                 </div>
-              ))}
-            </div>
-            {pagination.totalPages > 1 && (
-              <div className="pagination">
-                <button onClick={() => setPage(p => p - 1)} disabled={!pagination.hasPrevPage}>Anterior</button>
-                <span>Pagina {page} de {pagination.totalPages}</span>
-                <button onClick={() => setPage(p => p + 1)} disabled={!pagination.hasNextPage}>Siguiente</button>
+                <button onClick={() => handleDelete(file.id, file.name)} className="btn-icon" disabled={filesLoading}>
+                  <Trash2 size={14} />
+                </button>
               </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </div>
     </div>
