@@ -42,6 +42,9 @@ RUN python manage.py collectstatic --noinput --settings=core.production_settings
 # Make entrypoint executable
 RUN chmod +x /app/docker/entrypoint.sh
 
+# Pre-descargar modelo de embeddings para no depender de internet en runtime
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-mpnet-base-v2')"
+
 # Create non-root user
 RUN useradd -m -u 1000 django && chown -R django:django /app
 USER django
