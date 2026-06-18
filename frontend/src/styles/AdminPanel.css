@@ -958,3 +958,59 @@
 .admin-logout-btn:hover {
   background: var(--bg-secondary);
 }
+
+/* ===== Drive Stats Grid ===== */
+.drive-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.drive-stat-card {
+  background: var(--bg);
+  border: 0.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drive-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.drive-stat-value {
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.drive-stat-status {
+  font-size: 14px;
+  padding-top: 4px;
+}
+
+.drive-stat-status.idle {
+  color: #0F6E56;
+}
+
+.drive-stat-status.syncing {
+  color: var(--warning, #BA7517);
+}
+
+.drive-stat-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 600px) {
+  .drive-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

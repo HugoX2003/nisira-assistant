@@ -337,8 +337,29 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
 
   return (
     <div className="tab-content">
+
+      <div className="drive-stats-grid">
+        <div className="drive-stat-card">
+          <span className="drive-stat-label">Documentos</span>
+          <span className="drive-stat-value">{pagination.totalFiles || 0}</span>
+          <span className="drive-stat-sub">en el corpus</span>
+        </div>
+        <div className="drive-stat-card">
+          <span className="drive-stat-label">Estado de sync</span>
+          <span className={`drive-stat-value drive-stat-status ${syncing ? 'syncing' : 'idle'}`}>
+            {syncing ? 'Sincronizando...' : 'En espera'}
+          </span>
+          <span className="drive-stat-sub">{syncing ? 'en progreso' : 'sin actividad activa'}</span>
+        </div>
+        <div className="drive-stat-card">
+          <span className="drive-stat-label">Pipeline</span>
+          <span className="drive-stat-value drive-stat-status idle">Operacional</span>
+          <span className="drive-stat-sub">Drive + pgvector</span>
+        </div>
+      </div>
+
       <div className="section-header">
-        <h2>Gestion de Documentos</h2>
+        <h2>Sincronizacion</h2>
         <button onClick={onStartSync} className="btn-primary" disabled={filesLoading || syncing}>
           <RefreshCw size={16} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
         </button>
