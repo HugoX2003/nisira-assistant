@@ -359,7 +359,17 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
       </div>
 
       <div className="section-header" style={{marginBottom: '0.25rem'}}>
-        <h2>Sincronizacion</h2>
+        <h2 style={{display:'flex', alignItems:'center', gap:'8px'}}>
+          Sincronizacion
+          <a
+            href="https://drive.google.com/drive/folders/1wAYnaln3Dg-MnFy6rNhwqPlh7Ouc4EP8"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="drive-folder-link"
+          >
+            <ExternalLink size={13} /> Ver carpeta en Drive
+          </a>
+        </h2>
         <button onClick={onStartSync} className="btn-primary" disabled={filesLoading || syncing}>
           <RefreshCw size={16} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
         </button>
@@ -402,7 +412,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
         {filesLoading ? <Loading /> : files.length === 0 ? <Empty>No hay archivos</Empty> : (
           <>
             <div className="files-grid">
-              {files.slice(0, 8).map(file => (
+              {files.slice(0, 12).map(file => (
                 <div key={file.id} className="file-card">
                   <span className="file-icon">
                     {file.mimeType?.includes('pdf') ? <FileText size={16} /> : <FileEdit size={16} />}
