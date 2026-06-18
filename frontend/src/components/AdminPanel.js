@@ -32,6 +32,7 @@ import {
   Database,
   Terminal,
   ExternalLink,
+  Info,
   X,
 } from 'lucide-react';
 import {
@@ -293,6 +294,7 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [showHelp, setShowHelp] = useState(false);
   const [pagination, setPagination] = useState({ totalFiles: 0, totalPages: 0, hasNextPage: false, hasPrevPage: false });
 
   const syncing = syncProgress?.status === 'running' || syncProgress?.status === 'starting';
@@ -436,6 +438,54 @@ function DriveTab({ notify, syncProgress, onStartSync, filesRefreshTick }) {
           </>
         )}
       </div>
+
+      <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">
+        <Info size={18} />
+      </button>
+
+      {showHelp && (
+        <div className="help-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-modal" onClick={e => e.stopPropagation()}>
+            <div className="help-modal-header">
+              <h3>Cómo funciona esta sección</h3>
+              <button className="help-close" onClick={() => setShowHelp(false)}>✕</button>
+            </div>
+            <div className="help-modal-body">
+              <div className="help-step">
+                <div className="help-step-icon">1</div>
+                <div>
+                  <strong>Sincronización con Google Drive</strong>
+                  <p>Presiona <em>Sincronizar</em> para importar automáticamente los documentos PDF de la carpeta corporativa de Drive. El sistema detecta duplicados y solo descarga archivos nuevos.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">2</div>
+                <div>
+                  <strong>Subida directa de documentos</strong>
+                  <p>También puedes subir archivos manualmente desde tu equipo arrastrándolos o seleccionándolos. El sistema los indexa automáticamente en segundo plano.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">3</div>
+                <div>
+                  <strong>Verificación de embeddings</strong>
+                  <p>Después de sincronizar o subir documentos, ve a la tab <em>Embeddings</em> para confirmar que los fragmentos fueron generados correctamente y el corpus está actualizado.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">4</div>
+                <div>
+                  <strong>Consulta en el asistente</strong>
+                  <p>Una vez procesados los documentos, los usuarios pueden consultarlos desde el chat del asistente usando lenguaje natural.</p>
+                </div>
+              </div>
+              <div className="help-next">
+                <span>Siguiente paso:</span> Tab <strong>Embeddings</strong> → verificar chunks generados
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
