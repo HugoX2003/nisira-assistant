@@ -38,7 +38,8 @@ import {
 import {
   getDriveFiles, uploadDriveFile, deleteDriveFile, syncDriveDocuments, getSyncProgress,
   getEmbeddingsStatus, generateEmbeddings, verifyEmbeddings, clearEmbeddings, getEmbeddingProgress,
-  getSystemMetrics, getPipelineStatus, getRatingMetrics
+  getSystemMetrics, getPipelineStatus, getRatingMetrics,
+  getProcessedFiles, deleteDocumentEmbeddings, getAllDriveFiles
 } from '../services/adminApi';
 
 const Notification = ({ notification }) => {
@@ -619,6 +620,10 @@ function EmbeddingsTab({ notify }) {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [processedFiles, setProcessedFiles] = useState([]);
+  const [driveFileNames, setDriveFileNames] = useState(new Set());
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [showFilesView, setShowFilesView] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -630,6 +635,42 @@ function EmbeddingsTab({ notify }) {
     }
     setLoading(false);
   }, [notify]);
+
+  const loadProcessedFiles = useCallback(async () => {
+    setFilesLoading(true);
+    try {
+      const [processedRes, driveRes] = await Promise.all([
+        getProcessedFiles(),
+        getAllDriveFiles()
+      ]);
+      if (processedRes.success) {
+        setProcessedFiles(processedRes.files || []);
+      }
+      if (driveRes.success) {
+        const names = new Set((driveRes.files || []).map(f => f.name));
+        setDriveFileNames(names);
+      }
+    } catch (e) {
+      notify('Error cargando archivos indexados', 'error');
+    }
+    setFilesLoading(false);
+  }, [notify]);
+
+  const handleDeleteEmbeddings = async (fileName) => {
+    if (!window.confirm(`¿Eliminar embeddings de "${fileName}"? Los chunks de este archivo serán removidos del índice.`)) return;
+    try {
+      const res = await deleteDocumentEmbeddings(fileName);
+      if (res.success) {
+        notify(`Embeddings de "${fileName}" eliminados`, 'success');
+        loadProcessedFiles();
+        loadStatus();
+      } else {
+        notify('Error al eliminar embeddings', 'error');
+      }
+    } catch (e) {
+      notify('Error al eliminar embeddings', 'error');
+    }
+  };
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -762,6 +803,11 @@ function EmbeddingsTab({ notify }) {
           <span className="drive-stat-value" style={{fontSize:'13px', paddingTop:'6px'}}>HNSW</span>
           <span className="drive-stat-sub">m=32 · ef=200</span>
         </div>
+        <div className="emb-stat-card">
+          <span className="drive-stat-label">Tamaño índice</span>
+          <span className="drive-stat-value" style={{fontSize:'13px', paddingTop:'6px'}}>{status?.table_size || '149 MB'}</span>
+          <span className="drive-stat-sub">PostgreSQL</span>
+        </div>
       </div>
 
       {progress && (
@@ -776,26 +822,74 @@ function EmbeddingsTab({ notify }) {
       )}
 
       {!progress && (
-        <div className="emb-info-grid">
-          <div className="emb-info-card">
-            <div className="emb-info-title"><AlertTriangle size={14} /> Antes de generar</div>
-            <ol className="emb-info-list">
-              <li>Ve a Google Drive y sincroniza los documentos</li>
-              <li>Espera a que la sincronización termine</li>
-              <li>Regresa aquí y presiona Generar</li>
-            </ol>
-            <p className="emb-info-note"><Sparkles size={12} /> El sistema detecta duplicados automáticamente</p>
-          </div>
-          <div className="emb-info-card">
-            <div className="emb-info-title">Parámetros del pipeline</div>
-            <div className="emb-param-list">
-              <div className="emb-param"><span>Chunk size</span><strong>500 tokens</strong></div>
-              <div className="emb-param"><span>Overlap</span><strong>50 tokens</strong></div>
-              <div className="emb-param"><span>Retrieval</span><strong>60% semántico · 40% léxico</strong></div>
-              <div className="emb-param"><span>Similitud mínima</span><strong>0.65 coseno</strong></div>
+        !showFilesView ? (
+          <div className="emb-info-grid">
+            <div className="emb-info-card">
+              <div className="emb-info-title"><AlertTriangle size={14} /> Antes de generar</div>
+              <ol className="emb-info-list">
+                <li>Ve a Google Drive y sincroniza los documentos</li>
+                <li>Espera a que la sincronización termine</li>
+                <li>Regresa aquí y presiona Generar</li>
+              </ol>
+              <p className="emb-info-note"><Sparkles size={12} /> El sistema detecta duplicados automáticamente</p>
             </div>
+            <div className="emb-info-card">
+              <div className="emb-info-title">Parámetros del pipeline</div>
+              <div className="emb-param-list">
+                <div className="emb-param"><span>Chunk size</span><strong>500 tokens</strong></div>
+                <div className="emb-param"><span>Overlap</span><strong>50 tokens</strong></div>
+                <div className="emb-param"><span>Retrieval</span><strong>60% semántico · 40% léxico</strong></div>
+                <div className="emb-param"><span>Similitud mínima</span><strong>0.65 coseno</strong></div>
+              </div>
+            </div>
+            <button
+              className="emb-view-docs-btn"
+              onClick={() => { setShowFilesView(true); loadProcessedFiles(); }}
+            >
+              <Database size={14} /> Ver documentos indexados ({status?.total_documents?.toLocaleString() || '15,799'})
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="emb-files-section">
+            <div className="emb-files-header">
+              <span className="emb-files-title"><Database size={14} /> Documentos indexados</span>
+              <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+                <span className="emb-files-legend">
+                  <span className="legend-dot orphan"></span> No existe en Drive
+                </span>
+                <button className="emb-back-btn" onClick={() => setShowFilesView(false)}>
+                  ← Volver
+                </button>
+              </div>
+            </div>
+            {filesLoading ? <Loading /> : (
+              <div className="emb-files-list">
+                {processedFiles.map((file, i) => {
+                  const isOrphan = driveFileNames.size > 0 && !driveFileNames.has(file.file_name);
+                  return (
+                    <div key={i} className={`emb-file-row ${isOrphan ? 'orphan' : ''}`}>
+                      <span className="emb-file-icon">
+                        {file.file_type === 'pdf' ? <FileText size={14} /> : <FileEdit size={14} />}
+                      </span>
+                      <span className="emb-file-name" title={file.file_name}>
+                        {file.file_name}
+                        {isOrphan && <span className="emb-orphan-badge">Sin archivo en Drive</span>}
+                      </span>
+                      <span className="emb-file-chunks">{file.chunks_count} chunks</span>
+                      <button
+                        className="btn-icon emb-file-delete"
+                        onClick={() => handleDeleteEmbeddings(file.file_name)}
+                        title="Eliminar embeddings"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )
       )}
 
       <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">

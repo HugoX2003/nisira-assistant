@@ -1314,3 +1314,158 @@
   color: var(--text);
   font-weight: 500;
 }
+
+.emb-stats-grid {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.emb-view-docs-btn {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  background: transparent;
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.emb-view-docs-btn:hover {
+  background: var(--surface, #f9fafb);
+  color: var(--text);
+}
+
+.emb-files-section {
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+}
+
+.emb-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 0.5px solid var(--border, #e5e7eb);
+  background: var(--surface, #f9fafb);
+  flex-shrink: 0;
+}
+
+.emb-files-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.emb-files-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.orphan {
+  background: #E24B4A;
+}
+
+.emb-back-btn {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.emb-back-btn:hover {
+  background: var(--surface, #f9fafb);
+}
+
+.emb-files-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.emb-file-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 0.5px solid var(--border, #e5e7eb);
+  font-size: 12px;
+}
+
+.emb-file-row:last-child {
+  border-bottom: none;
+}
+
+.emb-file-row.orphan {
+  background: rgba(226, 75, 74, 0.04);
+}
+
+.emb-file-row.orphan .emb-file-name {
+  color: #A32D2D;
+}
+
+.emb-file-icon {
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.emb-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emb-orphan-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(226, 75, 74, 0.12);
+  color: #A32D2D;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.emb-file-chunks {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.emb-file-delete {
+  opacity: 0.4;
+}
+
+.emb-file-delete:hover {
+  opacity: 1;
+  color: #E24B4A;
+}
