@@ -639,18 +639,22 @@ function EmbeddingsTab({ notify }) {
   const loadProcessedFiles = useCallback(async () => {
     setFilesLoading(true);
     try {
-      const [processedRes, driveRes] = await Promise.all([
-        getProcessedFiles(),
-        getAllDriveFiles()
-      ]);
+      const processedRes = await getProcessedFiles();
       if (processedRes.success) {
         setProcessedFiles(processedRes.files || []);
       }
-      if (driveRes.success) {
-        const names = new Set((driveRes.files || []).map(f => f.name));
-        setDriveFileNames(names);
+      try {
+        const driveRes = await getAllDriveFiles();
+        if (driveRes.success && driveRes.files) {
+          const names = new Set(driveRes.files.map(f => f.name));
+          setDriveFileNames(names);
+        }
+      } catch (driveErr) {
+        console.warn('No se pudo cargar Drive para comparar:', driveErr);
+        setDriveFileNames(new Set());
       }
     } catch (e) {
+      console.error('Error loadProcessedFiles:', e);
       notify('Error cargando archivos indexados', 'error');
     }
     setFilesLoading(false);
