@@ -43,9 +43,9 @@ export default function Login({ onLogin, onShowRegister }) {
     <div className="auth-page">
       <div className="auth-card">
         <header className="auth-header">
-          <div className="auth-logo"><Bot size={48} strokeWidth={1.5} /></div>
+          <div className="auth-logo"><img src="/nisira.png" alt="NISIRA" /></div>
           <h1 className="auth-title">Bienvenido</h1>
-          <p className="auth-subtitle">Inicia sesión en NISIRA Assistant</p>
+          <p className="auth-subtitle">Asistente conversacional de NISIRA SYSTEMS</p>
         </header>
 
         <form onSubmit={handleSubmit}>

@@ -489,6 +489,7 @@ export default function Chat({ onLogout, user }) {
           <button className="btn-menu" onClick={() => setSidebarOpen(true)}>
             <Menu size={20} />
           </button>
+          <img src="/nisira.png" alt="NISIRA" className="chat-header-logo" />
           <h1 className="chat-title">NISIRA Assistant</h1>
           {loading && <span className="chat-status">Procesando...</span>}
         </header>
@@ -509,9 +510,9 @@ export default function Chat({ onLogout, user }) {
 
           {messages.length === 0 && !loading && !msgLoadingOlder && (
             <div className="welcome">
-              <div className="welcome-icon"><Bot size={64} strokeWidth={1.5} /></div>
-              <h2>Hola! Soy NISIRA Assistant</h2>
-              <p>Tu asistente inteligente. Preguntame lo que necesites.</p>
+              <div className="welcome-icon"><img src="/nisira.png" alt="NISIRA" className="welcome-logo" /></div>
+              <h2>NISIRA Assistant</h2>
+              <p>Consulta información sobre procesos, documentos y procedimientos de NISIRA SYSTEMS. Estoy aquí para ayudarte.</p>
             </div>
           )}
 

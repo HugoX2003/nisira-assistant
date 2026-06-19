@@ -209,8 +209,20 @@
 }
 
 .welcome-icon {
-  font-size: 3rem;
   margin-bottom: 16px;
+}
+
+.welcome-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.chat-header-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .welcome h2 {
