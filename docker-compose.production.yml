@@ -65,6 +65,8 @@ services:
 
       # RAG
       INIT_RAG: "false"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
     depends_on:
       db:
         condition: service_healthy
@@ -72,6 +74,7 @@ services:
       - rag_data:/app/data
       - chroma_data:/app/chroma_db
       - credentials:/app/credentials:ro
+      - /root/.cache/huggingface:/root/.cache/huggingface:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
