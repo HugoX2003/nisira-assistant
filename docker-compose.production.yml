@@ -74,7 +74,7 @@ services:
       - rag_data:/app/data
       - chroma_data:/app/chroma_db
       - credentials:/app/credentials:ro
-      - /root/.cache/huggingface:/root/.cache/huggingface:ro
+      - /root/.cache/huggingface:/home/django/.cache/huggingface:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s

@@ -153,11 +153,11 @@ class EmbeddingManager:
         else:
             logger.warning("[WARN]  No se encontraron adaptadores de Hugging Face; instala sentence-transformers")
         
-        # Seleccionar proveedor por defecto (preferir HuggingFace para ahorrar cuota de Google)
-        if 'huggingface' in self.available_providers:
-            self.current_provider = 'huggingface'
-        elif 'google' in self.available_providers:
+        # Seleccionar proveedor: Gemini primero (estable en producción), HuggingFace como fallback
+        if 'google' in self.available_providers:
             self.current_provider = 'google'
+        elif 'huggingface' in self.available_providers:
+            self.current_provider = 'huggingface'
         else:
             logger.error("[ERROR] No hay proveedores de embeddings disponibles")
     
