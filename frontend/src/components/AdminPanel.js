@@ -1107,6 +1107,7 @@ function MetricsTab({ notify }) {
 function RatingsTab({ notify }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadRatings = useCallback(async () => {
     setLoading(true);
@@ -1126,58 +1127,119 @@ function RatingsTab({ notify }) {
 
   return (
     <div className="tab-content">
-      <div className="section-header">
-        <h2><Star size={20} /> Metricas de Calificaciones</h2>
+      <div className="section-header" style={{marginBottom: '0.5rem'}}>
+        <h2>Calificaciones de Usuarios</h2>
         <button onClick={loadRatings} className="btn-secondary" disabled={loading}>
           <RefreshCw size={16} /> Actualizar
         </button>
       </div>
 
-      <div className="stats-grid">
-        <StatCard title="Total" value={data.total_ratings} icon={<BarChart3 size={20} />} />
-        <StatCard title="Likes" value={data.distribution.likes} subtitle={`${data.distribution.like_percentage}%`} icon={<ThumbsUp size={20} />} />
-        <StatCard title="Dislikes" value={data.distribution.dislikes} subtitle={`${data.distribution.dislike_percentage}%`} icon={<ThumbsDown size={20} />} />
-      </div>
-
-      <div className="card">
-        <h3>Distribucion</h3>
-        <div className="distribution-bar">
-          <div className="like-bar" style={{ width: `${data.distribution.like_percentage}%` }}>
-            {data.distribution.like_percentage > 10 && `${data.distribution.like_percentage}%`}
-          </div>
-          <div className="dislike-bar" style={{ width: `${data.distribution.dislike_percentage}%` }}>
-            {data.distribution.dislike_percentage > 10 && `${data.distribution.dislike_percentage}%`}
-          </div>
+      <div className="rat-stats-grid">
+        <div className="rat-stat-card">
+          <span className="drive-stat-label">Total calificaciones</span>
+          <span className="met-stat-value">{data.total_ratings || 0}</span>
+          <span className="drive-stat-sub">respuestas evaluadas</span>
+        </div>
+        <div className="rat-stat-card rat-likes">
+          <span className="drive-stat-label">Útil</span>
+          <span className="met-stat-value rat-likes-value">{data.distribution?.likes || 0}</span>
+          <span className="drive-stat-sub">{data.distribution?.like_percentage || 0}% de satisfacción</span>
+        </div>
+        <div className="rat-stat-card rat-dislikes">
+          <span className="drive-stat-label">No útil</span>
+          <span className="met-stat-value rat-dislikes-value">{data.distribution?.dislikes || 0}</span>
+          <span className="drive-stat-sub">{data.distribution?.dislike_percentage || 0}% de insatisfacción</span>
         </div>
       </div>
 
+      {data.total_ratings > 0 && (
+        <div className="rat-distribution">
+          <div className="rat-dist-label">
+            <span>Distribución</span>
+            <span>{data.distribution?.like_percentage || 0}% positivo</span>
+          </div>
+          <div className="rat-dist-bar">
+            <div className="rat-dist-likes" style={{width: `${data.distribution?.like_percentage || 0}%`}}></div>
+            <div className="rat-dist-dislikes" style={{width: `${data.distribution?.dislike_percentage || 0}%`}}></div>
+          </div>
+        </div>
+      )}
+
       {data.top_issues?.length > 0 && (
-        <div className="card">
-          <h3><AlertCircle size={18} /> Problemas Reportados</h3>
-          <div className="issues-list">
+        <div className="rat-card">
+          <div className="emb-info-title"><AlertCircle size={14} /> Problemas reportados</div>
+          <div className="emb-param-list">
             {data.top_issues.map((issue, i) => (
-              <div key={i} className="issue-item">
-                <span className="issue-rank">#{i + 1}</span>
-                <span className="issue-label">{issue.label}</span>
-                <span className="issue-count">{issue.count}x</span>
+              <div key={i} className="emb-param">
+                <span>#{i + 1} {issue.label}</span>
+                <strong>{issue.count} reportes</strong>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {data.recent_ratings?.length > 0 && (
-        <div className="card">
-          <h3><Clock size={18} /> Recientes</h3>
-          <div className="recent-list">
-            {data.recent_ratings.slice(0, 5).map(r => (
-              <div key={r.id} className={`recent-item ${r.value}`}>
-                <span>{r.value === 'like' ? <ThumbsUp size={14} /> : <ThumbsDown size={14} />}</span>
-                <span className="recent-user">{r.username}</span>
-                <span className="recent-msg">{r.message_preview}</span>
-                <span className="recent-date">{new Date(r.created_at).toLocaleDateString()}</span>
+      {data.recent_ratings?.length > 0 ? (
+        <div className="rat-recent-section">
+          <div className="emb-files-header">
+            <span className="emb-files-title">Calificaciones recientes</span>
+          </div>
+          <div className="rat-recent-list">
+            {data.recent_ratings.slice(0, 8).map(r => (
+              <div key={r.id} className={`rat-recent-item ${r.value}`}>
+                <span className="rat-icon">
+                  {r.value === 'like' ? <ThumbsUp size={13} /> : <ThumbsDown size={13} />}
+                </span>
+                <span className="rat-user">{r.username}</span>
+                <span className="rat-msg">{r.message_preview}</span>
+                <span className="rat-date">{new Date(r.created_at).toLocaleDateString()}</span>
               </div>
             ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rat-empty">
+          <span>No hay calificaciones aún. Los usuarios pueden calificar respuestas desde el chat.</span>
+        </div>
+      )}
+
+      <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">
+        <Info size={18} />
+      </button>
+
+      {showHelp && (
+        <div className="help-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-modal" onClick={e => e.stopPropagation()}>
+            <div className="help-modal-header">
+              <h3>Cómo funciona esta sección</h3>
+              <button className="help-close" onClick={() => setShowHelp(false)}>✕</button>
+            </div>
+            <div className="help-modal-body">
+              <div className="help-step">
+                <div className="help-step-icon">1</div>
+                <div>
+                  <strong>¿Qué se califica?</strong>
+                  <p>Cada respuesta del asistente puede ser calificada como "Útil" o "No útil" por el usuario. Los botones aparecen debajo de cada respuesta en el chat.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">2</div>
+                <div>
+                  <strong>Distribución</strong>
+                  <p>La barra muestra la proporción de respuestas positivas vs negativas. Un porcentaje alto de "Útil" indica que el asistente está respondiendo correctamente.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">3</div>
+                <div>
+                  <strong>Calificaciones recientes</strong>
+                  <p>Lista las últimas evaluaciones con el usuario, un preview de la respuesta calificada y la fecha. Útil para identificar qué tipos de consultas generan insatisfacción.</p>
+                </div>
+              </div>
+              <div className="help-next">
+                <span>Siguiente paso:</span> Tab <strong>Pipeline</strong> → verificar estado del sistema
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -1548,3 +1548,109 @@
   border-radius: 10px;
   padding: 14px 16px;
 }
+
+/* ========== RATINGS TAB ========== */
+.rat-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 0.75rem;
+}
+
+.rat-stat-card {
+  background: var(--bg, #ffffff);
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rat-likes-value { color: #0F6E56; }
+.rat-dislikes-value { color: #E24B4A; }
+
+.rat-distribution {
+  margin-bottom: 0.75rem;
+}
+
+.rat-dist-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.rat-dist-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border, #e5e7eb);
+}
+
+.rat-dist-likes {
+  background: #0F6E56;
+  transition: width 0.3s;
+}
+
+.rat-dist-dislikes {
+  background: #E24B4A;
+  transition: width 0.3s;
+}
+
+.rat-card {
+  background: var(--bg, #ffffff);
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 0.75rem;
+}
+
+.rat-recent-section {
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+  overflow: hidden;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.rat-recent-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.rat-recent-item {
+  display: grid;
+  grid-template-columns: 20px 80px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 0.5px solid var(--border, #e5e7eb);
+  font-size: 12px;
+}
+
+.rat-recent-item:last-child { border-bottom: none; }
+
+.rat-recent-item.like { background: rgba(15, 110, 86, 0.03); }
+.rat-recent-item.dislike { background: rgba(226, 75, 74, 0.03); }
+
+.rat-icon { display: flex; align-items: center; }
+.rat-icon svg { color: var(--text-secondary); }
+.rat-recent-item.like .rat-icon svg { color: #0F6E56; }
+.rat-recent-item.dislike .rat-icon svg { color: #E24B4A; }
+
+.rat-user { font-weight: 500; color: var(--text); }
+.rat-msg { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rat-date { color: var(--text-secondary); white-space: nowrap; font-size: 11px; }
+
+.rat-empty {
+  text-align: center;
+  padding: 2rem;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border: 0.5px solid var(--border, #e5e7eb);
+  border-radius: 10px;
+}
