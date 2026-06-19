@@ -1129,38 +1129,67 @@ function RatingsTab({ notify }) {
     <div className="tab-content">
       <div className="section-header" style={{marginBottom: '0.5rem'}}>
         <h2>Calificaciones de Usuarios</h2>
-        <button onClick={loadRatings} className="btn-secondary" disabled={loading}>
-          <RefreshCw size={16} /> Actualizar
-        </button>
+        <div className="btn-group">
+          {data.recent_ratings?.[0]?.created_at && (
+            <span className="rat-last-date">
+              <Clock size={12} /> Última: {new Date(data.recent_ratings[0].created_at).toLocaleDateString('es-PE', {day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'})}
+            </span>
+          )}
+          <button onClick={loadRatings} className="btn-secondary" disabled={loading}>
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="rat-stats-grid">
         <div className="rat-stat-card">
-          <span className="drive-stat-label">Total calificaciones</span>
+          <div className="rat-stat-header">
+            <Star size={13} className="rat-stat-icon-neutral" />
+            <span className="drive-stat-label">Total</span>
+          </div>
           <span className="met-stat-value">{data.total_ratings || 0}</span>
           <span className="drive-stat-sub">respuestas evaluadas</span>
         </div>
-        <div className="rat-stat-card rat-likes">
-          <span className="drive-stat-label">Útil</span>
+        <div className="rat-stat-card rat-stat-likes">
+          <div className="rat-stat-header">
+            <ThumbsUp size={13} className="rat-stat-icon-like" />
+            <span className="drive-stat-label">Útil</span>
+          </div>
           <span className="met-stat-value rat-likes-value">{data.distribution?.likes || 0}</span>
-          <span className="drive-stat-sub">{data.distribution?.like_percentage || 0}% de satisfacción</span>
+          <span className="drive-stat-sub">{data.distribution?.like_percentage || 0}% satisfacción</span>
         </div>
-        <div className="rat-stat-card rat-dislikes">
-          <span className="drive-stat-label">No útil</span>
+        <div className="rat-stat-card rat-stat-dislikes">
+          <div className="rat-stat-header">
+            <ThumbsDown size={13} className="rat-stat-icon-dislike" />
+            <span className="drive-stat-label">No útil</span>
+          </div>
           <span className="met-stat-value rat-dislikes-value">{data.distribution?.dislikes || 0}</span>
-          <span className="drive-stat-sub">{data.distribution?.dislike_percentage || 0}% de insatisfacción</span>
+          <span className="drive-stat-sub">{data.distribution?.dislike_percentage || 0}% insatisfacción</span>
         </div>
       </div>
 
       {data.total_ratings > 0 && (
         <div className="rat-distribution">
           <div className="rat-dist-label">
-            <span>Distribución</span>
-            <span>{data.distribution?.like_percentage || 0}% positivo</span>
+            <span className="rat-dist-legend-item">
+              <span className="rat-dist-dot rat-dist-dot-like"></span>
+              Útil · {data.distribution?.likes || 0}
+            </span>
+            <span className="rat-dist-legend-item">
+              No útil · {data.distribution?.dislikes || 0}
+              <span className="rat-dist-dot rat-dist-dot-dislike"></span>
+            </span>
           </div>
           <div className="rat-dist-bar">
             <div className="rat-dist-likes" style={{width: `${data.distribution?.like_percentage || 0}%`}}></div>
             <div className="rat-dist-dislikes" style={{width: `${data.distribution?.dislike_percentage || 0}%`}}></div>
+          </div>
+          <div className="rat-dist-sub">
+            {(data.distribution?.like_percentage || 0) >= 70
+              ? '✓ Alta satisfacción'
+              : (data.distribution?.like_percentage || 0) >= 40
+              ? '~ Satisfacción moderada'
+              : '✗ Baja satisfacción — revisar respuestas recientes'}
           </div>
         </div>
       )}
@@ -1183,16 +1212,17 @@ function RatingsTab({ notify }) {
         <div className="rat-recent-section">
           <div className="emb-files-header">
             <span className="emb-files-title">Calificaciones recientes</span>
+            <span className="rat-recent-count">{data.recent_ratings.length} registros</span>
           </div>
           <div className="rat-recent-list">
             {data.recent_ratings.slice(0, 8).map(r => (
               <div key={r.id} className={`rat-recent-item ${r.value}`}>
                 <span className="rat-icon">
-                  {r.value === 'like' ? <ThumbsUp size={13} /> : <ThumbsDown size={13} />}
+                  {r.value === 'like' ? <ThumbsUp size={15} /> : <ThumbsDown size={15} />}
                 </span>
                 <span className="rat-user">{r.username}</span>
                 <span className="rat-msg">{r.message_preview}</span>
-                <span className="rat-date">{new Date(r.created_at).toLocaleDateString()}</span>
+                <span className="rat-date">{new Date(r.created_at).toLocaleDateString('es-PE', {day: '2-digit', month: 'short'})}</span>
               </div>
             ))}
           </div>
