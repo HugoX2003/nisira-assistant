@@ -1654,3 +1654,10 @@
   border: 0.5px solid var(--border, #e5e7eb);
   border-radius: 10px;
 }
+
+/* ========== PIPELINE TAB ========== */
+.pipe-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}

@@ -1251,6 +1251,7 @@ function RatingsTab({ notify }) {
 function PipelineTab({ notify }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -1303,6 +1304,68 @@ function PipelineTab({ notify }) {
           </div>
         ))}
       </div>
+
+      <div className="pipe-info-grid">
+        <div className="met-info-card">
+          <div className="emb-info-title">Stack tecnológico</div>
+          <div className="emb-param-list">
+            <div className="emb-param"><span>LLM</span><strong>Gemini 2.5 Flash via OpenRouter</strong></div>
+            <div className="emb-param"><span>Embeddings</span><strong>all-mpnet-base-v2 · 768D</strong></div>
+            <div className="emb-param"><span>Vector Store</span><strong>pgvector + HNSW</strong></div>
+            <div className="emb-param"><span>Base de datos</span><strong>PostgreSQL 16</strong></div>
+          </div>
+        </div>
+        <div className="met-info-card">
+          <div className="emb-info-title">Configuración del retrieval</div>
+          <div className="emb-param-list">
+            <div className="emb-param"><span>Estrategia</span><strong>Híbrida semántica + léxica</strong></div>
+            <div className="emb-param"><span>Peso semántico</span><strong>60%</strong></div>
+            <div className="emb-param"><span>Peso léxico</span><strong>40%</strong></div>
+            <div className="emb-param"><span>Top-K adaptativo</span><strong>3–10 documentos</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <button className="help-fab" onClick={() => setShowHelp(true)} title="Ayuda">
+        <Info size={18} />
+      </button>
+
+      {showHelp && (
+        <div className="help-overlay" onClick={() => setShowHelp(false)}>
+          <div className="help-modal" onClick={e => e.stopPropagation()}>
+            <div className="help-modal-header">
+              <h3>Cómo funciona esta sección</h3>
+              <button className="help-close" onClick={() => setShowHelp(false)}>✕</button>
+            </div>
+            <div className="help-modal-body">
+              <div className="help-step">
+                <div className="help-step-icon">1</div>
+                <div>
+                  <strong>Estado general</strong>
+                  <p>El badge "Operacional" indica que todos los componentes críticos están activos. "Degradado" significa que algún componente falló y el asistente puede no responder correctamente.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">2</div>
+                <div>
+                  <strong>Componentes del sistema</strong>
+                  <p><strong>Google Drive:</strong> sincronización de documentos fuente. <strong>Embeddings:</strong> conversión de texto a vectores. <strong>Vector Store:</strong> índice pgvector para búsqueda semántica. <strong>Pipeline:</strong> orquestador RAG completo.</p>
+                </div>
+              </div>
+              <div className="help-step">
+                <div className="help-step-icon">3</div>
+                <div>
+                  <strong>Retrieval híbrido</strong>
+                  <p>Cada consulta combina búsqueda semántica (similitud vectorial, 60%) con búsqueda léxica (BM25 sobre texto, 40%). El Top-K se ajusta automáticamente entre 3 y 10 documentos según la complejidad de la consulta.</p>
+                </div>
+              </div>
+              <div className="help-next">
+                <span>Siguiente paso:</span> <strong>Chat del asistente</strong> → hacer consultas sobre documentos NISIRA
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
