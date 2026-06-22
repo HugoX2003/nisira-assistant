@@ -24,6 +24,25 @@ import '../styles/Chat.css';
 
 const PAGE_SIZE = 15;
 
+// Corrige errores comunes de reconocimiento de voz sobre el nombre "NISIRA"
+const corregirTexto = (texto) => {
+  const correcciones = {
+    'niceira': 'NISIRA',
+    'niseira': 'NISIRA',
+    'ni sira': 'NISIRA',
+    'ni sir': 'NISIRA',
+    'ni ser': 'NISIRA',
+    'nisi ra': 'NISIRA',
+    'nisira': 'NISIRA',
+  };
+  let resultado = texto;
+  for (const [incorrecto, correcto] of Object.entries(correcciones)) {
+    const regex = new RegExp(incorrecto, 'gi');
+    resultado = resultado.replace(regex, correcto);
+  }
+  return resultado;
+};
+
 // Renderiza Markdown
 const Markdown = ({ content }) => (
   <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
@@ -223,6 +242,7 @@ export default function Chat({ onLogout, user }) {
   const loadMoreConvsRef = useRef(null);
   const loadOlderMsgsRef = useRef(null);
   const recognitionRef = useRef(null);
+  const baseMessageRef = useRef('');
 
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -234,14 +254,30 @@ export default function Chat({ onLogout, user }) {
       return;
     }
 
+    baseMessageRef.current = message.trim();
+
     const recognition = new SpeechRecognitionApi();
     recognition.lang = 'es-ES';
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (e) => {
-      const transcript = Array.from(e.results).map(r => r[0].transcript).join(' ');
-      setMessage(prev => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript));
+      let finalTranscript = '';
+      let interimTranscript = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (result.isFinal) {
+          finalTranscript += `${result[0].transcript} `;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      const base = baseMessageRef.current;
+      const texto = [finalTranscript.trim() ? corregirTexto(finalTranscript.trim()) : '', interimTranscript.trim()]
+        .filter(Boolean)
+        .join(' ');
+      setMessage(base ? `${base} ${texto}` : texto);
     };
     recognition.onerror = () => setIsRecording(false);
     recognition.onend = () => setIsRecording(false);
@@ -249,7 +285,7 @@ export default function Chat({ onLogout, user }) {
     recognitionRef.current = recognition;
     recognition.start();
     setIsRecording(true);
-  }, [SpeechRecognitionApi, isRecording]);
+  }, [SpeechRecognitionApi, isRecording, message]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
