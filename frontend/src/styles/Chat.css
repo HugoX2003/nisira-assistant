@@ -384,6 +384,31 @@
   color: white;
 }
 
+/* TEXT-TO-SPEECH */
+.btn-tts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.btn-tts:hover {
+  background: var(--surface-2);
+}
+
+.btn-tts.speaking {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+
 /* PAGINACIÓN */
 .conv-load-more {
   display: flex;
@@ -498,6 +523,33 @@
 
 .msg-input:focus {
   outline: none;
+}
+
+.btn-mic {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.btn-mic:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.btn-mic.recording {
+  color: #ef4444;
+  animation: mic-pulse 1.2s infinite;
+}
+
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .btn-send {

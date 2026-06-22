@@ -14,6 +14,10 @@ import {
   Bot,
   Send,
   ChevronDown,
+  Mic,
+  Square,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { ragEnhancedChat, getConversations, getMessages, deleteConversation, submitRating } from '../services/api';
 import '../styles/Chat.css';
@@ -118,21 +122,56 @@ const Feedback = ({ value, onChange, disabled }) => (
   </div>
 );
 
+const ttsSupported = typeof window !== 'undefined' && !!window.speechSynthesis;
+
 // Mensaje individual
-const Message = ({ msg, onRate, ratingBusy, onOpenPdf }) => (
-  <div className={`message ${msg.sender}`}>
-    <div className="message-text">
-      {msg.sender === 'user' ? msg.text : <Markdown content={msg.text || ''} />}
+const Message = ({ msg, onRate, ratingBusy, onOpenPdf }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const toggleSpeak = () => {
+    if (!ttsSupported) return;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(msg.text || '');
+    utterance.lang = 'es-ES';
+    const voices = window.speechSynthesis.getVoices();
+    const esVoice = voices.find(v => v.lang === 'es-ES') || voices.find(v => v.lang?.startsWith('es'));
+    if (esVoice) utterance.voice = esVoice;
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+    setIsSpeaking(true);
+  };
+
+  return (
+    <div className={`message ${msg.sender}`}>
+      <div className="message-text">
+        {msg.sender === 'user' ? msg.text : <Markdown content={msg.text || ''} />}
+      </div>
+      {msg.sender === 'bot' && msg.sources?.length > 0 && (
+        <Sources sources={msg.sources} onOpenPdf={onOpenPdf} />
+      )}
+      {msg.sender === 'bot' && ttsSupported && (
+        <button
+          type="button"
+          className={`btn-tts ${isSpeaking ? 'speaking' : ''}`}
+          onClick={toggleSpeak}
+          title={isSpeaking ? 'Detener lectura' : 'Leer en voz alta'}
+        >
+          {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
+        </button>
+      )}
+      {msg.sender === 'bot' && onRate && (
+        <Feedback value={msg.rating} onChange={onRate} disabled={ratingBusy} />
+      )}
+      <div className="message-time">{msg.timestamp}</div>
     </div>
-    {msg.sender === 'bot' && msg.sources?.length > 0 && (
-      <Sources sources={msg.sources} onOpenPdf={onOpenPdf} />
-    )}
-    {msg.sender === 'bot' && onRate && (
-      <Feedback value={msg.rating} onChange={onRate} disabled={ratingBusy} />
-    )}
-    <div className="message-time">{msg.timestamp}</div>
-  </div>
-);
+  );
+};
 
 // Indicador de "pensando"
 const Loading = () => (
@@ -162,6 +201,7 @@ export default function Chat({ onLogout, user }) {
   const [deleteModal, setDeleteModal] = useState(null);
   const [ratingBusy, setRatingBusy] = useState({});
   const [pdfSource, setPdfSource] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   // Paginación — conversaciones
   const [convPage, setConvPage] = useState(1);
@@ -182,6 +222,34 @@ export default function Chat({ onLogout, user }) {
   const inputRef = useRef(null);
   const loadMoreConvsRef = useRef(null);
   const loadOlderMsgsRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  const toggleRecording = useCallback(() => {
+    if (!SpeechRecognitionApi) return;
+
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const recognition = new SpeechRecognitionApi();
+    recognition.lang = 'es-ES';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join(' ');
+      setMessage(prev => (prev.trim() ? `${prev.trim()} ${transcript}` : transcript));
+    };
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, [SpeechRecognitionApi, isRecording]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -548,6 +616,16 @@ export default function Chat({ onLogout, user }) {
                   }
                 }}
               />
+              {SpeechRecognitionApi && (
+                <button
+                  type="button"
+                  className={`btn-mic ${isRecording ? 'recording' : ''}`}
+                  onClick={toggleRecording}
+                  title={isRecording ? 'Detener grabación' : 'Hablar'}
+                >
+                  {isRecording ? <Square size={16} /> : <Mic size={18} />}
+                </button>
+              )}
               <button type="submit" className="btn-send" disabled={!message.trim() || loading}>
                 <Send size={18} />
               </button>
