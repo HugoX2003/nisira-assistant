@@ -513,8 +513,11 @@
   border: none;
   color: var(--text);
   font-size: 0.9rem;
+  line-height: 1.4;
   resize: none;
   font-family: inherit;
+  max-height: 130px;
+  overflow-y: auto;
 }
 
 .msg-input::placeholder {

@@ -243,6 +243,7 @@ export default function Chat({ onLogout, user }) {
   const loadOlderMsgsRef = useRef(null);
   const recognitionRef = useRef(null);
   const baseMessageRef = useRef('');
+  const finalTranscriptRef = useRef('');
 
   const SpeechRecognitionApi = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -255,6 +256,7 @@ export default function Chat({ onLogout, user }) {
     }
 
     baseMessageRef.current = message.trim();
+    finalTranscriptRef.current = '';
 
     const recognition = new SpeechRecognitionApi();
     recognition.lang = 'es-ES';
@@ -262,21 +264,21 @@ export default function Chat({ onLogout, user }) {
     recognition.maxAlternatives = 1;
 
     recognition.onresult = (e) => {
-      let finalTranscript = '';
       let interimTranscript = '';
-      for (let i = 0; i < e.results.length; i++) {
+      // Solo se procesan resultados nuevos/cambiados de este evento (e.resultIndex en adelante);
+      // los segmentos ya finalizados no se vuelven a recorrer, evitando duplicados.
+      for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
         if (result.isFinal) {
-          finalTranscript += `${result[0].transcript} `;
+          finalTranscriptRef.current += `${result[0].transcript} `;
         } else {
           interimTranscript += result[0].transcript;
         }
       }
 
       const base = baseMessageRef.current;
-      const texto = [finalTranscript.trim() ? corregirTexto(finalTranscript.trim()) : '', interimTranscript.trim()]
-        .filter(Boolean)
-        .join(' ');
+      const finalPart = finalTranscriptRef.current.trim() ? corregirTexto(finalTranscriptRef.current.trim()) : '';
+      const texto = [finalPart, interimTranscript.trim()].filter(Boolean).join(' ');
       setMessage(base ? `${base} ${texto}` : texto);
     };
     recognition.onerror = () => setIsRecording(false);
@@ -286,6 +288,15 @@ export default function Chat({ onLogout, user }) {
     recognition.start();
     setIsRecording(true);
   }, [SpeechRecognitionApi, isRecording, message]);
+
+  // Auto-resize del textarea: crece con el contenido hasta el max-height definido en CSS,
+  // donde aparece scroll interno. Se recalcula en cada cambio de texto (tecleo o dictado por voz).
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [message]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
