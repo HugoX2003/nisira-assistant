@@ -51,6 +51,9 @@ class RAGASEvaluator:
                 encode_kwargs={"normalize_embeddings": True},
             )
 
+            from ragas.metrics import answer_relevancy as _answer_relevancy_metric
+            _answer_relevancy_metric.strictness = 1
+
             logger.info("[OK] RAGASEvaluator inicializado con OpenRouter")
 
         except Exception as e:
