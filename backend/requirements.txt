@@ -53,7 +53,7 @@ torch==2.3.1+cpu ; sys_platform == 'win32'
 sentence-transformers>=2.2.0
 
 # === RAGAS - Evaluación RAG ===
-ragas>=0.1.0
+ragas==0.1.21
 datasets>=2.14.0
 tiktoken>=0.5.0
 transformers>=4.35.0
@@ -67,7 +67,6 @@ python-magic>=0.4.27
 # === EVALUACIÓN Y MÉTRICAS ===
 datasets>=2.18.0
 evaluate>=0.4.0
-ragas>=0.1.10
 
 # === GOOGLE GEMINI API ===
 google-generativeai>=0.3.0
