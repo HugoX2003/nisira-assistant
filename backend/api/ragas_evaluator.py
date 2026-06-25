@@ -49,11 +49,6 @@ class RAGASEvaluator:
                 encode_kwargs={"normalize_embeddings": True},
             )
 
-            self.metrics = [
-                faithfulness,
-                answer_relevancy,
-            ]
-
             logger.info("[OK] RAGASEvaluator inicializado con OpenRouter")
 
         except Exception as e:
@@ -84,22 +79,33 @@ class RAGASEvaluator:
             logger.info(f"   Question: {question[:100]}")
             logger.info(f"   Contexts: {len(contexts)} documentos")
 
-            result = evaluate(
+            def _extract_score(result, metric_name: str) -> float:
+                # Bug en ragas==0.1.21: answer_relevancy devuelve 0.0 cuando se
+                # evalúa junto a faithfulness, por eso se evalúan por separado.
+                if hasattr(result, 'to_pandas'):
+                    result_dict = result.to_pandas().to_dict('records')[0]
+                elif isinstance(result, dict):
+                    result_dict = result
+                else:
+                    result_dict = result.__dict__
+                return float(result_dict.get(metric_name, 0.0))
+
+            faithfulness_result = evaluate(
                 dataset,
-                metrics=self.metrics,
+                metrics=[faithfulness],
                 llm=self.llm,
                 embeddings=self.embeddings,
             )
+            faithfulness_score = _extract_score(faithfulness_result, 'faithfulness')
 
-            if hasattr(result, 'to_pandas'):
-                result_dict = result.to_pandas().to_dict('records')[0]
-            elif isinstance(result, dict):
-                result_dict = result
-            else:
-                result_dict = result.__dict__
+            relevancy_result = evaluate(
+                dataset,
+                metrics=[answer_relevancy],
+                llm=self.llm,
+                embeddings=self.embeddings,
+            )
+            relevancy_score = _extract_score(relevancy_result, 'answer_relevancy')
 
-            faithfulness_score = float(result_dict.get('faithfulness', 0.0))
-            relevancy_score = float(result_dict.get('answer_relevancy', 0.0))
             context_util_score = self._calculate_context_utilization(answer, contexts)
 
             calidad = (
