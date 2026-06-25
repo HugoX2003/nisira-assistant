@@ -12,6 +12,7 @@ Métricas RAGAS utilizadas (NO requieren ground_truth):
 """
 
 import logging
+import math
 import os
 from typing import List, Dict
 from datasets import Dataset
@@ -40,6 +41,7 @@ class RAGASEvaluator:
                 openai_api_key=self.api_key,
                 openai_api_base="https://openrouter.ai/api/v1",
                 temperature=0.0,
+                request_timeout=60,
             )
 
             # Embeddings locales con HuggingFace (sin API externa)
@@ -88,7 +90,8 @@ class RAGASEvaluator:
                     result_dict = result
                 else:
                     result_dict = result.__dict__
-                return float(result_dict.get(metric_name, 0.0))
+                value = float(result_dict.get(metric_name, 0.0))
+                return 0.0 if math.isnan(value) else value
 
             faithfulness_result = evaluate(
                 dataset,
