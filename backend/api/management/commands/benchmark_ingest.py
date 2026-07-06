@@ -9,6 +9,7 @@ Uso:
 """
 import os
 import random
+import tempfile
 import uuid
 from time import perf_counter
 
@@ -53,21 +54,33 @@ class Command(BaseCommand):
             file_name = f.get("name")
             self.stdout.write(f"[{i}/{len(sample_files)}] {file_name}")
 
+            temp_path = None
             try:
-                # --- Descarga real ---
+                # --- Descarga real (bytes -> PostgreSQL) ---
                 t0 = perf_counter()
-                local_path = pipeline.drive_manager.download_file(
+                stored_id = pipeline.drive_manager.download_file(
                     file_id, file_name, f.get("modifiedTime")
                 )
                 download_seconds = perf_counter() - t0
 
-                if not local_path or not os.path.exists(local_path):
-                    self.stderr.write(f"  Descarga fallida para {file_name}, se omite.")
+                if not stored_id or stored_id == "TOO_LARGE":
+                    self.stderr.write(f"  Descarga fallida u omitida para {file_name}, se omite.")
                     continue
+
+                # --- Recuperar bytes desde PostgreSQL y escribirlos a un temporal ---
+                file_record = pipeline.drive_manager.file_store.get_file(file_id=stored_id)
+                if not file_record or not file_record.get("file_content"):
+                    self.stderr.write(f"  No se pudo leer contenido de {file_name} desde PostgreSQL, se omite.")
+                    continue
+
+                suffix = os.path.splitext(file_name)[1] or ".pdf"
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                    tmp.write(file_record["file_content"])
+                    temp_path = tmp.name
 
                 # --- Extracción + chunking ---
                 t1 = perf_counter()
-                result = pipeline.process_document(local_path)
+                result = pipeline.process_document(temp_path)
                 extraction_seconds = perf_counter() - t1
 
                 if not result.get("success"):
@@ -109,6 +122,9 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stderr.write(f"  Error inesperado con {file_name}: {e}")
                 continue
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
 
         self.stdout.write(self.style.SUCCESS(
             f"\nBenchmark completado. Corre ahora:\n"
