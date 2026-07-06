@@ -12,6 +12,7 @@ Pipeline principal que coordina todos los componentes del sistema RAG:
 
 import os
 import re
+import uuid
 import logging
 from typing import List, Dict, Any, Optional, Union, Tuple
 from datetime import datetime
@@ -220,21 +221,36 @@ class RAGPipeline:
             }
         
         try:
+            # Identificador único para agrupar los registros de esta corrida
+            batch_id = uuid.uuid4()
+
             # 1. Sincronizar documentos desde Google Drive
             logger.info("Sincronizando documentos desde Google Drive...")
             sync_result = self.drive_manager.sync_documents()
-            
+
             if not sync_result['success']:
                 return {
                     "success": False,
                     "error": f"Error en sincronización: {sync_result.get('error', 'Unknown')}"
                 }
-            
+
             self.stats['last_sync'] = datetime.now().isoformat()
-            
-            # 2. Procesar documentos
+
+            # Mapa nombre → tiempos de descarga provistos por drive_manager
+            download_timing = {
+                f['name']: f.get('download_seconds', 0.0)
+                for f in sync_result.get('downloaded_files', [])
+            }
+
+            # Mapa nombre → drive_file_id
+            drive_id_map = {
+                f['name']: f.get('id')
+                for f in sync_result.get('downloaded_files', [])
+            }
+
+            # 2. Determinar documentos a procesar
             documents_to_process = []
-            
+
             if force_reprocess:
                 download_path = self.drive_manager.download_path
                 if os.path.exists(download_path):
@@ -245,7 +261,7 @@ class RAGPipeline:
             else:
                 for file_info in sync_result.get('downloaded_files', []):
                     documents_to_process.append(file_info['path'])
-            
+
             if not documents_to_process:
                 logger.info("No hay documentos nuevos para procesar")
                 return {
@@ -254,25 +270,65 @@ class RAGPipeline:
                     "sync_result": sync_result,
                     "processed_documents": 0
                 }
-            
-            # 3. Procesar cada documento
-            logger.info(f"Procesando {len(documents_to_process)} documentos...")
-            
+
+            # 3. Procesar cada documento midiendo extracción y embeddings por separado
+            logger.info(f"Procesando {len(documents_to_process)} documentos (batch {str(batch_id)[:8]})...")
+
             all_chunks = []
+            all_embeddings = []
             processing_results = []
-            
+
             for doc_path in documents_to_process:
+                doc_name = os.path.basename(doc_path)
                 try:
+                    # — Extracción + chunking —
+                    t_ext = perf_counter()
                     result = self.process_document(doc_path)
+                    extraction_seconds = perf_counter() - t_ext
+
                     processing_results.append(result)
-                    
+
                     if result['success']:
-                        all_chunks.extend(result['chunks'])
+                        doc_chunks = result.get('chunks', [])
+
+                        # — Embeddings por documento —
+                        t_emb = perf_counter()
+                        chunk_texts = [c['text'] for c in doc_chunks]
+                        doc_embeddings = self.embedding_manager.create_embeddings_batch(chunk_texts) if chunk_texts else []
+                        embedding_seconds = perf_counter() - t_emb
+
+                        valid_count = 0
+                        for chunk, emb in zip(doc_chunks, doc_embeddings):
+                            if emb is not None:
+                                all_chunks.append(chunk)
+                                all_embeddings.append(emb)
+                                valid_count += 1
+
                         self.stats['documents_processed'] += 1
-                        logger.info(f"Procesado: {os.path.basename(doc_path)}")
+                        logger.info(
+                            f"Procesado: {doc_name} | "
+                            f"ext={extraction_seconds:.2f}s emb={embedding_seconds:.2f}s "
+                            f"chunks={valid_count}"
+                        )
+
+                        # Guardar tiempos en BD (importación diferida para evitar circular imports)
+                        try:
+                            from api.models import DocumentIngestTiming
+                            DocumentIngestTiming.objects.create(
+                                batch_id=batch_id,
+                                document_name=doc_name,
+                                drive_file_id=drive_id_map.get(doc_name),
+                                download_seconds=round(download_timing.get(doc_name, 0.0), 4),
+                                extraction_seconds=round(extraction_seconds, 4),
+                                embedding_seconds=round(embedding_seconds, 4),
+                                chunks_count=valid_count,
+                            )
+                        except Exception as db_err:
+                            logger.warning(f"[TIMING] No se pudo guardar timing para {doc_name}: {db_err}")
+
                     else:
-                        logger.error(f"Error procesando {os.path.basename(doc_path)}: {result.get('error', 'Unknown')}")
-                        
+                        logger.error(f"Error procesando {doc_name}: {result.get('error', 'Unknown')}")
+
                 except Exception as e:
                     logger.error(f"Error inesperado procesando {doc_path}: {e}")
                     processing_results.append({
@@ -280,62 +336,51 @@ class RAGPipeline:
                         "file_path": doc_path,
                         "error": str(e)
                     })
-            
-            # 4. Generar embeddings
-            if all_chunks:
-                logger.info(f"Generando embeddings para {len(all_chunks)} chunks...")
-                
-                chunk_texts = [chunk['text'] for chunk in all_chunks]
-                embeddings = self.embedding_manager.create_embeddings_batch(chunk_texts)
-                
-                valid_chunks = []
-                valid_embeddings = []
-                
-                for chunk, embedding in zip(all_chunks, embeddings):
-                    if embedding is not None:
-                        valid_chunks.append(chunk)
-                        valid_embeddings.append(embedding)
-                
-                self.stats['chunks_created'] += len(valid_chunks)
-                self.stats['embeddings_generated'] += len(valid_embeddings)
-                
-                # 5. Almacenar en ChromaDB
-                if valid_chunks:
-                    logger.info(f"Almacenando {len(valid_chunks)} chunks en ChromaDB...")
-                    
-                    storage_success = self.chroma_manager.add_documents(
-                        valid_chunks, 
-                        valid_embeddings
-                    )
-                    
-                    if not storage_success:
-                        logger.error("Error almacenando en ChromaDB")
-                        return {
-                            "success": False,
-                            "error": "Error almacenando documentos en base de datos vectorial"
-                        }
-            
+
+            # 4. Almacenar todos los chunks válidos
+            valid_chunks = all_chunks
+            valid_embeddings = all_embeddings
+
+            self.stats['chunks_created'] += len(valid_chunks)
+            self.stats['embeddings_generated'] += len(valid_embeddings)
+
+            if valid_chunks:
+                logger.info(f"Almacenando {len(valid_chunks)} chunks en vector store...")
+
+                storage_success = self.chroma_manager.add_documents(
+                    valid_chunks,
+                    valid_embeddings
+                )
+
+                if not storage_success:
+                    logger.error("Error almacenando en ChromaDB")
+                    return {
+                        "success": False,
+                        "error": "Error almacenando documentos en base de datos vectorial"
+                    }
+
             self.stats['last_processing'] = datetime.now().isoformat()
-            
+
             successful_docs = len([r for r in processing_results if r['success']])
             failed_docs = len(processing_results) - successful_docs
-            
+
             result = {
                 "success": True,
+                "batch_id": str(batch_id),
                 "sync_result": sync_result,
                 "processing_summary": {
                     "total_documents": len(documents_to_process),
                     "successful": successful_docs,
                     "failed": failed_docs,
-                    "total_chunks": len(all_chunks),
-                    "valid_chunks": len(valid_chunks) if all_chunks else 0
+                    "total_chunks": len(valid_chunks),
+                    "valid_chunks": len(valid_chunks),
                 },
                 "processing_results": processing_results,
                 "stats": self.stats
             }
-            
+
             logger.info(f"Procesamiento completado: {successful_docs}/{len(documents_to_process)} documentos exitosos")
-            
+
             return result
             
         except Exception as e:

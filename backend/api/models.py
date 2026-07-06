@@ -1,5 +1,6 @@
 # Modelos para guardar el historial de chat
 import secrets
+import uuid
 from django.db import models
 from django.contrib.auth.models import User
 import json
@@ -370,4 +371,33 @@ class UploadedDocument(models.Model):
     def __str__(self):
         status = "[OK] Procesado" if self.processed else "[WAIT] Pendiente"
         return f"{self.file_name} ({status})"
+
+
+class DocumentIngestTiming(models.Model):
+    """
+    Registro de tiempos por fase para cada documento ingestado.
+    Un batch_id agrupa todos los documentos de una misma corrida de sincronización.
+    """
+    batch_id = models.UUIDField(db_index=True, help_text="Identifica la corrida de sincronización")
+    document_name = models.CharField(max_length=255)
+    drive_file_id = models.CharField(max_length=255, null=True, blank=True)
+    run_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    download_seconds = models.FloatField(help_text="Tiempo de descarga desde Google Drive")
+    extraction_seconds = models.FloatField(help_text="Tiempo de extracción de texto y chunking")
+    embedding_seconds = models.FloatField(help_text="Tiempo de generación de embeddings")
+    chunks_count = models.IntegerField(default=0, help_text="Chunks generados para este documento")
+
+    class Meta:
+        ordering = ['-run_at']
+        verbose_name = "Tiempo de ingesta por documento"
+        verbose_name_plural = "Tiempos de ingesta por documento"
+
+    def __str__(self):
+        return (
+            f"{self.document_name} | batch={str(self.batch_id)[:8]} | "
+            f"dl={self.download_seconds:.2f}s "
+            f"ext={self.extraction_seconds:.2f}s "
+            f"emb={self.embedding_seconds:.2f}s"
+        )
 

@@ -11,6 +11,7 @@ import json
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timezone
+from time import perf_counter
 import io
 
 try:
@@ -570,7 +571,9 @@ class GoogleDriveManager:
                         current_file=file_name,
                         log_message=f"[DOWN] ({idx}/{total}) Descargando: {file_name}",
                     )
+                    _dl_t0 = perf_counter()
                     downloaded_id = self.download_file(file_id, file_name, modified_time)
+                    _dl_elapsed = round(perf_counter() - _dl_t0, 4)
 
                     if downloaded_id == "TOO_LARGE":
                         too_large_files.append(file_name)
@@ -582,7 +585,8 @@ class GoogleDriveManager:
                             "id": file_id,
                             "stored_id": downloaded_id,
                             "modified_time": modified_time,
-                            "storage": "postgres" if self.use_postgres else "filesystem"
+                            "storage": "postgres" if self.use_postgres else "filesystem",
+                            "download_seconds": _dl_elapsed,
                         })
                         _emit(current=idx, total=total, current_file=file_name,
                               log_message=f"[OK] ({idx}/{total}) Guardado: {file_name}")
